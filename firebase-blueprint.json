@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile data",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "dateOfBirth": { "type": "string" }
+      },
+      "required": ["name", "email"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial transaction",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "date": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "amount", "type", "date", "userId", "createdAt"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "Financial goal",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "currentAmount": { "type": "number" },
+        "targetAmount": { "type": "number" },
+        "icon": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "currentAmount", "targetAmount", "userId", "createdAt", "updatedAt"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A task to complete",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "completed", "userId", "createdAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Chat message from AI or User",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "sender": { "type": "string", "enum": ["user", "ai"] },
+        "timestamp": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["text", "sender", "timestamp", "userId"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile collection"
+    },
+    "users/{userId}/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "User's transactions"
+    },
+    "users/{userId}/goals/{goalId}": {
+      "schema": { "$ref": "#/entities/Goal" },
+      "description": "User's financial goals"
+    },
+    "users/{userId}/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "User's tasks"
+    },
+    "users/{userId}/chatMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "User's chat messages"
+    }
+  }
+}

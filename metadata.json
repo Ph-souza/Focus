@@ -1,0 +1,6 @@
+{
+  "name": "Aura Sync",
+  "description": "Aura Sync (Powered by Nexus Flow) - Premium Finance and Productivity App",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,156 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Entity Validators ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['name', 'email'])
+        && data.name is string && data.name.size() <= 100
+        && data.email is string && data.email.size() <= 200
+        && (!data.keys().hasAny(['dateOfBirth']) || (data.dateOfBirth is string && data.dateOfBirth.size() <= 20));
+    }
+
+    function isValidTransaction(data, userId) {
+      return data.keys().hasAll(['title', 'amount', 'type', 'date', 'userId', 'createdAt'])
+        && data.title is string && data.title.size() <= 100 && data.title.size() > 0
+        && data.amount is number
+        && data.type is string && (data.type == 'income' || data.type == 'expense')
+        && data.date is string && data.date.size() <= 30
+        && data.userId == userId
+        && data.createdAt == request.time;
+    }
+
+    function isValidGoal(data, userId) {
+      return data.keys().hasAll(['title', 'currentAmount', 'targetAmount', 'userId', 'createdAt', 'updatedAt'])
+        && data.title is string && data.title.size() <= 100 && data.title.size() > 0
+        && data.currentAmount is number && data.currentAmount >= 0
+        && data.targetAmount is number && data.targetAmount > 0
+        && data.userId == userId
+        && data.createdAt == request.time
+        && data.updatedAt == request.time
+        && (!data.keys().hasAny(['icon']) || (data.icon is string && data.icon.size() <= 50));
+    }
+
+    function isValidGoalUpdate(data, userId) {
+      return data.keys().hasAll(['title', 'currentAmount', 'targetAmount', 'userId', 'createdAt', 'updatedAt'])
+        && data.title is string && data.title.size() <= 100 && data.title.size() > 0
+        && data.currentAmount is number && data.currentAmount >= 0
+        && data.targetAmount is number && data.targetAmount > 0
+        && data.userId == userId
+        && data.updatedAt == request.time
+        && (!data.keys().hasAny(['icon']) || (data.icon is string && data.icon.size() <= 50));
+    }
+
+    function isValidTask(data, userId) {
+      return data.keys().hasAll(['title', 'completed', 'userId', 'createdAt'])
+        && data.title is string && data.title.size() <= 200 && data.title.size() > 0
+        && data.completed is bool
+        && data.userId == userId
+        && data.createdAt == request.time;
+    }
+
+    function isValidChatMessage(data, userId) {
+      return data.keys().hasAll(['text', 'sender', 'timestamp', 'userId'])
+        && data.text is string && data.text.size() <= 5000 && data.text.size() > 0
+        && data.sender is string && (data.sender == 'user' || data.sender == 'ai')
+        && data.timestamp is string && data.timestamp.size() <= 30
+        && data.userId == userId;
+    }
+
+    function isValidAppointment(data, userId) {
+      return data.keys().hasAll(['title', 'time', 'type', 'day', 'userId', 'createdAt'])
+        && data.title is string && data.title.size() <= 200 && data.title.size() > 0
+        && data.time is string && data.time.size() <= 10
+        && data.type is string && data.type.size() <= 50
+        && data.day is number
+        && data.userId == userId
+        && data.createdAt == request.time;
+    }
+
+    // --- Collections ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
+
+      match /appointments/{appointmentId} {
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(appointmentId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(appointmentId)
+                      && isValidAppointment(incoming(), userId);
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(appointmentId);
+      }
+      
+      match /transactions/{transactionId} {
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(transactionId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(transactionId) 
+                      && isValidTransaction(incoming(), userId);
+        // Transactions are immutable in this simple implementation, or maybe they can update amount/title
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(transactionId);
+      }
+
+      match /goals/{goalId} {
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(goalId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(goalId)
+                      && isValidGoal(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(goalId)
+                      && isValidGoalUpdate(incoming(), userId)
+                      && incoming().createdAt == existing().createdAt
+                      && incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(goalId);
+      }
+
+      match /tasks/{taskId} {
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(taskId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(taskId)
+                      && isValidTask(incoming(), userId);
+        // Task updates (usually just 'completed' boolean or 'title')
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(taskId)
+                      && incoming().diff(existing()).affectedKeys().hasAny(['completed', 'title'])
+                      && (!incoming().diff(existing()).affectedKeys().hasAny(['userId', 'createdAt']))
+                      && incoming().title is string && incoming().title.size() <= 200 && incoming().title.size() > 0
+                      && incoming().completed is bool;
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(taskId);
+      }
+
+      match /chatMessages/{messageId} {
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(messageId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(messageId)
+                      && isValidChatMessage(incoming(), userId);
+        // Chat messages are immutable
+      }
+    }
+  }
+}
