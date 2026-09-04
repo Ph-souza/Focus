@@ -99,7 +99,7 @@ service cloud.firestore {
     // --- Collections ---
 
     match /users/{userId} {
-      allow get: if isOwner(userId) && isValidId(userId);
+      allow get: if (isOwner(userId) && isValidId(userId)) || (isSignedIn() && request.auth.token.email == userId);
       allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
       allow update: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
 

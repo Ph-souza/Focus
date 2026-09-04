@@ -32,17 +32,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const userDocRef = doc(db, 'users', user.uid);
 
-        // Assure document exists in Firestore
+        // Assure document exists in Firestore and check Guest Checkout Binding
         try {
           const snap = await getDoc(userDocRef);
+          let userIsPremium = snap.exists() ? Boolean(snap.data()?.isPremium) : false;
+
+          // Guest Checkout Binding: se a conta ainda não for premium, verificar se há compra pelo e-mail
+          if (!userIsPremium && user.email) {
+            try {
+              const emailDocRef = doc(db, 'users', user.email.trim().toLowerCase());
+              const emailSnap = await getDoc(emailDocRef);
+              if (emailSnap.exists() && emailSnap.data()?.isPremium) {
+                userIsPremium = true;
+                console.log('[Guest Checkout Binding] Licença Premium vinculada com sucesso a partir do e-mail:', user.email);
+              }
+            } catch (bindingErr) {
+              console.warn('[Guest Checkout Binding] Verificação por e-mail:', bindingErr);
+            }
+          }
+
           if (!snap.exists()) {
             await setDoc(userDocRef, {
               name: user.displayName || user.email?.split('@')[0] || 'Usuário',
               email: user.email || '',
               photoURL: user.photoURL || '',
-              isPremium: false,
+              isPremium: userIsPremium,
               createdAt: serverTimestamp()
             });
+          } else if (userIsPremium && !snap.data()?.isPremium) {
+            await setDoc(userDocRef, {
+              isPremium: true
+            }, { merge: true });
           }
         } catch (err) {
           console.warn('Notice ensuring user doc exists:', err);

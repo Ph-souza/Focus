@@ -4,10 +4,91 @@ dotenv.config();
 import express from "express";
 import cors from "cors";
 import path from "path";
+import crypto from "crypto";
+import { initializeApp, getApps, cert, App } from "firebase-admin/app";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import webpush from "web-push";
+
+// Firebase Admin SDK initialization (Singleton)
+let adminApp: App;
+if (!getApps().length) {
+  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "aura-sync-497100";
+
+  if (serviceAccountKey) {
+    try {
+      const parsed = typeof serviceAccountKey === "string" && serviceAccountKey.trim().startsWith("{")
+        ? JSON.parse(serviceAccountKey)
+        : JSON.parse(Buffer.from(serviceAccountKey, "base64").toString("utf-8"));
+      adminApp = initializeApp({
+        credential: cert(parsed),
+        projectId: parsed.project_id || projectId
+      });
+      console.log("[Firebase Admin] Inicializado com sucesso via Service Account Key.");
+    } catch (e: any) {
+      console.warn("[Firebase Admin] Falha ao processar FIREBASE_SERVICE_ACCOUNT_KEY, inicializando com projectId:", e?.message);
+      adminApp = initializeApp({ projectId });
+    }
+  } else {
+    adminApp = initializeApp({ projectId });
+    console.log(`[Firebase Admin] Inicializado com projectId: ${projectId}`);
+  }
+} else {
+  adminApp = getApps()[0];
+}
+
+const adminDb = getFirestore(adminApp);
+
+// Mercado Pago setup
+const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN?.trim() || process.env.MP_ACCESS_TOKEN?.trim() || "";
+const mpWebhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim() || process.env.MP_WEBHOOK_SECRET?.trim() || "";
+
+const mpClient = mpAccessToken ? new MercadoPagoConfig({ accessToken: mpAccessToken }) : null;
+const mpPayment = mpClient ? new Payment(mpClient) : null;
+
+/**
+ * Valida a assinatura do Webhook do Mercado Pago (Header x-signature)
+ * Formato x-signature: "ts=1700000000,v1=hash_hmac..."
+ * Manifest template: "id:[data.id];request-id:[x-request-id];ts:[ts];"
+ */
+function verifyMercadoPagoSignature(
+  xSignatureHeader: string | undefined,
+  xRequestIdHeader: string | undefined,
+  dataId: string | number,
+  secret: string
+): boolean {
+  if (!xSignatureHeader || !secret) {
+    return false;
+  }
+
+  try {
+    const parts = xSignatureHeader.split(",").reduce((acc: Record<string, string>, part) => {
+      const [k, v] = part.split("=").map((s) => s.trim());
+      if (k && v) acc[k] = v;
+      return acc;
+    }, {});
+
+    const ts = parts["ts"];
+    const v1Hash = parts["v1"];
+
+    if (!ts || !v1Hash) return false;
+
+    const manifest = `id:${dataId};request-id:${xRequestIdHeader || ""};ts:${ts};`;
+    const hmac = crypto.createHmac("sha256", secret);
+    hmac.update(manifest);
+    const expectedHash = hmac.digest("hex");
+
+    if (v1Hash.length !== expectedHash.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(v1Hash, "hex"), Buffer.from(expectedHash, "hex"));
+  } catch (err: any) {
+    console.warn("[Webhook MP] Erro ao validar assinatura HMAC:", err?.message);
+    return false;
+  }
+}
 
 // Resolve GEMINI API Key safely from environment
 const getGeminiApiKey = () => process.env.GEMINI_API_KEY?.trim() || process.env.VITE_GEMINI_API_KEY?.trim() || "";
@@ -167,6 +248,165 @@ async function startServer() {
 
   app.use(cors());
   app.use(express.json({ limit: '10mb' }));
+
+  // =========================================================================
+  // Rota Mercado Pago: Guest Checkout Binding Webhook
+  // =========================================================================
+  
+  // Endpoint de diagnóstico e status do Webhook (GET)
+  app.get("/api/webhooks/mercadopago", (req, res) => {
+    res.status(200).json({
+      service: "Mercado Pago Webhook Gateway",
+      status: "active",
+      endpoint: "POST /api/webhooks/mercadopago",
+      authConfigured: {
+        hasAccessToken: Boolean(mpAccessToken),
+        hasWebhookSecret: Boolean(mpWebhookSecret),
+        firebaseAdminReady: Boolean(getApps().length)
+      }
+    });
+  });
+
+  // Endpoint principal do Webhook (POST)
+  app.post("/api/webhooks/mercadopago", async (req, res) => {
+    // 1. Responder status 200 IMEDIATAMENTE para evitar timeout e retentativas do Mercado Pago
+    res.status(200).json({ received: true, status: "processing", timestamp: new Date().toISOString() });
+
+    try {
+      const body = req.body || {};
+      const query = req.query || {};
+
+      // Mercado Pago envia o ID via body.data.id, query['data.id'] ou query.id
+      const rawId = body.data?.id || query["data.id"] || query.id;
+      const topic = (body.type || body.action || query.topic || query.type || "").toString();
+
+      if (!rawId) {
+        console.log("[Webhook MP] Notificação recebida sem ID de recurso.");
+        return;
+      }
+
+      // Filtra apenas eventos relacionados a pagamento
+      if (topic && !topic.includes("payment") && topic !== "payment.created" && topic !== "payment.updated") {
+        console.log(`[Webhook MP] Tópico ignorado (${topic}) para ID ${rawId}.`);
+        return;
+      }
+
+      const paymentId = String(rawId);
+      console.log(`[Webhook MP] Recebida notificação para o pagamento ID: ${paymentId}`);
+
+      // 2. Validação da Origem da Requisição
+      // A) Validação criptográfica via HMAC (x-signature) se o segredo estiver configurado
+      const xSignature = req.headers["x-signature"] as string | undefined;
+      const xRequestId = req.headers["x-request-id"] as string | undefined;
+
+      if (mpWebhookSecret) {
+        const isSignatureValid = verifyMercadoPagoSignature(xSignature, xRequestId, paymentId, mpWebhookSecret);
+        if (!isSignatureValid) {
+          console.warn(`[Webhook MP] ALERTA DE SEGURANÇA: Assinatura x-signature inválida para o pagamento ${paymentId}!`);
+          return;
+        }
+        console.log(`[Webhook MP] Assinatura criptográfica x-signature validada para o pagamento ${paymentId}.`);
+      }
+
+      // B) Consulta autoritativa direta à API do Mercado Pago
+      // Garante autenticidade total dos dados (status e payer.email) diretamente dos servidores do MP
+      let paymentData: any = null;
+
+      if (mpPayment) {
+        try {
+          paymentData = await mpPayment.get({ id: paymentId });
+        } catch (apiErr: any) {
+          console.error(`[Webhook MP] Falha ao consultar pagamento no SDK MP: ${apiErr?.message}`);
+        }
+      } else if (mpAccessToken) {
+        try {
+          const apiRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+            headers: { Authorization: `Bearer ${mpAccessToken}` }
+          });
+          if (apiRes.ok) {
+            paymentData = await apiRes.json();
+          } else {
+            console.error(`[Webhook MP] API do MP retornou erro HTTP: ${apiRes.status}`);
+          }
+        } catch (fetchErr: any) {
+          console.error(`[Webhook MP] Erro ao consultar API MP via fetch: ${fetchErr?.message}`);
+        }
+      } else {
+        console.warn("[Webhook MP] MERCADOPAGO_ACCESS_TOKEN não configurado no .env! Utilizando payload bruto (modo preview).");
+        paymentData = body.data || body;
+      }
+
+      if (!paymentData) {
+        console.error(`[Webhook MP] Não foi possível obter os dados do pagamento ${paymentId}.`);
+        return;
+      }
+
+      const paymentStatus = paymentData.status;
+      console.log(`[Webhook MP] Pagamento ${paymentId} status: "${paymentStatus}"`);
+
+      // 3. Processar apenas pagamentos aprovados ("approved")
+      if (paymentStatus !== "approved") {
+        console.log(`[Webhook MP] Pagamento ${paymentId} não está aprovado (status: "${paymentStatus}"). Ignorando.`);
+        return;
+      }
+
+      // 4. Extrair o e-mail do cliente (payer.email)
+      const rawEmail = paymentData.payer?.email || paymentData.external_reference || paymentData.metadata?.email;
+      if (!rawEmail || typeof rawEmail !== "string") {
+        console.error(`[Webhook MP] Pagamento ${paymentId} aprovado, porém sem e-mail do comprador!`, paymentData.payer);
+        return;
+      }
+
+      const payerEmail = rawEmail.trim().toLowerCase();
+      console.log(`[Webhook MP] Pagamento APROVADO! Aplicando Guest Checkout Binding para o e-mail: ${payerEmail}`);
+
+      // 5. Firebase Admin SDK: Criar/atualizar documento na coleção 'users' com o ID sendo o e-mail
+      const emailDocRef = adminDb.collection("users").doc(payerEmail);
+      await emailDocRef.set({
+        email: payerEmail,
+        isPremium: true,
+        role: "premium_user",
+        plan: "pro_unlimited",
+        lastPaymentId: paymentId,
+        paymentMethod: paymentData.payment_method_id || "mercadopago",
+        transactionAmount: paymentData.transaction_amount || 0,
+        approvedAt: paymentData.date_approved || new Date().toISOString(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      console.log(`[Webhook MP] Documento users/${payerEmail} atualizado com isPremium: true com sucesso!`);
+
+      // 6. Vinculação Adicional com Contas UID (Google Sign-In)
+      // Se o usuário já tiver conta criada com o mesmo e-mail (onde o ID do documento é o UID),
+      // atualizamos também o documento do UID para liberação em tempo real no Dashboard
+      try {
+        const matchingUsersSnap = await adminDb.collection("users").where("email", "==", payerEmail).get();
+        const batch = adminDb.batch();
+        let boundCount = 0;
+
+        matchingUsersSnap.forEach((userDoc) => {
+          if (userDoc.id !== payerEmail) {
+            batch.set(userDoc.ref, {
+              isPremium: true,
+              lastPaymentId: paymentId,
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+            boundCount++;
+          }
+        });
+
+        if (boundCount > 0) {
+          await batch.commit();
+          console.log(`[Webhook MP] Guest Checkout sincronizado com ${boundCount} conta(s) existente(s) do usuário (UIDs).`);
+        }
+      } catch (bindError: any) {
+        console.warn("[Webhook MP] Erro ao sincronizar contas com UID:", bindError?.message);
+      }
+
+    } catch (error: any) {
+      console.error("[Webhook MP] Erro inesperado ao processar webhook:", error);
+    }
+  });
 
   // Push Notification Endpoints
   app.get("/api/vapidPublicKey", (req, res) => {
