@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "nexusfocus",
     "public": "dist",
     "ignore": [
       "firebase.json",
