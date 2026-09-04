@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
 import { 
   Crown, 
   CheckCircle2, 
@@ -13,14 +14,29 @@ import {
   Lock,
   MessageCircle,
   TrendingUp,
-  BrainCircuit
+  BrainCircuit,
+  CreditCard,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { AuraLogo } from './AuraLogo';
 
 export function CheckoutScreen() {
   const { currentUser, isPremium, isLoading, logout } = useAuth();
+  const navigate = useNavigate();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
+
+  // Inicializar SDK do Mercado Pago com a Public Key do ambiente
+  const mpPublicKey = import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || import.meta.env.VITE_MP_PUBLIC_KEY || '';
+
+  useEffect(() => {
+    if (mpPublicKey) {
+      initMercadoPago(mpPublicKey, { locale: 'pt-BR' });
+    }
+  }, [mpPublicKey]);
 
   // 1. Se não houver currentUser: redireciona para /login
   if (!isLoading && !currentUser) {
@@ -32,19 +48,66 @@ export function CheckoutScreen() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const checkoutUrl = import.meta.env.VITE_CHECKOUT_URL || 'https://buy.stripe.com/exemplo_nexus_focus';
+  const getApiUrl = () => {
+    if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      return 'http://localhost:3000';
+    }
+    return '';
+  };
 
-  const handleOpenCheckout = () => {
-    window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+  const handleCardSubmit = async (formData: any) => {
+    setIsProcessing(true);
+    setPaymentError(null);
+    setPaymentSuccess(null);
+
+    try {
+      const cardToken = formData.token;
+      if (!cardToken) {
+        throw new Error('Não foi possível gerar o token de segurança do cartão.');
+      }
+
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/api/subscriptions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          token: cardToken,
+          email: currentUser?.email,
+          userId: currentUser?.uid,
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Não foi possível autorizar a assinatura com este cartão.');
+      }
+
+      setPaymentSuccess('Assinatura recorrente aprovada com sucesso! Liberando seu acesso Pro...');
+
+      // O AuthContext com listener em tempo real atualizará isPremium automaticamente
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 1500);
+    } catch (err: any) {
+      console.error('Erro na submissão da assinatura:', err);
+      setPaymentError(err?.message || 'Erro ao processar assinatura recorrente.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleRefreshStatus = () => {
     setIsRefreshing(true);
-    // Recarrega a página ou dispara verificação
     setTimeout(() => {
       window.location.reload();
     }, 600);
   };
+
+  const fallbackCheckoutUrl = import.meta.env.VITE_CHECKOUT_URL || '';
 
   const benefits = [
     {
@@ -126,19 +189,34 @@ export function CheckoutScreen() {
             Acesso Restrito para Assinantes
           </div>
 
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-3 tracking-tight">
-            Desbloqueie o Poder Total do Nexus Focus
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-2 tracking-tight">
+            Desbloqueie o Nexus Focus Pro
           </h2>
-          <p className="text-zinc-400 text-sm sm:text-base max-w-md mx-auto mb-8">
-            O aplicativo opera com acesso 100% exclusivo. Torne-se membro Pro para liberar o painel completo.
+          <p className="text-zinc-400 text-sm sm:text-base max-w-md mx-auto mb-6">
+            Assinatura recorrente mensal com acesso ilimitado a todas as ferramentas e mentorias com IA.
           </p>
 
+          {/* Pricing Highlight */}
+          <div className="mb-6 p-4 rounded-2xl bg-amber-500/[0.07] border border-amber-500/25 flex items-center justify-between">
+            <div className="text-left">
+              <span className="text-xs text-amber-300 font-semibold uppercase tracking-wider">Plano Pro Mensal</span>
+              <p className="text-xs text-zinc-400 mt-0.5">Renovação automática • Cancele quando quiser</p>
+            </div>
+            <div className="text-right">
+              <div className="flex items-baseline gap-1">
+                <span className="text-sm font-semibold text-zinc-400">R$</span>
+                <span className="text-2xl sm:text-3xl font-black text-white">29,90</span>
+                <span className="text-xs text-zinc-400">/mês</span>
+              </div>
+            </div>
+          </div>
+
           {/* Feature List */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-8 text-left">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8 text-left">
             {benefits.map((b, i) => (
               <div
                 key={i}
-                className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.06] flex items-start gap-3 hover:bg-white/[0.04] transition-colors"
+                className="p-3 rounded-2xl bg-white/[0.02] border border-white/[0.06] flex items-start gap-3 hover:bg-white/[0.04] transition-colors"
               >
                 <div className="p-2 rounded-xl bg-white/[0.04] shrink-0">
                   {b.icon}
@@ -151,20 +229,97 @@ export function CheckoutScreen() {
             ))}
           </div>
 
-          {/* Primary CTA Checkout Button */}
-          <button
-            onClick={handleOpenCheckout}
-            className="w-full relative group overflow-hidden rounded-2xl p-[1px] focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-zinc-900 transition-all duration-300 hover:scale-[1.02] active:scale-[0.99] shadow-xl shadow-amber-500/20"
-          >
-            <span className="absolute inset-0 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 rounded-2xl" />
-            <div className="relative flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 font-bold text-black text-base tracking-wide">
-              <span>Desbloquear Acesso Agora</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          {/* Checkout Bricks Form */}
+          {mpPublicKey ? (
+            <div className="text-left bg-black/40 border border-white/[0.08] rounded-2xl p-4 sm:p-6 mb-6">
+              <div className="flex items-center justify-between mb-4 border-b border-white/[0.06] pb-3">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs sm:text-sm font-semibold text-white">Assinar com Cartão de Crédito</span>
+                </div>
+                <span className="text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium">
+                  Mercado Pago Seguro
+                </span>
+              </div>
+
+              {/* Feedback messages */}
+              {paymentError && (
+                <div className="mb-4 p-3.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{paymentError}</span>
+                </div>
+              )}
+
+              {paymentSuccess && (
+                <div className="mb-4 p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{paymentSuccess}</span>
+                </div>
+              )}
+
+              {isProcessing && (
+                <div className="mb-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center gap-3 text-amber-300 text-sm font-medium">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Processando tokenização e assinatura recorrente no Mercado Pago...</span>
+                </div>
+              )}
+
+              {/* Mercado Pago CardPayment Brick */}
+              <div id="cardPaymentBrick_container" className="mercado-pago-brick-dark">
+                <CardPayment
+                  initialization={{
+                    amount: 29.90,
+                    payer: {
+                      email: currentUser?.email || '',
+                    }
+                  }}
+                  customization={{
+                    paymentMethods: {
+                      minInstallments: 1,
+                      maxInstallments: 1,
+                    },
+                    visual: {
+                      style: {
+                        theme: 'dark',
+                        customVariables: {
+                          baseColor: '#f59e0b',
+                          baseColorSecondary: '#d97706',
+                        }
+                      }
+                    }
+                  }}
+                  onSubmit={handleCardSubmit}
+                  onError={(error) => {
+                    console.error('[CardPayment Brick Error]:', error);
+                    setPaymentError('Ocorreu um erro ao carregar o formulário de pagamento. Verifique os dados ou tente novamente.');
+                  }}
+                />
+              </div>
             </div>
-          </button>
+          ) : (
+            <div className="mb-6 p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-left">
+              <div className="flex items-center gap-2 text-amber-300 font-semibold text-sm mb-1.5">
+                <AlertCircle className="w-4 h-4" />
+                <span>Configuração de Chave do Mercado Pago</span>
+              </div>
+              <p className="text-xs text-zinc-300 mb-4">
+                Adicione a variável <code className="bg-black/40 px-1.5 py-0.5 rounded text-amber-300 font-mono">VITE_MERCADOPAGO_PUBLIC_KEY</code> no arquivo <code className="bg-black/40 px-1.5 py-0.5 rounded text-zinc-300 font-mono">.env</code> para exibir o formulário de cartão Checkout Bricks.
+              </p>
+
+              {fallbackCheckoutUrl && (
+                <button
+                  onClick={() => window.open(fallbackCheckoutUrl, '_blank', 'noopener,noreferrer')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold text-sm hover:scale-[1.01] transition-transform"
+                >
+                  <span>Abrir Link de Checkout Alternativo</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Verification / Refresh */}
-          <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3 text-xs text-zinc-400">
+          <div className="mt-2 flex flex-col sm:flex-row items-center justify-center gap-3 text-xs text-zinc-400">
             <button
               onClick={handleRefreshStatus}
               disabled={isRefreshing}
@@ -178,7 +333,7 @@ export function CheckoutScreen() {
           {/* Security guarantee */}
           <div className="mt-6 pt-5 border-t border-white/[0.06] flex items-center justify-center gap-2 text-zinc-500 text-[11px]">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Garantia de 7 dias ou seu dinheiro de volta. Pagamento 100% criptografado.</span>
+            <span>Garantia de 7 dias ou seu dinheiro de volta. Pagamento 100% criptografado pelo Mercado Pago.</span>
           </div>
         </div>
       </motion.div>

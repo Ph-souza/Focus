@@ -7,7 +7,7 @@ import path from "path";
 import crypto from "crypto";
 import { initializeApp, getApps, cert, App } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { MercadoPagoConfig, Payment } from "mercadopago";
+import { MercadoPagoConfig, Payment, PreApproval } from "mercadopago";
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
@@ -49,6 +49,7 @@ const mpWebhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim() || proces
 
 const mpClient = mpAccessToken ? new MercadoPagoConfig({ accessToken: mpAccessToken }) : null;
 const mpPayment = mpClient ? new Payment(mpClient) : null;
+const mpPreApproval = mpClient ? new PreApproval(mpClient) : null;
 
 /**
  * Valida a assinatura do Webhook do Mercado Pago (Header x-signature)
@@ -405,6 +406,148 @@ async function startServer() {
 
     } catch (error: any) {
       console.error("[Webhook MP] Erro inesperado ao processar webhook:", error);
+    }
+  });
+
+  // =========================================================================
+  // Rota de Assinaturas Recorrentes (PreApproval / Subscriptions)
+  // =========================================================================
+  app.post("/api/subscriptions", async (req, res) => {
+    try {
+      const { token, email, userId, planId } = req.body || {};
+
+      if (!token) {
+        return res.status(400).json({ success: false, error: "Token do cartão não fornecido." });
+      }
+
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ success: false, error: "E-mail do usuário não fornecido ou inválido." });
+      }
+
+      const payerEmail = email.trim().toLowerCase();
+      console.log(`[Assinaturas MP] Criando assinatura para o cliente: ${payerEmail}`);
+
+      if (!mpClient && !mpAccessToken) {
+        return res.status(500).json({
+          success: false,
+          error: "MERCADOPAGO_ACCESS_TOKEN não configurado no servidor."
+        });
+      }
+
+      const selectedPlanId = planId || process.env.MERCADOPAGO_PLAN_ID;
+      const amount = Number(process.env.SUBSCRIPTION_AMOUNT || 29.90);
+      const appUrl = process.env.APP_URL || "https://nexusfocus.web.app";
+
+      // Montar corpo da requisição de PreApproval
+      const preapprovalPayload: any = {
+        payer_email: payerEmail,
+        card_token_id: token,
+        back_url: `${appUrl}/dashboard`,
+        status: "authorized"
+      };
+
+      if (selectedPlanId) {
+        preapprovalPayload.preapproval_plan_id = selectedPlanId;
+      } else {
+        preapprovalPayload.reason = "Nexus Focus Pro - Assinatura Mensal";
+        preapprovalPayload.auto_recurring = {
+          frequency: 1,
+          frequency_type: "months",
+          transaction_amount: amount,
+          currency_id: "BRL"
+        };
+      }
+
+      let subscriptionResult: any = null;
+
+      if (mpPreApproval) {
+        subscriptionResult = await mpPreApproval.create({ body: preapprovalPayload });
+      } else {
+        const response = await fetch("https://api.mercadopago.com/preapproval", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${mpAccessToken}`
+          },
+          body: JSON.stringify(preapprovalPayload)
+        });
+
+        subscriptionResult = await response.json();
+
+        if (!response.ok) {
+          throw new Error(subscriptionResult?.message || subscriptionResult?.cause?.[0]?.description || "Falha na criação da assinatura no Mercado Pago");
+        }
+      }
+
+      console.log("[Assinaturas MP] Resposta da criação no MP:", subscriptionResult);
+
+      const subscriptionId = subscriptionResult?.id;
+      const status = subscriptionResult?.status; // 'authorized', 'pending', etc.
+
+      // Se a assinatura foi autorizada ou está pendente de confirmação bancária
+      if (status === "authorized" || status === "pending") {
+        // 1. Atualizar documento users/{payerEmail}
+        const emailRef = adminDb.collection("users").doc(payerEmail);
+        await emailRef.set({
+          email: payerEmail,
+          isPremium: true,
+          role: "premium_user",
+          plan: "pro_unlimited",
+          subscriptionId: subscriptionId,
+          subscriptionStatus: status,
+          subscribedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // 2. Se o userId (UID do Firebase Auth) foi enviado, atualizar users/{userId}
+        if (userId && typeof userId === "string") {
+          const userRef = adminDb.collection("users").doc(userId);
+          await userRef.set({
+            isPremium: true,
+            subscriptionId: subscriptionId,
+            subscriptionStatus: status,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+
+        // 3. Sincronizar qualquer outra conta matching pelo e-mail
+        try {
+          const querySnap = await adminDb.collection("users").where("email", "==", payerEmail).get();
+          const batch = adminDb.batch();
+          querySnap.forEach((docSnap) => {
+            if (docSnap.id !== payerEmail && docSnap.id !== userId) {
+              batch.set(docSnap.ref, {
+                isPremium: true,
+                subscriptionId: subscriptionId,
+                subscriptionStatus: status,
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+            }
+          });
+          await batch.commit();
+        } catch (e: any) {
+          console.warn("[Assinaturas MP] Aviso na sincronização secundária:", e?.message);
+        }
+
+        return res.status(200).json({
+          success: true,
+          status,
+          subscriptionId,
+          message: "Assinatura ativada com sucesso!"
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          status,
+          error: "Não foi possível autorizar o cartão para a assinatura recorrente."
+        });
+      }
+    } catch (err: any) {
+      console.error("[Assinaturas MP] Erro ao processar assinatura:", err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || "Erro interno ao processar assinatura."
+      });
     }
   });
 
