@@ -29,6 +29,7 @@
     "openai": "^7.8.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "react-router-dom": "^7.18.3",
     "recharts": "^3.8.1",
     "vite": "^6.2.3",
     "web-push": "^3.6.7"

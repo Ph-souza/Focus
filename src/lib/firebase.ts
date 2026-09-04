@@ -130,17 +130,28 @@ export const mapAuthError = (error: any): { message: string; tip?: string } => {
   }
 };
 
-export const googleSignInWithScopes = async () => {
+export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     cachedAccessToken = credential?.accessToken || null;
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
+    if (error?.code === 'auth/popup-blocked') {
+      await signInWithRedirect(auth, googleProvider);
+      return null;
+    }
     console.error('Sign in with Google error:', error);
     throw error;
   }
 };
+
+export const signOutUser = async () => {
+  await signOut(auth);
+  cachedAccessToken = null;
+};
+
+export const googleSignInWithScopes = signInWithGoogle;
 
 export const loginWithEmail = async (email: string, pass: string) => {
   try {

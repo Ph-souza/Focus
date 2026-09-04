@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TabType, User, AppNotification, Transaction, ChatMessage, Task, Appointment } from './types';
 import { Navigation } from './components/Navigation';
 import { TabHome } from './components/TabHome';
@@ -7,25 +8,32 @@ import { TabReports } from './components/TabReports';
 import { TabGoals } from './components/TabGoals';
 import { TabTasks } from './components/TabTasks';
 import { TabChat } from './components/TabChat';
-import { AuthScreen } from './components/AuthScreen';
 import { ToastNotifications } from './components/ToastNotifications';
 import { ProfileModal } from './components/ProfileModal';
 import { FocusModeModal } from './components/FocusModeModal';
 import { QuickChat } from './components/QuickChat';
 import { SmartCaptureModal } from './components/SmartCaptureModal';
 import { WhatsAppModal } from './components/WhatsAppModal';
-import { auth, db, handleFirestoreError, OperationType, initAuth, getAccessToken, logoutWithScopes } from './lib/firebase';
+import { db, handleFirestoreError, OperationType } from './lib/firebase';
 import { collection, onSnapshot, query, orderBy, setDoc, doc, getDoc, where } from 'firebase/firestore';
-import { MessageSquarePlus } from 'lucide-react';
 import { subscribeToPushNotifications } from './lib/pushNotifications';
 import { getApiUrl } from './lib/api';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { LoginScreen } from './components/LoginScreen';
+import { CheckoutScreen } from './components/CheckoutScreen';
 
-import { injectMockData } from './lib/mockData';
+function Dashboard() {
+  const { currentUser, logout } = useAuth();
 
-export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [authChecking, setAuthChecking] = useState(true);
-  const [needsAuth, setNeedsAuth] = useState(true);
+  const user: User = {
+    id: currentUser?.uid || '',
+    name: currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Usuário',
+    email: currentUser?.email || '',
+    photoURL: currentUser?.photoURL || undefined,
+    isDemo: false
+  };
+
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
@@ -61,170 +69,106 @@ export default function App() {
     }
   }, []);
 
+  // Sync Google User details to Firestore doc
   useEffect(() => {
-    const unsub = initAuth(
-      async (firebaseUser, token) => {
-        const googleName = firebaseUser.displayName || firebaseUser.providerData[0]?.displayName || 'Usuário';
-        const googleEmail = firebaseUser.email || firebaseUser.providerData[0]?.email || '';
-        const googlePhoto = firebaseUser.photoURL || firebaseUser.providerData[0]?.photoURL || undefined;
-
-        setUser({
-          id: firebaseUser.uid,
-          name: googleName,
-          email: googleEmail,
-          photoURL: googlePhoto,
-          isDemo: false
-        });
-        setNeedsAuth(false);
-        setAuthChecking(false);
-
-        // Ensure user document exists in root users collection with Google Auth info
-        try {
-          const docRef = doc(db, 'users', firebaseUser.uid);
-          const docSnap = await getDoc(docRef);
-          if (!docSnap.exists()) {
-            await setDoc(docRef, {
-              name: googleName,
-              email: googleEmail,
-              photoURL: googlePhoto || '',
-              dateOfBirth: ''
-            });
-          } else {
-            const data = docSnap.data();
-            // Update Firestore doc to use real Google details if needed
-            if (data?.name === 'Amanda Costa' || data?.name === 'Amanda Costa (Demo)' || (googlePhoto && data?.photoURL !== googlePhoto)) {
-              await setDoc(docRef, {
-                name: (data?.name === 'Amanda Costa' || data?.name === 'Amanda Costa (Demo)') ? googleName : (data?.name || googleName),
-                email: googleEmail,
-                photoURL: googlePhoto || data?.photoURL || ''
-              }, { merge: true });
-            }
-          }
-        } catch (err) {
-          console.warn("Notice: could not sync user doc with Firestore (possibly offline or initializing):", err);
-        }
-      },
-      () => {
-        setUser((prev) => {
-          if (prev?.isDemo) {
-            setNeedsAuth(false);
-            return prev;
-          }
-          setNeedsAuth(true);
-          return null;
-        });
-        setAuthChecking(false);
-      }
-    );
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const unsubTxs = onSnapshot(collection(db, `users/${user.id}/transactions`), (snapshot) => {
-      const txs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
-      txs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setTransactions(txs);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.id}/transactions`));
-
-    const unsubTasks = onSnapshot(collection(db, `users/${user.id}/tasks`), (snapshot) => {
-      const dbTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
-      dbTasks.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setTasks(dbTasks);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.id}/tasks`));
-
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    
-    const unsubChat = onSnapshot(query(
-      collection(db, `users/${user.id}/chatMessages`), 
-      where('timestamp', '>=', oneYearAgo.toISOString()),
-      orderBy('timestamp', 'asc')
-    ), (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage));
-      setChatMessages(msgs);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.id}/chatMessages`));
-
-    const unsubGoals = onSnapshot(collection(db, `users/${user.id}/goals`), (snapshot) => {
-      const gs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setGoals(gs);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.id}/goals`));
-
-    const unsubUser = onSnapshot(doc(db, `users/${user.id}`), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.name === 'Amanda Costa' || data.name === 'Amanda Costa (Demo)') {
-          delete data.name;
-          delete data.photoURL;
-        }
-        const currentGooglePhoto = auth.currentUser?.photoURL || auth.currentUser?.providerData[0]?.photoURL || undefined;
-        const finalPhoto = currentGooglePhoto || data.photoURL;
-
-        setUser(prev => prev ? { 
-          ...prev, 
-          ...data,
-          photoURL: finalPhoto || prev?.photoURL || ''
-        } : null);
-      }
-    }, (error) => handleFirestoreError(error, OperationType.GET, `users/${user.id}`));
-
-    const fetchGoogleCalendar = async () => {
-      const token = await getAccessToken();
-      if (!token) return [];
-      
+    if (!currentUser) return;
+    const syncUserProfile = async () => {
       try {
-        const now = new Date();
-        const startOfRange = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const endOfRange = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
+        const docRef = doc(db, 'users', currentUser.uid);
+        const docSnap = await getDoc(docRef);
+        const googleName = currentUser.displayName || 'Usuário';
+        const googleEmail = currentUser.email || '';
+        const googlePhoto = currentUser.photoURL || '';
 
-        const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${startOfRange.toISOString()}&timeMax=${endOfRange.toISOString()}&singleEvents=true&orderBy=startTime`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!res.ok) return [];
-        const data = await res.json();
-        
-        return (data.items || []).map((item: any) => {
-          const dateStr = item.start?.dateTime || item.start?.date;
-          const dt = new Date(dateStr);
-          return {
-            id: item.id,
-            title: item.summary || 'Evento',
-            time: item.start?.dateTime ? dt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'O Dia Todo',
-            type: 'Google Calendar',
-            day: dt.getDate(),
-            date: dt.toISOString()
-          } as Appointment;
-        });
+        if (!docSnap.exists()) {
+          await setDoc(docRef, {
+            name: googleName,
+            email: googleEmail,
+            photoURL: googlePhoto,
+            dateOfBirth: ''
+          }, { merge: true });
+        } else {
+          const data = docSnap.data();
+          if (googlePhoto && data?.photoURL !== googlePhoto) {
+            await setDoc(docRef, {
+              photoURL: googlePhoto
+            }, { merge: true });
+          }
+        }
       } catch (err) {
-        console.error('Failed to fetch google calendar', err);
-        return [];
+        console.warn('Notice syncing user profile to Firestore:', err);
       }
     };
+    syncUserProfile();
+  }, [currentUser]);
 
-    const unsubAppointments = onSnapshot(collection(db, `users/${user.id}/appointments`), async (snapshot) => {
-      const dbApts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
-      const gcalApts = await fetchGoogleCalendar();
-      setAppointments([...dbApts, ...gcalApts]);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.id}/appointments`));
+  // Firestore Subscriptions
+  useEffect(() => {
+    if (!user.id) return;
+
+    // 1. Transactions Listener
+    const transQuery = query(
+      collection(db, 'users', user.id, 'transactions'),
+      orderBy('date', 'desc')
+    );
+    const unsubTrans = onSnapshot(transQuery, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
+      setTransactions(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/transactions`);
+    });
+
+    // 2. Goals Listener
+    const goalsQuery = query(collection(db, 'users', user.id, 'goals'));
+    const unsubGoals = onSnapshot(goalsQuery, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setGoals(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/goals`);
+    });
+
+    // 3. Tasks Listener
+    const tasksQuery = query(collection(db, 'users', user.id, 'tasks'), orderBy('createdAt', 'desc'));
+    const unsubTasks = onSnapshot(tasksQuery, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Task));
+      setTasks(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/tasks`);
+    });
+
+    // 4. Chat Messages Listener
+    const chatQuery = query(collection(db, 'users', user.id, 'chatMessages'), orderBy('timestamp', 'asc'));
+    const unsubChat = onSnapshot(chatQuery, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage));
+      setChatMessages(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/chatMessages`);
+    });
+
+    // 5. Appointments Listener
+    const appointmentsQuery = query(collection(db, 'users', user.id, 'appointments'), orderBy('createdAt', 'desc'));
+    const unsubAppointments = onSnapshot(appointmentsQuery, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Appointment));
+      setAppointments(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/appointments`);
+    });
 
     return () => {
-      unsubTxs();
+      unsubTrans();
+      unsubGoals();
       unsubTasks();
       unsubChat();
-      unsubGoals();
-      unsubUser();
       unsubAppointments();
     };
-  }, [user?.id]);
+  }, [user.id]);
 
+  // Notifications & Push Trigger
   useEffect(() => {
-    if (!user) return;
+    if (!user.id) return;
     
-    // Subscribe to Web Push Notifications on login
     subscribeToPushNotifications();
 
-    // Trigger Web Push instead of simple browser notifications
     const triggerWebPush = async (title: string, body: string, url: string = '/') => {
       try {
         await fetch(getApiUrl('/api/notifications/send'), {
@@ -239,109 +183,71 @@ export default function App() {
     
     const newNotifications: AppNotification[] = [];
     
-    // Check Goals nearing completion (e.g. >= 80%)
-    goals.forEach(goal => {
-      if (goal.targetAmount > 0) {
-        const percent = (goal.currentAmount / goal.targetAmount) * 100;
-        if (percent >= 80 && percent < 100) {
-          const title = 'Meta Próxima! 🎉';
-          const msg = `Sua caixinha "${goal.title}" atingiu ${percent.toFixed(0)}% do objetivo.`;
-          newNotifications.push({ id: `goal-${goal.id}`, title, message: msg, type: 'success' });
-        }
+    // Check overdue/upcoming tasks
+    const today = new Date().toISOString().split('T')[0];
+    tasks.filter(t => !t.completed && t.deadline).forEach(t => {
+      if (t.deadline! < today) {
+        newNotifications.push({
+          id: `task-overdue-${t.id}`,
+          title: 'Tarefa Atrasada',
+          message: `A tarefa "${t.title}" venceu em ${t.deadline}.`,
+          type: 'warning',
+          read: false,
+          date: new Date().toISOString()
+        });
+      } else if (t.deadline === today) {
+        newNotifications.push({
+          id: `task-today-${t.id}`,
+          title: 'Vence Hoje',
+          message: `A tarefa "${t.title}" vence hoje!`,
+          type: 'info',
+          read: false,
+          date: new Date().toISOString()
+        });
       }
     });
 
-    // Check Tasks pending
-    const pendingTasks = tasks.filter(t => !t.completed);
-    if (pendingTasks.length > 0) {
-      const topTask = pendingTasks[0];
-      newNotifications.push({ 
-        id: `task-${topTask.id}`, 
-        title: 'Lembrete de Tarefa', 
-        message: `Você tem a tarefa pendente: "${topTask.title}".`, 
-        type: 'warning' 
-      });
-    }
+    // Check budget limit alert
+    const currentMonth = new Date().toISOString().substring(0, 7);
+    const monthlyExpenses = transactions
+      .filter(t => t.type === 'expense' && t.date.startsWith(currentMonth))
+      .reduce((sum, t) => sum + t.amount, 0);
 
-    // Check Appointments today
-    const currentDay = new Date().getDate();
-    const aptsToday = appointments.filter(a => a.day === currentDay);
-    if (aptsToday.length > 0) {
-       const topApt = aptsToday[0];
-       newNotifications.push({ 
-        id: `apt-${topApt.id}`, 
-        title: 'Compromisso Hoje', 
-        message: `Você tem um compromisso "${topApt.title}" às ${topApt.time}.`, 
-        type: 'info' 
-      });
-    }
+    const savedBudget = localStorage.getItem('nexus_monthly_budget');
+    const budgetLimit = savedBudget ? parseFloat(savedBudget) : 3500;
 
-    // Monthly Budget Alert verification
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const currentMonthTx = transactions.filter(t => {
-      const d = new Date(t.date);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-    });
-    const monthlyExpenses = currentMonthTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-    const budgetLimit = 5000; // Example static limit or could come from user profile
-
-    if (monthlyExpenses > budgetLimit * 0.8) {
+    if (monthlyExpenses > budgetLimit) {
       newNotifications.push({
-        id: `budget-${currentMonth}-${currentYear}`,
-        title: 'Alerta de Orçamento Mensal ⚠️',
-        message: `Você já gastou R$ ${monthlyExpenses.toFixed(2)}, o que representa mais de 80% do seu limite estipulado.`,
-        type: 'warning'
+        id: `budget-exceeded-${currentMonth}`,
+        title: 'Orçamento Ultrapassado',
+        message: `Seus gastos este mês atingiram R$ ${monthlyExpenses.toFixed(2)}, excedendo o limite definido de R$ ${budgetLimit.toFixed(2)}.`,
+        type: 'warning',
+        read: false,
+        date: new Date().toISOString()
       });
     }
 
     setNotifications(prev => {
-      const addedNotifs = newNotifications.filter(nn => !prev.some(pn => pn.id === nn.id));
+      const existingIds = new Set(prev.map(p => p.id));
+      const addedNotifs = newNotifications.filter(n => !existingIds.has(n.id));
+      if (addedNotifs.length === 0) return prev;
       
       addedNotifs.forEach(an => {
-        // Send Web Push instead of old window.Notification
         triggerWebPush(an.title, an.message);
       });
 
       return [...prev, ...addedNotifs];
     });
 
-  }, [user, goals, tasks, appointments, transactions]);
+  }, [user.id, goals, tasks, appointments, transactions]);
 
   const dismissNotification = (id: string) => {
     setNotifications((prev) => prev.filter(n => n.id !== id));
   };
 
-  const handleLoginUser = (newUser: User) => {
-    setUser(newUser);
-    setNeedsAuth(false);
-    if (newUser.isDemo) {
-      injectMockData(newUser.id).catch((err) => {
-        console.warn("Demo mode mock data notice:", err);
-      });
-    }
-  };
-
   const handleLogout = async () => {
     setIsProfileModalOpen(false);
-    try {
-      await logoutWithScopes();
-    } catch (e) {
-      console.error("Logout error", e);
-    }
-    setUser(null);
-    setNeedsAuth(true);
-  };
-
-  const handleSwitchToRealAccount = async () => {
-    setIsProfileModalOpen(false);
-    try {
-      await logoutWithScopes();
-    } catch (e) {
-      console.error("Logout error", e);
-    }
-    setUser(null);
-    setNeedsAuth(true);
+    await logout();
   };
 
   const renderContent = () => {
@@ -370,14 +276,6 @@ export default function App() {
       document.body.classList.remove('dark');
     }
   }, [isDarkMode]);
-
-  if (authChecking) {
-    return <div className="min-h-screen flex items-center justify-center bg-[#09090b]"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
-  }
-
-  if (!user || needsAuth) {
-    return <AuthScreen onLogin={handleLoginUser} />;
-  }
 
   return (
     <div className={`flex h-screen overflow-hidden font-sans antialiased pb-[68px] md:pb-0`}>
@@ -424,5 +322,28 @@ export default function App() {
         <QuickChat user={user} onOpenFullChat={() => setActiveTab('chat')} activeTab={activeTab} transactions={transactions} tasks={tasks} />
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginScreen />} />
+          <Route path="/checkout" element={<CheckoutScreen />} />
+          <Route
+            path="/dashboard/*"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          {/* Fallback inteligente: redireciona para o dashboard que valida as regras de acesso */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

@@ -34,7 +34,9 @@ service cloud.firestore {
       return data.keys().hasAll(['name', 'email'])
         && data.name is string && data.name.size() <= 100
         && data.email is string && data.email.size() <= 200
-        && (!data.keys().hasAny(['dateOfBirth']) || (data.dateOfBirth is string && data.dateOfBirth.size() <= 20));
+        && (!data.keys().hasAny(['dateOfBirth']) || (data.dateOfBirth is string && data.dateOfBirth.size() <= 20))
+        && (!data.keys().hasAny(['photoURL']) || (data.photoURL is string && data.photoURL.size() <= 2000))
+        && (!data.keys().hasAny(['isPremium']) || data.isPremium is bool);
     }
 
     function isValidTransaction(data, userId) {
