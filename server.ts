@@ -17,7 +17,7 @@ import webpush from "web-push";
 let adminApp: App;
 if (!getApps().length) {
   const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "aura-sync-497100";
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "planner-com-ia-assistant";
 
   if (serviceAccountKey) {
     try {

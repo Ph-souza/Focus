@@ -1,10 +1,10 @@
 {
-  "projectId": "aura-sync-497100",
-  "appId": "1:406685307798:web:20042817c174da931203b7",
-  "apiKey": "AIzaSyC3JCjAXdCa7fJ4w1l_1UG6hrypjCp0P48",
-  "authDomain": "aura-sync-497100.firebaseapp.com",
+  "projectId": "planner-com-ia-assistant",
+  "appId": "1:16899628445:web:90c81f0e8213c541a12374",
+  "apiKey": "AIzaSyCy9wq6g4I8IlxfWOiPQZQ1RJsXN5Q1dH8",
+  "authDomain": "planner-com-ia-assistant.firebaseapp.com",
   "firestoreDatabaseId": "(default)",
-  "storageBucket": "aura-sync-497100.firebasestorage.app",
-  "messagingSenderId": "406685307798",
-  "measurementId": "G-2PNCS9WPJJ"
+  "storageBucket": "planner-com-ia-assistant.firebasestorage.app",
+  "messagingSenderId": "16899628445",
+  "measurementId": "G-YFG7KW5RLK"
 }
