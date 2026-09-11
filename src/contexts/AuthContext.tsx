@@ -1,3 +1,8 @@
+// Contas com acesso Pro / Vitalício garantido
+const PRO_ACCOUNTS = [
+  'phillipe.souza27@gmail.com'
+];
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
@@ -32,10 +37,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const userDocRef = doc(db, 'users', user.uid);
 
+        const isProWhitelisted = Boolean(user.email && PRO_ACCOUNTS.includes(user.email.trim().toLowerCase()));
+
         // Assure document exists in Firestore and check Guest Checkout Binding
         try {
           const snap = await getDoc(userDocRef);
-          let userIsPremium = snap.exists() ? Boolean(snap.data()?.isPremium) : false;
+          let userIsPremium = isProWhitelisted || (snap.exists() ? Boolean(snap.data()?.isPremium) : false);
 
           // Guest Checkout Binding: se a conta ainda não for premium, verificar se há compra pelo e-mail
           if (!userIsPremium && user.email) {
@@ -57,11 +64,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               email: user.email || '',
               photoURL: user.photoURL || '',
               isPremium: userIsPremium,
+              plan: userIsPremium ? 'pro_unlimited' : 'free',
+              role: isProWhitelisted ? 'admin_pro' : 'user',
               createdAt: serverTimestamp()
             });
-          } else if (userIsPremium && !snap.data()?.isPremium) {
+          } else if (userIsPremium && (!snap.data()?.isPremium || snap.data()?.plan !== 'pro_unlimited')) {
             await setDoc(userDocRef, {
-              isPremium: true
+              isPremium: true,
+              plan: 'pro_unlimited',
+              role: isProWhitelisted ? 'admin_pro' : (snap.data()?.role || 'premium_user')
             }, { merge: true });
           }
         } catch (err) {
@@ -70,7 +81,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Realtime listener for isPremium status changes
         unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
-          if (docSnap.exists()) {
+          if (isProWhitelisted) {
+            setIsPremium(true);
+          } else if (docSnap.exists()) {
             const data = docSnap.data();
             setIsPremium(Boolean(data?.isPremium));
           } else {
@@ -79,7 +92,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsLoading(false);
         }, (err) => {
           console.error('Firestore user snapshot error:', err);
-          setIsPremium(false);
+          if (isProWhitelisted) {
+            setIsPremium(true);
+          } else {
+            setIsPremium(false);
+          }
           setIsLoading(false);
         });
       } else {

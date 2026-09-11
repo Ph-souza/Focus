@@ -112,7 +112,7 @@ if (isPlaceholder(vapidPublicKey) || isPlaceholder(vapidPrivateKey)) {
 
 try {
   webpush.setVapidDetails(
-    "mailto:suporte@aurasync.com",
+    "mailto:phillipe.souza27@gmail.com",
     vapidPublicKey,
     vapidPrivateKey
   );
@@ -122,7 +122,7 @@ try {
   vapidPublicKey = keys.publicKey;
   vapidPrivateKey = keys.privateKey;
   webpush.setVapidDetails(
-    "mailto:suporte@aurasync.com",
+    "mailto:phillipe.souza27@gmail.com",
     vapidPublicKey,
     vapidPrivateKey
   );
