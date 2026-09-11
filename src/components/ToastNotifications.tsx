@@ -21,8 +21,8 @@ export function ToastNotifications({ notifications, onDismiss }: ToastNotificati
           >
             <div className={`mt-0.5 rounded-full p-1.5 ${
               notif.type === 'success' ? 'bg-emerald-50 text-emerald-600' :
-              notif.type === 'warning' ? 'bg-amber-50 text-amber-600' :
-              'bg-blue-50 text-blue-600'
+              notif.type === 'warning' ? 'bg-zinc-100 text-zinc-800' :
+              'bg-zinc-100 text-zinc-700'
             }`}>
               {notif.type === 'success' && <CheckCircle size={18} />}
               {notif.type === 'warning' && <AlertTriangle size={18} />}

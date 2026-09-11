@@ -54,9 +54,9 @@ export function NotificationsModal({ isOpen, onClose }: NotificationsModalProps)
                 {notifications.map(n => (
                   <div key={n.id} className="p-4 border-b border-slate-100 dark:border-slate-800/50 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-[#18181b] transition-colors cursor-pointer">
                     <div className={`mt-0.5 w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                      n.type === 'warning' ? 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' :
+                      n.type === 'warning' ? 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300' :
                       n.type === 'success' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' :
-                      'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400'
+                      'bg-white/10 text-white dark:bg-white/10 dark:text-white'
                     }`}>
                       {n.type === 'warning' ? <AlertTriangle size={14} /> :
                        n.type === 'success' ? <CheckCircle size={14} /> :

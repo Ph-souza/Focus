@@ -63,24 +63,31 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
-  const handleSave = (e?: React.MouseEvent | React.KeyboardEvent) => {
+  const handleSave = (e?: React.FormEvent | React.MouseEvent | React.KeyboardEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
 
-    const cleanInput = budgetInput.toString().replace(',', '.').trim();
-    const newVal = parseFloat(cleanInput);
+    // 1. Fechar imediatamente o modo de edição para alternar para a visualização limpa
+    setIsEditing(false);
+
+    const cleanInput = (budgetInput ?? '').toString().replace(',', '.').trim();
+    const newVal = cleanInput === '' ? 0 : parseFloat(cleanInput);
 
     if (!isNaN(newVal) && newVal >= 0) {
-      // 1. Atualização otimista e síncrona do estado
+      // 2. Atualização síncrona local imediata
       setCurrentBudget(newVal);
 
       if (typeof window !== 'undefined') {
-        localStorage.setItem('nexus_monthly_budget', newVal.toString());
+        try {
+          localStorage.setItem('nexus_monthly_budget', newVal.toString());
+        } catch {
+          // Ignorar erros de quota/armazenamento local
+        }
       }
 
-      // 2. Persistência assíncrona no Firestore sem travar o ciclo de renderização
+      // 3. Persistência assíncrona desacoplada no Firestore
       if (user?.id) {
         setDoc(doc(db, `users/${user.id}`), { monthlyBudget: newVal }, { merge: true })
           .catch((err) => {
@@ -88,9 +95,6 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
           });
       }
     }
-
-    // 3. Fecha imediatamente o modo de edição para alternar para a visualização do card
-    setIsEditing(false);
   };
 
   const handleCancel = (e?: React.MouseEvent) => {
@@ -113,11 +117,11 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
 
   return (
     <div className="bg-white dark:bg-gradient-to-br dark:from-[#18181b] dark:to-[#09090b] rounded-[24px] border border-slate-200 dark:border-[#27272a]/80 shadow-md p-6 relative overflow-hidden backdrop-blur-md">
-      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#6366f1]/20 to-transparent pointer-events-none"></div>
+      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none"></div>
 
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white flex items-center justify-center">
             <Target size={16} />
           </div>
           <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Orçamento Mensal</h3>
@@ -127,7 +131,7 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
           <button
             type="button"
             onClick={handleStartEdit}
-            className="text-xs font-semibold text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 transition-colors focus:outline-none cursor-pointer"
+            className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition-colors focus:outline-none cursor-pointer"
           >
             <Edit2 size={12} /> Editar
           </button>
@@ -142,43 +146,41 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="flex items-center gap-3 mb-2"
           >
-            <div className="flex-1 relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">R$</span>
-              <input
-                type="number"
-                step="0.01"
-                autoFocus
-                value={budgetInput}
-                onChange={(e) => setBudgetInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSave(e);
-                  } else if (e.key === 'Escape') {
-                    handleCancel();
-                  }
-                }}
-                placeholder="0.00"
-                className="w-full bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-[#27272a] rounded-xl pl-9 pr-4 py-2 text-slate-800 dark:text-slate-100 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleSave}
-              title="Salvar orçamento"
-              className="w-10 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition-all active:scale-95 shadow-sm cursor-pointer"
-            >
-              <Check size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              title="Cancelar edição"
-              className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-[#27272a] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
-            >
-              <X size={18} />
-            </button>
+            <form onSubmit={handleSave} className="flex items-center gap-3 mb-2">
+              <div className="flex-1 relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500 text-sm font-medium">R$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  autoFocus
+                  value={budgetInput}
+                  onChange={(e) => setBudgetInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      handleCancel();
+                    }
+                  }}
+                  placeholder="0.00"
+                  className="w-full bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-[#27272a] rounded-xl pl-9 pr-4 py-2 text-slate-800 dark:text-slate-100 text-sm focus:ring-1 focus:ring-white focus:border-white focus:outline-none transition-all"
+                />
+              </div>
+              <button
+                type="submit"
+                title="Salvar orçamento"
+                className="w-10 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition-all active:scale-95 shadow-sm cursor-pointer"
+              >
+                <Check size={18} className="pointer-events-none" />
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                title="Cancelar edição"
+                className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-[#27272a] hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+              >
+                <X size={18} className="pointer-events-none" />
+              </button>
+            </form>
           </motion.div>
         ) : (
           <motion.div
@@ -204,7 +206,7 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
 
             <div className="w-full h-3 bg-slate-100 dark:bg-[#09090b] rounded-full overflow-hidden mt-3 mb-1">
               <div
-                className={`h-full rounded-full transition-all duration-1000 ease-out ${isOverBudget ? 'bg-rose-500' : percentage > 80 ? 'bg-amber-500' : 'bg-indigo-500'}`}
+                className={`h-full rounded-full transition-all duration-1000 ease-out ${isOverBudget ? 'bg-rose-500' : 'bg-white'}`}
                 style={{ width: `${percentage}%` }}
               ></div>
             </div>
@@ -215,7 +217,7 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
               </p>
             )}
             {!isOverBudget && currentBudget > 0 && percentage > 80 && (
-              <p className="text-xs font-semibold text-amber-500 mt-2 flex items-center gap-1.5">
+              <p className="text-xs font-semibold text-zinc-400 dark:text-zinc-300 mt-2 flex items-center gap-1.5">
                 <AlertCircle size={12} /> Atenção! Você está perto do limite.
               </p>
             )}

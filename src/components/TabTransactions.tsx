@@ -306,7 +306,7 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
           
           {transactions.filter(tx => (filter === 'all' || tx.type === filter) && (categoryFilter === 'all' || tx.category === categoryFilter)).length === 0 && (
             <div className="py-14 px-4 flex flex-col items-center justify-center text-center">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 mb-3 shadow-inner">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-800/80 border border-zinc-700/80 flex items-center justify-center text-white mb-3 shadow-inner">
                 <Receipt size={22} />
               </div>
               <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Nenhuma movimentação encontrada</p>

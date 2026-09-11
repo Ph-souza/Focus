@@ -180,7 +180,7 @@ export function TabTasks({ tasks, setTasks, user }: TabTasksProps) {
           {tasks.map(task => {
             const isHigh = task.priority === 'high';
             const isLow = task.priority === 'low';
-            const priorityColor = isHigh ? 'text-red-500' : isLow ? 'text-green-500' : 'text-amber-500';
+            const priorityColor = isHigh ? 'text-red-500' : isLow ? 'text-emerald-500' : 'text-zinc-400 dark:text-zinc-300';
             
             return (
               <div key={task.id} className="flex items-start gap-4 group">

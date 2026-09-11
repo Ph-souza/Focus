@@ -84,8 +84,8 @@ export function TaskAnalyzer({ tasks }: TaskAnalyzerProps) {
             exit={{ opacity: 0, height: 0 }}
             className="flex flex-col items-center justify-center py-6 relative z-10"
           >
-            <Loader2 className="w-6 h-6 text-indigo-500 animate-spin mb-3" />
-            <p className="text-xs text-amber-300 font-medium animate-pulse">Nexus Focus está analisando seus padrões...</p>
+            <Loader2 className="w-6 h-6 text-white animate-spin mb-3" />
+            <p className="text-xs text-zinc-300 font-medium animate-pulse">Nexus Focus está analisando seus padrões...</p>
           </motion.div>
         ) : analysisResult ? (
           <motion.div 

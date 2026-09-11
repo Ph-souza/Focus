@@ -79,12 +79,12 @@ export function CheckoutScreen() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden selection:bg-amber-500 selection:text-black">
+    <div className="min-h-screen bg-[#09090b] text-white flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden selection:bg-white selection:text-black">
       {/* Subtle Background Glows */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-gradient-to-tr from-amber-500/10 via-amber-600/5 to-transparent rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-1/4 w-[400px] h-[250px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-white/[0.02] rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-10 right-1/4 w-[400px] h-[250px] bg-white/[0.01] rounded-full blur-3xl pointer-events-none" />
 
-      <div className="max-w-md w-full bg-[#121216] border border-[#27272a] rounded-3xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.6)] relative z-10">
+      <div className="max-w-md w-full bg-[#121216] border border-[#27272a] rounded-3xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.7)] relative z-10">
 
         {/* Top Session Bar */}
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-[#27272a]/60 text-xs">
@@ -101,17 +101,17 @@ export function CheckoutScreen() {
 
         {/* Brand Header */}
         <div className="text-center mb-7 flex flex-col items-center">
-          <div className="p-3 bg-gradient-to-br from-[#27272a] to-[#09090b] border border-[#3f3f46] rounded-2xl shadow-xl backdrop-blur-xl mb-3 flex items-center justify-center">
+          <div className="p-3.5 bg-gradient-to-br from-[#1c1c20] to-[#09090b] border border-white/20 rounded-2xl shadow-xl backdrop-blur-xl mb-3 flex items-center justify-center">
             <NexusFocusLogo className="w-10 h-10" />
           </div>
 
           <div className="flex flex-col items-center gap-1 mb-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[11px] font-bold tracking-wider uppercase shadow-sm">
-              <Sparkles className="w-3 h-3 text-amber-400" />
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/10 border border-white/20 text-white text-[11px] font-bold tracking-wider uppercase shadow-sm">
+              <Sparkles className="w-3 h-3 text-white" />
               Nexus Focus Pro
             </div>
-            <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-amber-500/80">
-              Powered by Nexus Flow
+            <span className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-zinc-400">
+              A EVOLUÇÃO DA SUA TI
             </span>
           </div>
 
@@ -119,18 +119,18 @@ export function CheckoutScreen() {
             Eleve seu Foco e Gestão
           </h1>
           <p className="text-sm text-zinc-400 max-w-sm leading-relaxed">
-            Assinatura recorrente com acesso irrestrito ao ecossistema de alta performance.
+            Assinatura corporativa com acesso irrestrito ao ecossistema de alta performance.
           </p>
         </div>
 
         {/* Plan Value Card */}
-        <div className="bg-gradient-to-br from-[#18181b] to-[#121214] border border-amber-500/30 rounded-2xl p-4 sm:p-5 mb-5 shadow-[0_4px_20px_rgba(245,158,11,0.08)] flex justify-between items-center relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-amber-500/30 to-transparent"></div>
+        <div className="bg-gradient-to-br from-[#18181b] to-[#121214] border border-white/20 rounded-2xl p-4 sm:p-5 mb-5 shadow-[0_4px_20px_rgba(0,0,0,0.5)] flex justify-between items-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
           <div>
-            <span className="text-[11px] text-amber-400 font-extrabold uppercase tracking-wider block mb-0.5">
+            <span className="text-[11px] text-zinc-200 font-extrabold uppercase tracking-wider block mb-0.5">
               Plano Pro Mensal
             </span>
-            <p className="text-xs text-zinc-400">Renovação mensal flexível</p>
+            <p className="text-xs text-zinc-400">Renovação corporativa flexível</p>
           </div>
           <div className="text-right">
             <span className="text-2xl font-black text-white tracking-tight">R$ 29,90</span>
@@ -142,7 +142,7 @@ export function CheckoutScreen() {
         <div className="space-y-2.5 mb-6">
           {benefits.map((b, idx) => (
             <div key={idx} className="flex items-start gap-2.5 text-xs text-zinc-300">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-4 h-4 text-white shrink-0 mt-0.5" />
               <span className="leading-snug">{b}</span>
             </div>
           ))}
@@ -154,13 +154,13 @@ export function CheckoutScreen() {
           </div>
         )}
 
-        {/* Call to Action Button */}
+        {/* Call to Action Button - High Contrast Monochrome */}
         <button
           onClick={() => setIsModalOpen(true)}
           disabled={loading}
-          className="w-full relative group overflow-hidden rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-extrabold py-3.5 px-4 transition-all shadow-[0_6px_25px_rgba(245,158,11,0.25)] hover:shadow-[0_8px_30px_rgba(245,158,11,0.4)] flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full relative group overflow-hidden rounded-xl bg-white hover:bg-zinc-200 text-black font-black py-4 px-4 transition-all shadow-[0_4px_25px_rgba(255,255,255,0.18)] hover:shadow-[0_4px_35px_rgba(255,255,255,0.25)] flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          <Lock className="w-4 h-4 text-zinc-950" />
+          <Lock className="w-4 h-4 text-black" />
           <span>Desbloquear Acesso Pro Agora</span>
         </button>
 
@@ -173,7 +173,7 @@ export function CheckoutScreen() {
 
           <a
             href="/dashboard"
-            className="text-xs text-zinc-500 hover:text-amber-400 transition-colors flex items-center gap-1 mt-1"
+            className="text-xs text-zinc-400 hover:text-white transition-colors flex items-center gap-1 mt-1"
           >
             <RefreshCw className="w-3 h-3" />
             <span>Já realizou o pagamento? Atualizar status</span>
@@ -188,7 +188,7 @@ export function CheckoutScreen() {
 
             <div className="flex justify-between items-center mb-5 pb-3 border-b border-[#27272a]">
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+                <div className="w-7 h-7 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-white">
                   <Lock size={14} />
                 </div>
                 <div>
@@ -221,8 +221,8 @@ export function CheckoutScreen() {
 
             {loading && (
               <div className="absolute inset-0 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl gap-3 z-20">
-                <div className="w-9 h-9 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-sm font-semibold text-amber-400">Processando assinatura segura...</p>
+                <div className="w-9 h-9 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm font-semibold text-white">Processando assinatura segura...</p>
               </div>
             )}
           </div>

@@ -372,13 +372,13 @@ export function FocusModeModal({ isOpen, onClose, tasks = [], setTasks, user, on
             {/* Header Minimalista Zen */}
             <div className="flex flex-col items-center gap-2 pt-4">
               <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300 text-xs font-semibold backdrop-blur-md">
-                <span className={`w-2 h-2 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-emerald-400 animate-ping'}`} />
+                <span className={`w-2 h-2 rounded-full ${isPaused ? 'bg-zinc-400' : 'bg-emerald-400 animate-ping'}`} />
                 <span>
                   {category} • {focusType === 'countdown' ? 'Regressivo (50m)' : 'Cronômetro Livre'}
                 </span>
               </div>
               {isPaused && (
-                <span className="text-[11px] font-bold text-amber-400 tracking-wider uppercase">
+                <span className="text-[11px] font-bold text-zinc-300 tracking-wider uppercase">
                   Em Pausa
                 </span>
               )}
@@ -387,7 +387,7 @@ export function FocusModeModal({ isOpen, onClose, tasks = [], setTasks, user, on
             {/* Relógio Gigante Centralizado */}
             <div className="flex flex-col items-center justify-center my-auto relative max-w-lg w-full">
               {/* Radial glow background */}
-              <div className="absolute inset-0 bg-indigo-500/5 blur-[100px] rounded-full pointer-events-none w-72 h-72"></div>
+              <div className="absolute inset-0 bg-white/5 blur-[100px] rounded-full pointer-events-none w-72 h-72"></div>
 
               <motion.div
                 animate={{ scale: isPaused ? 0.98 : 1 }}
@@ -412,8 +412,8 @@ export function FocusModeModal({ isOpen, onClose, tasks = [], setTasks, user, on
                   <p className="italic text-xs sm:text-sm text-zinc-400 font-normal leading-relaxed tracking-wide max-w-md">
                     "{currentQuote}"
                   </p>
-                  <span className="text-[11px] sm:text-xs font-bold text-zinc-500 tracking-wider">
-                    — Mentor Focus
+                  <span className="text-[11px] sm:text-xs font-bold text-zinc-400 tracking-wider">
+                    — Mentor Nexus Focus
                   </span>
                 </motion.div>
               )}
@@ -436,7 +436,7 @@ export function FocusModeModal({ isOpen, onClose, tasks = [], setTasks, user, on
                     </>
                   ) : (
                     <>
-                      <Pause size={16} className="text-amber-400 fill-amber-400" />
+                      <Pause size={16} className="text-white fill-white" />
                       <span>Pausar</span>
                     </>
                   )}

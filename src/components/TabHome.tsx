@@ -95,7 +95,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
     return acc;
   }, {} as Record<string, number>);
 
-  const COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
+  const COLORS = ['#10B981', '#3B82F6', '#94A3B8', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
   const calculatedExpenseCategories = Object.keys(expenseByCategory).map((key, index) => ({
     name: key,
     value: expenseByCategory[key],
@@ -162,7 +162,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
             onClick={() => setIsNotificationsOpen(true)}
             className="w-10 h-10 bg-slate-100 dark:bg-[#18181b] rounded-[14px] flex items-center justify-center relative shadow-sm"
           >
-            <Bell size={20} className="text-[#f59e0b]" />
+            <Bell size={20} className="text-zinc-200" />
             <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border border-[#18181b]"></span>
           </button>
         </div>
@@ -348,11 +348,11 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
           {tasks.filter(t => !t.completed).slice(0, 2).map((task) => (
             <div key={task.id} className="flex items-start gap-4">
               <div className="mt-1 w-1 h-8 rounded-full bg-slate-200 dark:bg-slate-700 relative">
-                <div className={`absolute top-0 left-0 w-full rounded-full ${task.priority === 'high' ? 'h-full bg-red-400' : task.priority === 'medium' ? 'h-1/2 bg-amber-400' : 'h-1/3 bg-blue-400'}`}></div>
+                <div className={`absolute top-0 left-0 w-full rounded-full ${task.priority === 'high' ? 'h-full bg-red-400' : task.priority === 'medium' ? 'h-1/2 bg-zinc-300' : 'h-1/3 bg-zinc-400'}`}></div>
               </div>
               <div className="flex-1">
                 <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">{task.title}</p>
-                <p className={`text-[10px] font-semibold ${task.priority === 'high' ? 'text-red-500' : task.priority === 'medium' ? 'text-amber-500' : 'text-blue-500'}`}>
+                <p className={`text-[10px] font-semibold ${task.priority === 'high' ? 'text-red-500' : task.priority === 'medium' ? 'text-zinc-300' : 'text-zinc-400'}`}>
                   Prioridade {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Média' : 'Baixa'} • Vence em: {task.deadline}
                 </p>
               </div>
@@ -494,7 +494,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
               ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100))
               : 0;
             const isCompleted = percent >= 100;
-            const progressColor = isCompleted ? 'bg-emerald-400' : (i % 2 === 0 ? 'bg-yellow-400' : 'bg-orange-400');
+            const progressColor = isCompleted ? 'bg-emerald-400' : 'bg-white';
 
             return (
               <div key={goal.id} className="bg-white dark:bg-[#0f111a] border border-slate-100 dark:border-[#1f2231] min-w-[160px] p-4 rounded-[24px] snap-center shrink-0 shadow-sm relative overflow-hidden">

@@ -238,7 +238,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
               <div className="flex flex-col h-[420px] bg-[#efeae2] dark:bg-[#0b141a] rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-inner relative">
                 {/* Simulated WhatsApp Chat TopBar */}
                 <div className="bg-[#075e54] dark:bg-[#202c33] text-white p-3 flex items-center gap-3 shrink-0">
-                  <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center font-bold text-sm text-zinc-950">
+                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center font-black text-sm text-black shadow-sm">
                     N
                   </div>
                   <div className="flex-1">
@@ -431,7 +431,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
                   </div>
                 </div>
 
-                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+                <div className="p-3 bg-zinc-100 dark:bg-[#121216] border border-zinc-200 dark:border-[#27272a] rounded-xl text-zinc-800 dark:text-zinc-200 text-xs flex items-start gap-2">
                   <AlertCircle size={16} className="shrink-0 mt-0.5" />
                   <div>
                     <strong>Modo de Teste Prático Instantâneo:</strong>

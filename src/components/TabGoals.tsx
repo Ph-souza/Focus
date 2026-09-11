@@ -33,7 +33,7 @@ export function TabGoals({ goals, user }: TabGoalsProps) {
           onClick={() => setIsModalOpen(true)}
           className="px-4 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm flex items-center gap-2 relative overflow-hidden group"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/10 to-yellow-500/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
           <Plus size={16} /> <span className="hidden sm:inline relative z-10">Nova Meta</span>
         </button>
       </div>
@@ -51,14 +51,14 @@ export function TabGoals({ goals, user }: TabGoalsProps) {
                 <div>
                   <div className="flex justify-between text-xs mb-3">
                     <span className="font-black text-slate-800 dark:text-white drop-shadow-sm text-lg">{formatCurrency(goal.currentAmount)}</span>
-                    <span className="font-bold text-[#F59E0B] text-lg bg-[#F59E0B]/10 px-2 py-0.5 rounded-md drop-shadow-sm">{progressPercentage}%</span>
+                    <span className="font-bold text-white text-sm bg-zinc-800 border border-zinc-700/80 px-2.5 py-0.5 rounded-md drop-shadow-sm">{progressPercentage}%</span>
                   </div>
                   <div className="h-1.5 w-full bg-slate-100 dark:bg-[#27272a] rounded-full overflow-hidden border border-slate-200 dark:border-slate-800">
                     <motion.div 
                       initial={{ width: 0 }}
                       animate={{ width: `${progressPercentage}%` }}
                       transition={{ duration: 1, ease: 'easeOut' }}
-                      className="bg-gradient-to-r from-[#F59E0B]/50 to-[#F59E0B] h-full rounded-full shadow-[0_0_10px_rgba(245,158,11,0.5)]"
+                      className="bg-gradient-to-r from-zinc-400 to-white h-full rounded-full shadow-[0_0_10px_rgba(255,255,255,0.25)]"
                     ></motion.div>
                   </div>
                 </div>

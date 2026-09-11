@@ -159,14 +159,14 @@ export function Navigation({
             onClick={() => onTabChange('home')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'home' 
-                ? 'text-amber-500 font-bold scale-105' 
-                : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 font-medium'
+                ? 'text-white font-bold scale-105' 
+                : 'text-zinc-500 hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <Home size={21} className={activeTab === 'home' ? 'text-amber-500' : ''} />
+              <Home size={21} className={activeTab === 'home' ? 'text-white' : ''} />
               {activeTab === 'home' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></span>
               )}
             </div>
             <span>Home</span>
@@ -178,14 +178,14 @@ export function Navigation({
             onClick={() => onTabChange('transactions')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'transactions' || activeTab === 'reports' 
-                ? 'text-amber-500 font-bold scale-105' 
-                : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 font-medium'
+                ? 'text-white font-bold scale-105' 
+                : 'text-zinc-500 hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <BarChart3 size={21} className={activeTab === 'transactions' || activeTab === 'reports' ? 'text-amber-500' : ''} />
+              <BarChart3 size={21} className={activeTab === 'transactions' || activeTab === 'reports' ? 'text-white' : ''} />
               {(activeTab === 'transactions' || activeTab === 'reports') && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></span>
               )}
             </div>
             <span>Finanças</span>
@@ -207,11 +207,11 @@ export function Navigation({
               }}
               title="Abrir Modo Foco"
               aria-label="Abrir Modo Foco"
-              className="w-13 h-13 sm:w-14 sm:h-14 bg-gradient-to-tr from-amber-500 via-amber-600 to-amber-400 text-zinc-950 rounded-full flex items-center justify-center shadow-[0_8px_20px_rgba(245,158,11,0.4)] hover:shadow-[0_10px_25px_rgba(245,158,11,0.55)] hover:scale-105 active:scale-95 transition-all cursor-pointer border-[3.5px] border-white dark:border-[#09090b] relative group"
+              className="w-13 h-13 sm:w-14 sm:h-14 bg-white hover:bg-zinc-200 text-black rounded-full flex items-center justify-center shadow-[0_4px_25px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all cursor-pointer border-[3.5px] border-[#09090b] relative group"
             >
-              <Target size={26} className="text-zinc-950 group-hover:rotate-12 transition-transform duration-300" />
+              <Target size={26} className="text-black group-hover:rotate-12 transition-transform duration-300" />
             </button>
-            <span className="text-[9px] font-bold text-amber-500 uppercase tracking-tight mt-0.5 pointer-events-none">
+            <span className="text-[9px] font-bold text-white uppercase tracking-tight mt-0.5 pointer-events-none">
               Foco
             </span>
           </div>
@@ -222,14 +222,14 @@ export function Navigation({
             onClick={() => onTabChange('goals')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'goals' 
-                ? 'text-amber-500 font-bold scale-105' 
-                : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 font-medium'
+                ? 'text-white font-bold scale-105' 
+                : 'text-zinc-500 hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <Package size={21} className={activeTab === 'goals' ? 'text-amber-500' : ''} />
+              <Package size={21} className={activeTab === 'goals' ? 'text-white' : ''} />
               {activeTab === 'goals' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></span>
               )}
             </div>
             <span>Caixinhas</span>
@@ -241,14 +241,14 @@ export function Navigation({
             onClick={() => onTabChange('tasks')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'tasks' 
-                ? 'text-amber-500 font-bold scale-105' 
-                : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 font-medium'
+                ? 'text-white font-bold scale-105' 
+                : 'text-zinc-500 hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <CheckSquare size={21} className={activeTab === 'tasks' ? 'text-amber-500' : ''} />
+              <CheckSquare size={21} className={activeTab === 'tasks' ? 'text-white' : ''} />
               {activeTab === 'tasks' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></span>
               )}
             </div>
             <span>Tarefas</span>
@@ -265,13 +265,13 @@ export function Navigation({
         {/* Brand Header */}
         <div className="flex items-center justify-between p-6 mb-2 relative z-10">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-gradient-to-br from-[#27272a] to-[#09090b] border border-[#3f3f46] rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden backdrop-blur-md flex-shrink-0">
-              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-amber-500/20 mix-blend-overlay"></div>
-              <AuraLogo className="w-6 h-6 relative z-10" />
+            <div className="h-11 w-11 bg-gradient-to-br from-[#1c1c20] to-[#09090b] border border-white/20 rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden backdrop-blur-md flex-shrink-0">
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent mix-blend-overlay"></div>
+              <AuraLogo className="w-7 h-7 relative z-10" />
             </div>
             <div>
               <h1 className="text-lg font-black tracking-tight text-slate-800 dark:text-white leading-tight drop-shadow-sm">NEXUS FOCUS</h1>
-              <p className="text-[9px] uppercase tracking-widest text-amber-500/90 dark:text-amber-400 font-bold leading-none mt-1">POWERED BY NEXUS FLOW</p>
+              <p className="text-[9px] uppercase tracking-widest text-zinc-400 font-extrabold leading-none mt-1">A EVOLUÇÃO DA SUA TI</p>
             </div>
           </div>
           <button 
@@ -295,13 +295,13 @@ export function Navigation({
                 onTabChange('tasks');
               }
             }}
-            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-semibold text-xs hover:bg-amber-500/20 transition-all cursor-pointer shadow-sm group"
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 text-white font-semibold text-xs hover:bg-white/10 transition-all cursor-pointer shadow-sm group"
           >
             <div className="flex items-center gap-2.5">
-              <Target size={18} className="text-amber-500 group-hover:rotate-45 transition-transform duration-300" />
+              <Target size={18} className="text-zinc-300 group-hover:rotate-45 transition-transform duration-300" />
               <span>Modo Foco</span>
             </div>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-extrabold tracking-wider uppercase shadow-sm">
+            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-white text-black font-extrabold tracking-wider uppercase shadow-sm">
               Iniciar
             </span>
           </button>
@@ -316,8 +316,8 @@ export function Navigation({
               onClick={() => onTabChange(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 cursor-pointer ${
                 activeTab === item.id 
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20 shadow-[inset_0_1px_0_rgba(245,158,11,0.15)]' 
-                  : 'text-slate-500 dark:text-[#afafaf] hover:bg-slate-50 dark:hover:bg-[#121214] font-medium dark:hover:text-white'
+                  ? 'bg-white text-black font-bold shadow-[0_2px_12px_rgba(255,255,255,0.12)]' 
+                  : 'text-zinc-400 hover:bg-white/5 font-medium hover:text-white'
               }`}
             >
               <div className="flex items-center justify-center">
@@ -333,11 +333,11 @@ export function Navigation({
         {/* User Profile Card */}
         <div className="mt-auto p-6 cursor-pointer relative z-10" onClick={onOpenProfile}>
           {user?.isDemo && (
-            <div className="mb-3 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center shadow-sm">
-              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tracking-wider uppercase block">
+            <div className="mb-3 p-2.5 bg-zinc-800/80 border border-zinc-700/80 rounded-xl text-center shadow-sm">
+              <span className="text-[10px] font-bold text-zinc-300 dark:text-zinc-200 tracking-wider uppercase block">
                 ⚡ Modo Demo Ativo
               </span>
-              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block mt-0.5 hover:underline">
+              <span className="text-[10px] text-white font-bold block mt-0.5 hover:underline">
                 Alternar para Conta Real →
               </span>
             </div>
@@ -345,7 +345,7 @@ export function Navigation({
           <div className="p-4 bg-slate-50 dark:bg-gradient-to-br dark:from-[#18181b] dark:to-[#121214] rounded-[16px] border border-slate-100 dark:border-[#27272a]/80 shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all hover:-translate-y-1 group overflow-hidden relative">
             <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
             <div className="flex items-center gap-3 mb-3 relative z-10">
-              <div className="w-8 h-8 rounded-[10px] bg-indigo-500/10 flex items-center justify-center text-indigo-500 font-bold text-xs uppercase border border-indigo-500/20 overflow-hidden">
+              <div className="w-8 h-8 rounded-[10px] bg-zinc-800 flex items-center justify-center text-white font-bold text-xs uppercase border border-zinc-700 overflow-hidden">
                 {user?.photoURL ? (
                   <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
@@ -355,9 +355,9 @@ export function Navigation({
               <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{user?.name || 'User'}</p>
             </div>
             <div className="h-1 bg-slate-200 dark:bg-[#27272a] rounded-full w-full relative z-10 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-[#F59E0B]/50 to-[#F59E0B] w-full rounded-full shadow-[0_0_10px_rgba(245,158,11,0.5)]"></div>
+              <div className="h-full bg-gradient-to-r from-zinc-500 to-white w-full rounded-full shadow-[0_0_8px_rgba(255,255,255,0.35)]"></div>
             </div>
-            <p className="text-[9px] tracking-widest uppercase font-bold text-[#F59E0B] mt-2 relative z-10 text-right">Acesso Elite</p>
+            <p className="text-[9px] tracking-widest uppercase font-extrabold text-white mt-2 relative z-10 text-right">Acesso Elite</p>
           </div>
         </div>
       </aside>

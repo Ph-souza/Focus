@@ -117,9 +117,9 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         {/* Subtle radial metallic gradient & deep vault ambient light */}
         <div className="absolute top-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1f1f22] via-[#09090b] to-[#09090b]"></div>
         
-        {/* Subtle gold and emerald glow behind card */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-yellow-500/5 rounded-full blur-[120px] opacity-70"></div>
-        <div className="absolute top-[25%] left-[55%] w-[450px] h-[450px] bg-[#10B981]/5 rounded-full blur-[140px] opacity-60"></div>
+        {/* Subtle white ambient light behind card */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/[0.03] rounded-full blur-[120px] opacity-70"></div>
+        <div className="absolute top-[25%] left-[55%] w-[450px] h-[450px] bg-white/[0.02] rounded-full blur-[140px] opacity-60"></div>
 
         {/* High-end metallic grid texture */}
         <div 
@@ -144,9 +144,9 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-6 w-full relative z-10">
           <div className="mb-4 relative group">
-            <div className="absolute inset-0 bg-yellow-500/20 blur-xl rounded-full opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="w-18 h-18 bg-gradient-to-br from-[#27272a] to-[#09090b] border border-[#3f3f46] rounded-2xl flex items-center justify-center shadow-2xl relative overflow-hidden backdrop-blur-md">
-              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-yellow-500/10 mix-blend-overlay"></div>
+            <div className="absolute inset-0 bg-white/10 blur-xl rounded-full opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div className="w-18 h-18 bg-gradient-to-br from-[#27272a] to-[#09090b] border border-white/20 rounded-2xl flex items-center justify-center shadow-2xl relative overflow-hidden backdrop-blur-md">
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent mix-blend-overlay"></div>
               <AuraLogo className="w-9 h-9 relative z-10" />
             </div>
           </div>
@@ -154,8 +154,8 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           <h1 className="text-[28px] sm:text-[32px] font-black tracking-[-0.04em] text-white leading-none mb-1.5 shadow-black drop-shadow-lg">
             NEXUS FOCUS
           </h1>
-          <p className="text-[9px] font-bold tracking-[0.3em] text-[#a1a1aa] uppercase opacity-90 flex items-center gap-1.5">
-            <span>POWERED BY NEXUS FLOW</span>
+          <p className="text-[9px] font-bold tracking-[0.22em] text-[#a1a1aa] uppercase opacity-90 flex items-center gap-1.5">
+            <span>A EVOLUÇÃO DA SUA TI • POWERED BY NEXUS FLOW</span>
           </p>
         </div>
 
@@ -228,7 +228,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
               disabled={isLoading}
               className="w-full bg-gradient-to-b from-[#27272a] to-[#121214] hover:from-[#3f3f46] hover:to-[#18181b] text-white rounded-[16px] py-3.5 font-semibold transition-all shadow-[0_8px_16px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_24px_rgba(0,0,0,0.8)] border border-[#3f3f46] hover:border-[#52525b] flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50 relative overflow-hidden group"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/10 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
               
               {loadingProvider === 'google' ? (
                 <div className="w-5 h-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
@@ -385,13 +385,13 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             type="button"
             onClick={handleDemoLogin}
             disabled={isLoading}
-            className="w-full bg-[#121214] hover:bg-[#18181b] text-slate-300 hover:text-white border border-[#27272a] hover:border-yellow-500/40 rounded-xl py-3 px-4 text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer group shadow-sm disabled:opacity-50"
+            className="w-full bg-[#121214] hover:bg-[#18181b] text-slate-300 hover:text-white border border-[#27272a] hover:border-white/40 rounded-xl py-3 px-4 text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer group shadow-sm disabled:opacity-50"
           >
             {loadingProvider === 'demo' ? (
-              <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
               <>
-                <Sparkles size={14} className="text-yellow-400 group-hover:scale-110 transition-transform" />
+                <Sparkles size={14} className="text-white group-hover:scale-110 transition-transform" />
                 <span>Acessar Modo Demonstração (Sem Login)</span>
               </>
             )}

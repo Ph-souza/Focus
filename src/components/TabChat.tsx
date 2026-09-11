@@ -5,6 +5,7 @@ import { ChatMessage, Transaction, Task, TabType, User } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getApiUrl } from '../lib/api';
+import { AuraLogo } from './AuraLogo';
 
 interface TabChatProps {
   messages: ChatMessage[];
@@ -374,11 +375,11 @@ ${recentTasks || 'Nenhuma tarefa pendente/recente.'}`;
     >
       <div className="flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 bg-gradient-to-br from-amber-500 to-amber-600 text-zinc-950 rounded-xl flex items-center justify-center font-black text-sm shadow-md">
-            N
+          <div className="h-9 w-9 bg-[#1c1c20] border border-white/20 rounded-xl flex items-center justify-center shadow-md">
+            <AuraLogo className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-extrabold uppercase tracking-widest text-amber-400">Mentor Nexus Focus</p>
+            <p className="text-xs font-black uppercase tracking-widest text-white">Mentor Nexus Focus</p>
             <p className="text-[10px] text-zinc-400 font-medium">Alta Performance & Finanças</p>
           </div>
         </div>

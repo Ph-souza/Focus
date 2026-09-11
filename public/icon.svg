@@ -1,3 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="#2563eb">
-  <path d="M256 32c123.7 0 224 100.3 224 224s-100.3 224-224 224S32 379.7 32 256 132.3 32 256 32zm0 400c97.2 0 176-78.8 176-176S353.2 80 256 80 80 158.8 80 256s78.8 176 176 176zm80-176c0 44.2-35.8 80-80 80s-80-35.8-80-80 35.8-80 80-80 80 35.8 80 80z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <rect width="100" height="100" rx="20" fill="#09090b"/>
+  <defs>
+    <linearGradient id="iconPlatinum" x1="20" y1="10" x2="80" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#FFFFFF" />
+      <stop offset="40%" stopColor="#F8FAFC" />
+      <stop offset="75%" stopColor="#CBD5E1" />
+      <stop offset="100%" stopColor="#94A3B8" />
+    </linearGradient>
+    <linearGradient id="iconSilver" x1="50" y1="0" x2="50" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#FFFFFF" />
+      <stop offset="100%" stopColor="#E2E8F0" />
+    </linearGradient>
+  </defs>
+  <g transform="translate(0, 2)">
+    <!-- Crown -->
+    <path d="M50 10 L61 24 L75 17 L69 31 L31 31 L25 17 L39 24 Z" fill="url(#iconSilver)" />
+    <path d="M50 10 L61 24 L50 31 L39 24 Z" fill="url(#iconPlatinum)" opacity="0.9" />
+    <circle cx="50" cy="14" r="1.8" fill="#FFFFFF" />
+    <circle cx="27" cy="19" r="1.4" fill="#FFFFFF" />
+    <circle cx="73" cy="19" r="1.4" fill="#FFFFFF" />
+    <path d="M23 31 L77 31 L74 36 L26 36 Z" fill="url(#iconPlatinum)" />
+
+    <!-- Helmet Forehead -->
+    <path d="M26 36 L74 36 C76 36 78 38 78 41 L80 56 C80 57.5 79 58 77 58 L57 58 L54 39 L46 39 L43 58 L23 58 C21 58 20 57.5 20 56 L22 41 C22 38 24 36 26 36 Z" fill="url(#iconPlatinum)" />
+    
+    <!-- Nasal -->
+    <path d="M46 39 L54 39 L53 68 L50 72 L47 68 Z" fill="#FFFFFF" />
+    
+    <!-- Cheeks -->
+    <path d="M20 58 L42 58 L37 72 L32 88 C31.5 89.5 29.5 89.5 29 88 L22 68 Z" fill="url(#iconSilver)" />
+    <path d="M80 58 L58 58 L63 72 L68 88 C68.5 89.5 70.5 89.5 71 88 L78 68 Z" fill="url(#iconSilver)" />
+
+    <!-- T-Visor Cutout -->
+    <path d="M26 60 L44 60 L45 64 L28 64 Z" fill="#09090b" />
+    <path d="M74 60 L56 60 L55 64 L72 64 Z" fill="#09090b" />
+    <path d="M48 68 L52 68 L53 82 L50 85 L47 82 Z" fill="#09090b" />
+  </g>
 </svg>
