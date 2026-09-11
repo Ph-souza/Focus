@@ -98,21 +98,35 @@ const getGeminiApiKey = () => process.env.GEMINI_API_KEY?.trim() || process.env.
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 // Web Push setup
-let vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
-let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+let vapidPublicKey = process.env.VAPID_PUBLIC_KEY?.trim();
+let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY?.trim();
 
-if (!vapidPublicKey || !vapidPrivateKey) {
+const isPlaceholder = (k?: string) => !k || k.includes("YOUR_VAPID_") || k.length < 20;
+
+if (isPlaceholder(vapidPublicKey) || isPlaceholder(vapidPrivateKey)) {
   const keys = webpush.generateVAPIDKeys();
   vapidPublicKey = keys.publicKey;
   vapidPrivateKey = keys.privateKey;
   console.log("Generated VAPID keys locally for preview.");
 }
 
-webpush.setVapidDetails(
-  "mailto:suporte@aurasync.com",
-  vapidPublicKey,
-  vapidPrivateKey
-);
+try {
+  webpush.setVapidDetails(
+    "mailto:suporte@aurasync.com",
+    vapidPublicKey,
+    vapidPrivateKey
+  );
+} catch (err: any) {
+  console.warn("Falha ao configurar VAPID com as chaves fornecidas, gerando novas:", err?.message);
+  const keys = webpush.generateVAPIDKeys();
+  vapidPublicKey = keys.publicKey;
+  vapidPrivateKey = keys.privateKey;
+  webpush.setVapidDetails(
+    "mailto:suporte@aurasync.com",
+    vapidPublicKey,
+    vapidPrivateKey
+  );
+}
 
 // In-memory store for subscriptions (in production, use Firestore)
 const subscriptions: any[] = [];
