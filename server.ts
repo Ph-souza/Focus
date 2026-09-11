@@ -948,36 +948,43 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
     }
   });
 
-  // Auto-seed Pro Admin Account into Cloud Firestore
-  try {
-    const adminEmail = "phillipe.souza27@gmail.com";
-    const emailRef = adminDb.collection("users").doc(adminEmail);
-    await emailRef.set({
-      email: adminEmail,
-      isPremium: true,
-      role: "admin_pro",
-      plan: "pro_unlimited",
-      updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    const matchingUsersSnap = await adminDb.collection("users").where("email", "==", adminEmail).get();
-    const batch = adminDb.batch();
-    matchingUsersSnap.forEach((docSnap) => {
-      batch.set(docSnap.ref, {
+  // Auto-seed Pro Admin Account into Cloud Firestore (only if Admin SDK credentials are provided)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    try {
+      const adminEmail = "phillipe.souza27@gmail.com";
+      const emailRef = adminDb.collection("users").doc(adminEmail);
+      await emailRef.set({
+        email: adminEmail,
         isPremium: true,
         role: "admin_pro",
         plan: "pro_unlimited",
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
-    });
-    await batch.commit();
-    console.log(`[Auto-Seed Pro] Conta ${adminEmail} garantida com sucesso como Pro no Firestore.`);
-  } catch (seedErr: any) {
-    console.warn("[Auto-Seed Pro] Aviso ao inicializar conta Pro:", seedErr?.message);
+
+      const matchingUsersSnap = await adminDb.collection("users").where("email", "==", adminEmail).get();
+      const batch = adminDb.batch();
+      matchingUsersSnap.forEach((docSnap) => {
+        batch.set(docSnap.ref, {
+          isPremium: true,
+          role: "admin_pro",
+          plan: "pro_unlimited",
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      await batch.commit();
+      console.log(`[Auto-Seed Pro] Conta ${adminEmail} garantida com sucesso como Pro no Firestore.`);
+    } catch (seedErr: any) {
+      console.warn("[Auto-Seed Pro] Aviso ao inicializar conta Pro:", seedErr?.message);
+    }
+  } else {
+    console.log("[Auto-Seed Pro] Ambiente sem FIREBASE_SERVICE_ACCOUNT_KEY. Seed ignorado localmente.");
   }
 
   // Admin Route to ensure Pro status on demand
   app.post('/api/admin/activate-pro', async (req, res) => {
+    if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      return res.status(503).json({ success: false, error: "FIREBASE_SERVICE_ACCOUNT_KEY not configured" });
+    }
     try {
       const { email } = req.body || {};
       const targetEmail = (email || "phillipe.souza27@gmail.com").trim().toLowerCase();
