@@ -159,14 +159,14 @@ export function Navigation({
             onClick={() => onTabChange('home')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'home' 
-                ? 'text-white font-bold scale-105' 
-                : 'text-zinc-500 hover:text-zinc-300 font-medium'
+                ? 'text-zinc-950 dark:text-white font-bold scale-105' 
+                : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <Home size={21} className={activeTab === 'home' ? 'text-white' : ''} />
+              <Home size={21} className={activeTab === 'home' ? 'text-zinc-950 dark:text-white' : ''} />
               {activeTab === 'home' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-zinc-950 dark:bg-white rounded-full"></span>
               )}
             </div>
             <span>Home</span>
@@ -178,14 +178,14 @@ export function Navigation({
             onClick={() => onTabChange('transactions')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'transactions' || activeTab === 'reports' 
-                ? 'text-white font-bold scale-105' 
-                : 'text-zinc-500 hover:text-zinc-300 font-medium'
+                ? 'text-zinc-950 dark:text-white font-bold scale-105' 
+                : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <BarChart3 size={21} className={activeTab === 'transactions' || activeTab === 'reports' ? 'text-white' : ''} />
+              <BarChart3 size={21} className={activeTab === 'transactions' || activeTab === 'reports' ? 'text-zinc-950 dark:text-white' : ''} />
               {(activeTab === 'transactions' || activeTab === 'reports') && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-zinc-950 dark:bg-white rounded-full"></span>
               )}
             </div>
             <span>Finanças</span>
@@ -207,11 +207,11 @@ export function Navigation({
               }}
               title="Abrir Modo Foco"
               aria-label="Abrir Modo Foco"
-              className="w-13 h-13 sm:w-14 sm:h-14 bg-white hover:bg-zinc-200 text-black rounded-full flex items-center justify-center shadow-[0_4px_25px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all cursor-pointer border-[3.5px] border-[#09090b] relative group"
+              className="w-13 h-13 sm:w-14 sm:h-14 bg-zinc-900 text-white dark:bg-white dark:text-black rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer border-[3.5px] border-slate-50 dark:border-[#09090b] relative group"
             >
-              <Target size={26} className="text-black group-hover:rotate-12 transition-transform duration-300" />
+              <Target size={26} className="group-hover:rotate-12 transition-transform duration-300" />
             </button>
-            <span className="text-[9px] font-bold text-white uppercase tracking-tight mt-0.5 pointer-events-none">
+            <span className="text-[9px] font-bold text-zinc-900 dark:text-white uppercase tracking-tight mt-0.5 pointer-events-none">
               Foco
             </span>
           </div>
@@ -222,14 +222,14 @@ export function Navigation({
             onClick={() => onTabChange('goals')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'goals' 
-                ? 'text-white font-bold scale-105' 
-                : 'text-zinc-500 hover:text-zinc-300 font-medium'
+                ? 'text-zinc-950 dark:text-white font-bold scale-105' 
+                : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <Package size={21} className={activeTab === 'goals' ? 'text-white' : ''} />
+              <Package size={21} className={activeTab === 'goals' ? 'text-zinc-950 dark:text-white' : ''} />
               {activeTab === 'goals' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-zinc-950 dark:bg-white rounded-full"></span>
               )}
             </div>
             <span>Caixinhas</span>
@@ -241,14 +241,14 @@ export function Navigation({
             onClick={() => onTabChange('tasks')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'tasks' 
-                ? 'text-white font-bold scale-105' 
-                : 'text-zinc-500 hover:text-zinc-300 font-medium'
+                ? 'text-zinc-950 dark:text-white font-bold scale-105' 
+                : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <CheckSquare size={21} className={activeTab === 'tasks' ? 'text-white' : ''} />
+              <CheckSquare size={21} className={activeTab === 'tasks' ? 'text-zinc-950 dark:text-white' : ''} />
               {activeTab === 'tasks' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-zinc-950 dark:bg-white rounded-full"></span>
               )}
             </div>
             <span>Tarefas</span>
@@ -265,19 +265,18 @@ export function Navigation({
         {/* Brand Header */}
         <div className="flex items-center justify-between p-6 mb-2 relative z-10">
           <div className="flex items-center gap-3">
-            <div className="h-11 w-11 bg-gradient-to-br from-[#1c1c20] to-[#09090b] border border-white/20 rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden backdrop-blur-md flex-shrink-0">
-              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent mix-blend-overlay"></div>
+            <div className="h-11 w-11 bg-zinc-900 dark:bg-gradient-to-br dark:from-[#1c1c20] dark:to-[#09090b] border border-zinc-800 dark:border-white/20 rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden flex-shrink-0">
               <AuraLogo className="w-7 h-7 relative z-10" />
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-tight text-slate-800 dark:text-white leading-tight drop-shadow-sm">NEXUS FOCUS</h1>
-              <p className="text-[9px] uppercase tracking-widest text-zinc-400 font-extrabold leading-none mt-1">A EVOLUÇÃO DA SUA TI</p>
+              <h1 className="text-lg font-black tracking-tight text-zinc-900 dark:text-white leading-tight drop-shadow-sm">NEXUS FOCUS</h1>
+              <p className="text-[9px] uppercase tracking-widest text-zinc-500 dark:text-zinc-400 font-extrabold leading-none mt-1">A EVOLUÇÃO DA SUA TI</p>
             </div>
           </div>
           <button 
             type="button"
             onClick={onToggleDarkMode} 
-            className="p-2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-white bg-slate-50 dark:bg-[#121214] rounded-lg transition-colors border border-slate-100 dark:border-[#27272a] cursor-pointer"
+            className="p-2 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white bg-zinc-100 hover:bg-zinc-200 dark:bg-[#121214] dark:hover:bg-zinc-800 rounded-lg transition-colors border border-zinc-200 dark:border-[#27272a] cursor-pointer"
             title={isDarkMode ? "Modo Claro" : "Modo Escuro"}
           >
             {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
@@ -295,13 +294,13 @@ export function Navigation({
                 onTabChange('tasks');
               }
             }}
-            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 text-white font-semibold text-xs hover:bg-white/10 transition-all cursor-pointer shadow-sm group"
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300 dark:bg-white/5 dark:border-white/10 dark:hover:border-white/20 dark:text-white font-semibold text-xs transition-all cursor-pointer shadow-sm group"
           >
             <div className="flex items-center gap-2.5">
-              <Target size={18} className="text-zinc-300 group-hover:rotate-45 transition-transform duration-300" />
-              <span>Modo Foco</span>
+              <Target size={18} className="text-zinc-700 dark:text-zinc-300 group-hover:rotate-45 transition-transform duration-300" />
+              <span className="font-bold">Modo Foco</span>
             </div>
-            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-white text-black font-extrabold tracking-wider uppercase shadow-sm">
+            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-zinc-900 text-white dark:bg-white dark:text-black font-extrabold tracking-wider uppercase shadow-sm">
               Iniciar
             </span>
           </button>
@@ -316,8 +315,8 @@ export function Navigation({
               onClick={() => onTabChange(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 cursor-pointer ${
                 activeTab === item.id 
-                  ? 'bg-white text-black font-bold shadow-[0_2px_12px_rgba(255,255,255,0.12)]' 
-                  : 'text-zinc-400 hover:bg-white/5 font-medium hover:text-white'
+                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black font-bold shadow-sm dark:shadow-[0_2px_12px_rgba(255,255,255,0.12)]' 
+                  : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white font-medium'
               }`}
             >
               <div className="flex items-center justify-center">
@@ -333,19 +332,19 @@ export function Navigation({
         {/* User Profile Card */}
         <div className="mt-auto p-6 cursor-pointer relative z-10" onClick={onOpenProfile}>
           {user?.isDemo && (
-            <div className="mb-3 p-2.5 bg-zinc-800/80 border border-zinc-700/80 rounded-xl text-center shadow-sm">
-              <span className="text-[10px] font-bold text-zinc-300 dark:text-zinc-200 tracking-wider uppercase block">
+            <div className="mb-3 p-2.5 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-xl text-center shadow-sm">
+              <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200 tracking-wider uppercase block">
                 ⚡ Modo Demo Ativo
               </span>
-              <span className="text-[10px] text-white font-bold block mt-0.5 hover:underline">
+              <span className="text-[10px] text-zinc-900 dark:text-white font-bold block mt-0.5 hover:underline">
                 Alternar para Conta Real →
               </span>
             </div>
           )}
-          <div className="p-4 bg-slate-50 dark:bg-gradient-to-br dark:from-[#18181b] dark:to-[#121214] rounded-[16px] border border-slate-100 dark:border-[#27272a]/80 shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all hover:-translate-y-1 group overflow-hidden relative">
-            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+          <div className="p-4 bg-slate-50 dark:bg-[#121214] rounded-[16px] border border-slate-200 dark:border-zinc-800/80 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all hover:-translate-y-1 group overflow-hidden relative">
+            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-zinc-200 dark:via-white/10 to-transparent"></div>
             <div className="flex items-center gap-3 mb-3 relative z-10">
-              <div className="w-8 h-8 rounded-[10px] bg-zinc-800 flex items-center justify-center text-white font-bold text-xs uppercase border border-zinc-700 overflow-hidden">
+              <div className="w-8 h-8 rounded-[10px] bg-zinc-900 text-white dark:bg-white dark:text-black flex items-center justify-center font-bold text-xs uppercase border border-zinc-700 dark:border-zinc-300 overflow-hidden shadow-sm">
                 {user?.photoURL ? (
                   <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
@@ -355,9 +354,9 @@ export function Navigation({
               <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{user?.name || 'User'}</p>
             </div>
             <div className="h-1 bg-slate-200 dark:bg-[#27272a] rounded-full w-full relative z-10 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-zinc-500 to-white w-full rounded-full shadow-[0_0_8px_rgba(255,255,255,0.35)]"></div>
+              <div className="h-full bg-gradient-to-r from-zinc-500 to-zinc-900 dark:from-zinc-500 dark:to-white w-full rounded-full shadow-[0_0_8px_rgba(0,0,0,0.1)] dark:shadow-[0_0_8px_rgba(255,255,255,0.35)]"></div>
             </div>
-            <p className="text-[9px] tracking-widest uppercase font-extrabold text-white mt-2 relative z-10 text-right">Acesso Elite</p>
+            <p className="text-[9px] tracking-widest uppercase font-extrabold text-zinc-700 dark:text-white mt-2 relative z-10 text-right">Acesso Elite</p>
           </div>
         </div>
       </aside>

@@ -223,8 +223,8 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
 
       <MonthlyBudgetWidget transactions={transactions} user={user} />
 
-      <div className="bg-white dark:bg-gradient-to-br dark:from-[#18181b] dark:to-[#09090b] rounded-[24px] border border-slate-200 dark:border-[#27272a]/80 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)] flex flex-col overflow-hidden relative backdrop-blur-md">
-        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+      <div className="bg-white dark:bg-[#121216] rounded-[24px] border border-slate-200 dark:border-zinc-800 shadow-[0_4px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] flex flex-col overflow-hidden relative backdrop-blur-md">
+        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-700/60 to-transparent pointer-events-none"></div>
         <div className="p-4 border-b border-slate-100 dark:border-[#27272a] flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
           <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Transações Recentes</h3>
           <div className="flex flex-col sm:flex-row gap-3">

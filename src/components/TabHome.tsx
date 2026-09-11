@@ -200,55 +200,55 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
         </AnimatePresence>
 
         {/* AI Banner / Visão do Mentor */}
-        <div className="hidden md:flex flex-col bg-[#0f111a] dark:bg-white border border-[#1f2231] dark:border-slate-200 p-4 rounded-[24px] text-white dark:text-slate-800 shadow-lg relative overflow-hidden mb-2">
+        <div className="hidden md:flex flex-col bg-white dark:bg-[#121216] border border-slate-200 dark:border-zinc-800 p-5 rounded-[24px] text-slate-800 dark:text-white shadow-sm dark:shadow-[0_8px_30px_rgba(0,0,0,0.5)] relative overflow-hidden mb-2">
           <div className="flex items-center justify-between mb-3 relative z-10 w-full">
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 bg-indigo-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                <Shield className="text-indigo-400 dark:text-indigo-600" size={16} />
+              <div className="h-8 w-8 bg-zinc-100 dark:bg-white/10 rounded-full flex items-center justify-center flex-shrink-0 text-zinc-900 dark:text-white">
+                <Shield size={16} />
               </div>
               <div className="flex items-center gap-2">
-                <p className="font-bold text-sm text-white dark:text-slate-800">Visão do Mentor</p>
+                <p className="font-bold text-sm text-slate-800 dark:text-white">Visão do Mentor</p>
                 {latestMentorFeedback && (
-                  <span className="text-[10px] bg-indigo-500/20 text-indigo-300 dark:text-indigo-600 px-2 py-0.5 rounded-full font-bold border border-indigo-500/30 animate-pulse">
+                  <span className="text-[10px] bg-zinc-100 dark:bg-white/10 text-zinc-800 dark:text-zinc-200 px-2 py-0.5 rounded-full font-bold border border-zinc-200 dark:border-white/10 animate-pulse">
                     🎯 Última Sessão de Foco
                   </span>
                 )}
               </div>
             </div>
-            <button className="text-indigo-400 dark:text-indigo-500 hover:text-indigo-300 transition-colors p-1" onClick={() => setDailyTip('Nova dica gerada... (simulado)')}>
+            <button className="text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-white transition-colors p-1 cursor-pointer" onClick={() => setDailyTip('Nova dica gerada... (simulado)')}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
             </button>
           </div>
 
           <div className="relative z-10 pl-11">
-            <div className="flex items-start gap-1.5 mb-1 text-indigo-400 dark:text-indigo-600">
-              <span className="mt-1 w-1.5 h-1.5 rounded-full bg-indigo-400 dark:bg-indigo-600 shrink-0"></span>
+            <div className="flex items-start gap-1.5 mb-1 text-zinc-600 dark:text-zinc-300">
+              <span className="mt-1 w-1.5 h-1.5 rounded-full bg-zinc-900 dark:bg-white shrink-0"></span>
               <p className="text-xs font-semibold leading-relaxed">
                 {latestMentorFeedback ? 'Avaliação da sua Sessão:' : 'Recomendação Estratégica do Mentor:'}
               </p>
             </div>
-            <p className="text-[#e2e8f0] dark:text-slate-700 text-xs leading-relaxed ml-3 font-medium">
+            <p className="text-slate-600 dark:text-zinc-300 text-xs leading-relaxed ml-3 font-medium">
               {latestMentorFeedback || mentorInsight}
             </p>
           </div>
         </div>
 
         {/* WhatsApp Integration Card */}
-        <div className="bg-emerald-950/40 dark:bg-emerald-900/20 border border-emerald-500/30 dark:border-emerald-500/40 p-4 rounded-[24px] text-white dark:text-slate-100 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div className="bg-white dark:bg-[#121216] border border-slate-200 dark:border-zinc-800 p-4 rounded-[24px] text-slate-800 dark:text-slate-100 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 relative overflow-hidden">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-lg shrink-0">
+            <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-lg shrink-0">
               💬
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h4 className="font-bold text-sm text-emerald-400 dark:text-emerald-300">
+                <h4 className="font-bold text-sm text-emerald-600 dark:text-emerald-400">
                   Mentor no WhatsApp
                 </h4>
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-medium border border-emerald-500/30">
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold border border-emerald-500/20">
                   Novo
                 </span>
               </div>
-              <p className="text-xs text-slate-300 dark:text-slate-400 leading-snug">
+              <p className="text-xs text-slate-500 dark:text-zinc-400 leading-snug">
                 Envie áudios ou textos no WhatsApp e insira gastos, receitas e lembretes instantaneamente no app.
               </p>
             </div>
@@ -294,21 +294,21 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
       {/* Desktop Quick Stats Grid & Tasks */}
       <div className="hidden md:grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div
-          className="lg:col-span-1 bg-white dark:bg-gradient-to-br dark:from-[#18181b] dark:to-[#09090b] p-8 rounded-[24px] border border-slate-200 dark:border-[#27272a]/80 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)] flex flex-col justify-center transition-all hover:-translate-y-1 relative overflow-hidden backdrop-blur-md group cursor-pointer h-[320px]"
+          className="lg:col-span-1 bg-white dark:bg-[#121216] p-8 rounded-[24px] border border-slate-200 dark:border-zinc-800 shadow-[0_4px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] flex flex-col justify-center transition-all hover:-translate-y-1 relative overflow-hidden backdrop-blur-md group cursor-pointer h-[320px]"
           onClick={() => setIsStatementModalOpen(true)}
         >
           <div className="absolute inset-0 bg-gradient-to-tr from-[#10B981]/0 via-transparent to-[#10B981]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
-          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-          <p className="text-slate-500 dark:text-[#afafaf] text-sm font-bold uppercase tracking-wider mb-4 relative z-10">Saldo Total</p>
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-700/60 to-transparent pointer-events-none"></div>
+          <p className="text-slate-500 dark:text-zinc-400 text-sm font-bold uppercase tracking-wider mb-4 relative z-10">Saldo Total</p>
           <p className="text-4xl font-black text-slate-800 dark:text-white drop-shadow-sm relative z-10">{formatCurrency(balance)}</p>
           <div className="mt-4 text-xs text-[#10B981] font-bold tracking-wide relative z-10">+R$ 1.200,00 este mês</div>
         </div>
 
         <div className="lg:col-span-1 flex flex-col gap-6 h-[320px]">
-          <div className="flex-1 bg-white dark:bg-gradient-to-br dark:from-[#18181b] dark:to-[#09090b] p-6 rounded-[24px] border border-slate-200 dark:border-[#27272a]/80 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)] flex flex-col justify-center transition-all hover:-translate-y-1 relative overflow-hidden backdrop-blur-md group">
+          <div className="flex-1 bg-white dark:bg-[#121216] p-6 rounded-[24px] border border-slate-200 dark:border-zinc-800 shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] flex flex-col justify-center transition-all hover:-translate-y-1 relative overflow-hidden backdrop-blur-md group">
             <div className="absolute inset-0 bg-gradient-to-tr from-[#10B981]/0 via-transparent to-[#10B981]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
-            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-            <p className="text-slate-500 dark:text-[#afafaf] text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5 relative z-10">
+            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-700/60 to-transparent pointer-events-none"></div>
+            <p className="text-slate-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5 relative z-10">
               Receitas
               <ArrowUpRight size={14} className="text-[#10B981]" />
             </p>
@@ -318,10 +318,10 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
             </div>
           </div>
 
-          <div className="flex-1 bg-white dark:bg-gradient-to-br dark:from-[#18181b] dark:to-[#09090b] p-6 rounded-[24px] border border-slate-200 dark:border-[#27272a]/80 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)] flex flex-col justify-center transition-all hover:-translate-y-1 relative overflow-hidden backdrop-blur-md group">
+          <div className="flex-1 bg-white dark:bg-[#121216] p-6 rounded-[24px] border border-slate-200 dark:border-zinc-800 shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] flex flex-col justify-center transition-all hover:-translate-y-1 relative overflow-hidden backdrop-blur-md group">
             <div className="absolute inset-0 bg-gradient-to-tr from-rose-500/0 via-transparent to-rose-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
-            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-            <p className="text-slate-500 dark:text-[#afafaf] text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5 relative z-10">
+            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-700/60 to-transparent pointer-events-none"></div>
+            <p className="text-slate-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5 relative z-10">
               Despesas
               <ArrowDownRight size={14} className="text-rose-500" />
             </p>
@@ -366,32 +366,32 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
         </div>
 
         {/* Compact AI Banner / Visão do Mentor */}
-        <div className="bg-[#0f111a] dark:bg-white border border-slate-800 dark:border-slate-200 p-3 rounded-[16px] text-white dark:text-slate-800 shadow-lg relative overflow-hidden mb-6">
+        <div className="bg-white dark:bg-[#121216] border border-slate-200 dark:border-zinc-800 p-3.5 rounded-[16px] text-slate-800 dark:text-white shadow-sm relative overflow-hidden mb-6">
           <div className="flex justify-between items-center mb-2">
             <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 dark:bg-indigo-100 dark:text-indigo-600 flex items-center justify-center">
+              <div className="w-5 h-5 rounded-full bg-zinc-100 dark:bg-white/10 text-zinc-800 dark:text-white flex items-center justify-center">
                 <Shield size={10} />
               </div>
               <span className="text-[11px] font-bold tracking-wide">Visão do Mentor</span>
               {latestMentorFeedback && (
-                <span className="text-[8px] bg-indigo-500/20 text-indigo-300 dark:text-indigo-600 px-1.5 py-0.5 rounded-full font-bold border border-indigo-500/30 animate-pulse">
+                <span className="text-[8px] bg-zinc-100 dark:bg-white/10 text-zinc-800 dark:text-zinc-200 px-1.5 py-0.5 rounded-full font-bold border border-zinc-200 dark:border-white/10 animate-pulse">
                   🎯 Foco Recente
                 </span>
               )}
             </div>
-            <button className="text-indigo-400 dark:text-indigo-500 hover:opacity-80 transition-opacity">
+            <button className="text-zinc-400 dark:text-zinc-400 hover:opacity-80 transition-opacity">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
             </button>
           </div>
 
-          <div className="bg-white/5 dark:bg-slate-100 rounded-md p-2">
+          <div className="bg-slate-50 dark:bg-zinc-900/70 border border-slate-100 dark:border-zinc-800/60 rounded-xl p-2.5">
             <div className="flex items-center gap-1.5 mb-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
-              <span className="text-[9px] font-bold text-indigo-400 dark:text-indigo-600">
+              <div className="w-1.5 h-1.5 rounded-full bg-zinc-800 dark:bg-white"></div>
+              <span className="text-[9px] font-bold text-zinc-700 dark:text-zinc-200">
                 {latestMentorFeedback ? 'Avaliação da Sessão:' : 'Recomendação Estratégica do Mentor:'}
               </span>
             </div>
-            <p className="text-[10px] text-slate-200 dark:text-slate-700 pl-3 leading-tight font-medium">
+            <p className="text-[10px] text-slate-600 dark:text-zinc-300 pl-3 leading-tight font-medium">
               {latestMentorFeedback || "Configure as notificações PWA para receber orientações do Mentor."}
             </p>
           </div>
@@ -402,9 +402,9 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
       <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-6">
         <div
           onClick={() => onTabChange('reports')}
-          className="bg-white dark:bg-gradient-to-br dark:from-[#18181b] dark:to-[#09090b] p-7 rounded-[24px] border border-slate-200 dark:border-[#27272a]/80 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)] flex-col transition-all relative overflow-hidden backdrop-blur-md cursor-pointer hover:border-[#10B981]/50 group flex h-[380px]"
+          className="bg-white dark:bg-[#121216] p-7 rounded-[24px] border border-slate-200 dark:border-zinc-800 shadow-[0_4px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] flex-col transition-all relative overflow-hidden backdrop-blur-md cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-700 group flex h-[380px]"
         >
-          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-700/60 to-transparent pointer-events-none"></div>
           <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 mb-6 uppercase tracking-wider text-[11px] relative z-10 group-hover:text-[#10B981] transition-colors">Receitas vs Despesas (Mensal)</h3>
           <div className="flex-1 w-full relative z-10 pointer-events-none">
             <ResponsiveContainer width="100%" height="100%">
@@ -426,9 +426,9 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
 
         <div
           onClick={() => onTabChange('reports')}
-          className="bg-white dark:bg-[#0f111a] border border-slate-100 dark:border-[#1f2231] p-6 rounded-[32px] shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-none flex flex-col transition-all relative overflow-hidden backdrop-blur-md cursor-pointer hover:border-[#10B981]/50 group mb-6 md:mb-0 h-[380px]"
+          className="bg-white dark:bg-[#121216] border border-slate-200 dark:border-zinc-800 p-6 rounded-[24px] shadow-[0_4px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] flex flex-col transition-all relative overflow-hidden backdrop-blur-md cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-700 group mb-6 md:mb-0 h-[380px]"
         >
-          <div className="hidden dark:block absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-700/60 to-transparent pointer-events-none"></div>
           <div className="flex justify-between items-center mb-10 relative z-10">
             <h3 className="font-bold text-sm text-slate-800 dark:text-white tracking-wide">Distribuição de Despesas</h3>
           </div>

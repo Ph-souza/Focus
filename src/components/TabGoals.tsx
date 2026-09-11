@@ -43,8 +43,8 @@ export function TabGoals({ goals, user }: TabGoalsProps) {
           const progressPercentage = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
           
           return (
-            <div key={goal.id} className="bg-white dark:bg-gradient-to-br dark:from-[#18181b] dark:to-[#09090b] p-6 rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)] border border-slate-200 dark:border-[#27272a]/80 relative group overflow-hidden transition-all hover:-translate-y-1 backdrop-blur-md">
-              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+            <div key={goal.id} className="bg-white dark:bg-[#121216] p-6 rounded-[24px] shadow-[0_4px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] border border-slate-200 dark:border-zinc-800 relative group overflow-hidden transition-all hover:-translate-y-1 backdrop-blur-md">
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-700/60 to-transparent pointer-events-none"></div>
               <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 mb-6 uppercase tracking-wider text-[11px] relative z-10">{goal.title}</h3>
               
               <div className="space-y-4 relative z-10">

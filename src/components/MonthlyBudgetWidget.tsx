@@ -116,8 +116,8 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
   };
 
   return (
-    <div className="bg-white dark:bg-gradient-to-br dark:from-[#18181b] dark:to-[#09090b] rounded-[24px] border border-slate-200 dark:border-[#27272a]/80 shadow-md p-6 relative overflow-hidden backdrop-blur-md">
-      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none"></div>
+    <div className="bg-white dark:bg-[#121216] rounded-[24px] border border-slate-200 dark:border-zinc-800 shadow-[0_4px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] p-6 relative overflow-hidden backdrop-blur-md">
+      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-700/60 to-transparent pointer-events-none"></div>
 
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">

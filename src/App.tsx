@@ -276,10 +276,14 @@ function Dashboard() {
   };
 
   useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
     if (isDarkMode) {
-      document.body.classList.add('dark');
+      root.classList.add('dark');
+      body.classList.add('dark');
     } else {
-      document.body.classList.remove('dark');
+      root.classList.remove('dark');
+      body.classList.remove('dark');
     }
     if (typeof window !== 'undefined') {
       localStorage.setItem('nexus_dark_mode', isDarkMode ? 'true' : 'false');
@@ -287,7 +291,7 @@ function Dashboard() {
   }, [isDarkMode]);
 
   return (
-    <div className={`flex h-screen overflow-hidden font-sans antialiased pb-[68px] md:pb-0`}>
+    <div className="flex h-screen overflow-hidden font-sans antialiased pb-[68px] md:pb-0 bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-white transition-colors duration-200">
       <ToastNotifications notifications={notifications} onDismiss={dismissNotification} />
       <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} user={user} onLogout={handleLogout} />
       <WhatsAppModal isOpen={isWhatsAppModalOpen} onClose={() => setIsWhatsAppModalOpen(false)} user={user} />
