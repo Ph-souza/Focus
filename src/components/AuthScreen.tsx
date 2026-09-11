@@ -99,9 +99,9 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
     setLoadingProvider('demo');
     setTimeout(() => {
       onLogin({
-        id: 'demo_user_aura',
+        id: 'demo_user_nexus',
         name: 'Usuário Demonstração',
-        email: 'demo@aurasync.app',
+        email: 'demo@nexusfocus.app',
         photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?fit=crop&w=150&h=150',
         isDemo: true
       });
@@ -152,7 +152,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
           </div>
           
           <h1 className="text-[28px] sm:text-[32px] font-black tracking-[-0.04em] text-white leading-none mb-1.5 shadow-black drop-shadow-lg">
-            AURA SYNC
+            NEXUS FOCUS
           </h1>
           <p className="text-[9px] font-bold tracking-[0.3em] text-[#a1a1aa] uppercase opacity-90 flex items-center gap-1.5">
             <span>POWERED BY NEXUS FLOW</span>

@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Sparkles, Shield, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
-import { AuraLogo } from './AuraLogo';
+import { NexusFocusLogo } from './AuraLogo';
 import { mapAuthError } from '../lib/firebase';
 
 export function LoginScreen() {
@@ -48,11 +48,16 @@ export function LoginScreen() {
         {/* Logo and Brand */}
         <div className="mb-6 flex flex-col items-center">
           <div className="p-3 bg-white/[0.03] border border-white/[0.08] rounded-2xl shadow-2xl backdrop-blur-xl mb-4">
-            <AuraLogo className="w-12 h-12" />
+            <NexusFocusLogo className="w-12 h-12" />
           </div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold tracking-wider uppercase mb-3">
-            <Sparkles className="w-3.5 h-3.5" />
-            Nexus Focus
+          <div className="flex flex-col items-center gap-1 mb-3">
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-bold tracking-wider uppercase shadow-sm">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              Nexus Focus
+            </div>
+            <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-amber-500/80 mt-0.5">
+              Powered by Nexus Flow
+            </span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-2">
             Foco Absoluto e Gestão Inteligente

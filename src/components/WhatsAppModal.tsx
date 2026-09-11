@@ -14,7 +14,7 @@ interface WhatsAppModalProps {
 
 interface SimulatedMessage {
   id: string;
-  sender: 'user' | 'aurora';
+  sender: 'user' | 'nexus';
   text: string;
   timestamp: string;
   actionDone?: string;
@@ -23,7 +23,7 @@ interface SimulatedMessage {
 export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
   const [activeTab, setActiveTab] = useState<'simulator' | 'setup' | 'guide'>('simulator');
   const [phoneNumber, setPhoneNumber] = useState<string>(() => {
-    return localStorage.getItem('aurora_whatsapp_number') || '+55 (11) 99876-5432';
+    return localStorage.getItem('nexus_whatsapp_number') || localStorage.getItem('aurora_whatsapp_number') || '+55 (11) 99876-5432';
   });
   const [isSavedPhone, setIsSavedPhone] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
@@ -35,8 +35,8 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
   const [messages, setMessages] = useState<SimulatedMessage[]>([
     {
       id: '1',
-      sender: 'aurora',
-      text: 'Olá! Sou a Aurora no seu WhatsApp. 💚 Você pode me enviar áudios ou mensagens de texto com seus gastos, receitas ou tarefas!',
+      sender: 'nexus',
+      text: 'Olá! Sou o Mentor Nexus no seu WhatsApp. ⚡ Você pode me enviar áudios ou mensagens de texto com seus gastos, receitas ou tarefas!',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -45,11 +45,11 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
 
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://sua-app.run.app';
   const webhookUrl = `${currentOrigin}/api/whatsapp/webhook`;
-  const verifyToken = 'aurora_whatsapp_token';
+  const verifyToken = 'nexus_whatsapp_token';
 
   const handleSavePhone = (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem('aurora_whatsapp_number', phoneNumber);
+    localStorage.setItem('nexus_whatsapp_number', phoneNumber);
     setIsSavedPhone(true);
     setTimeout(() => setIsSavedPhone(false), 2500);
   };
@@ -135,22 +135,22 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
         }
       }
 
-      const auroraMsg: SimulatedMessage = {
+      const nexusMsg: SimulatedMessage = {
         id: (Date.now() + 1).toString(),
-        sender: 'aurora',
+        sender: 'nexus',
         text: replyText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         actionDone: actionNotice
       };
 
-      setMessages(prev => [...prev, auroraMsg]);
+      setMessages(prev => [...prev, nexusMsg]);
     } catch (error) {
       console.error("WhatsApp webhook test failed", error);
       setMessages(prev => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
-          sender: 'aurora',
+          sender: 'nexus',
           text: 'Desculpe, ocorreu um erro de conexão ao processar sua mensagem via WhatsApp.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
@@ -177,7 +177,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="font-bold text-base">Aurora no WhatsApp</h2>
+                  <h2 className="font-bold text-base">Nexus Focus no WhatsApp</h2>
                   <span className="bg-emerald-400/30 text-emerald-100 text-[10px] px-2 py-0.5 rounded-full font-semibold border border-emerald-300/30">
                     🟢 Webhook On
                   </span>
@@ -238,11 +238,11 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
               <div className="flex flex-col h-[420px] bg-[#efeae2] dark:bg-[#0b141a] rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-inner relative">
                 {/* Simulated WhatsApp Chat TopBar */}
                 <div className="bg-[#075e54] dark:bg-[#202c33] text-white p-3 flex items-center gap-3 shrink-0">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-sm text-white">
-                    A
+                  <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center font-bold text-sm text-zinc-950">
+                    N
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-xs leading-tight">Aurora AI Mentor</h3>
+                    <h3 className="font-semibold text-xs leading-tight">Nexus Focus AI Mentor</h3>
                     <p className="text-[10px] text-emerald-200">Online • WhatsApp Bot</p>
                   </div>
                   <span className="text-[10px] bg-emerald-800/60 px-2 py-0.5 rounded text-emerald-100">
@@ -266,9 +266,9 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
                             : 'bg-white dark:bg-[#202c33] text-slate-800 dark:text-slate-100 rounded-tl-none border border-slate-100 dark:border-slate-700/50'
                         }`}
                       >
-                        {msg.sender === 'aurora' && (
+                        {msg.sender === 'nexus' && (
                           <div className="flex items-center gap-1 font-bold text-[10px] text-emerald-600 dark:text-emerald-400 mb-1">
-                            <Bot size={12} /> Aurora AI
+                            <Bot size={12} /> Mentor Nexus
                           </div>
                         )}
                         <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
@@ -292,7 +292,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
                       <div className="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" />
                       <div className="w-2 h-2 rounded-full bg-emerald-500 animate-bounce delay-100" />
                       <div className="w-2 h-2 rounded-full bg-emerald-500 animate-bounce delay-200" />
-                      <span className="text-[10px]">Aurora digitando...</span>
+                      <span className="text-[10px]">Mentor Nexus digitando...</span>
                     </div>
                   )}
                 </div>
@@ -354,7 +354,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
                     Seu Número do WhatsApp Vinculado
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                    As mensagens vindas deste número de WhatsApp serão associadas à sua conta no Aura automaticamente.
+                    As mensagens vindas deste número de WhatsApp serão associadas à sua conta no Nexus Focus automaticamente.
                   </p>
                   <form onSubmit={handleSavePhone} className="flex gap-2">
                     <input
@@ -378,7 +378,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
                 <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
                   <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2">
                     <ShieldCheck size={16} className="text-emerald-600 dark:text-emerald-400" />
-                    URL do Webhook do Backend Aura
+                    URL do Webhook do Backend Nexus Focus
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Insira este endereço nas configurações do seu provedor de WhatsApp (Meta Cloud API, Evolution API, Z-API ou Twilio):
@@ -450,7 +450,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
                     Como conectar um número do WhatsApp de forma gratuita ou via API
                   </h3>
                   <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                    A Aurora está equipada com um webhook inteligente que aceita mensagens em diversos formatos JSON standard (Meta Cloud API, Evolution API, Z-API, Twilio ou custom webhooks).
+                    O Nexus Focus está equipado com um webhook inteligente que aceita mensagens em diversos formatos JSON standard (Meta Cloud API, Evolution API, Z-API, Twilio ou custom webhooks).
                   </p>
                 </div>
 
@@ -461,8 +461,8 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
                     </h4>
                     <ol className="list-decimal list-inside text-slate-600 dark:text-slate-300 space-y-1 text-[11px]">
                       <li>Crie um app no Meta for Developers (WhatsApp Product).</li>
-                      <li>Vá em Configurações do Webhook e cole a <strong>URL do Webhook</strong> do Aura.</li>
-                      <li>Use o Verify Token <code>aurora_whatsapp_token</code>.</li>
+                      <li>Vá em Configurações do Webhook e cole a <strong>URL do Webhook</strong> do Nexus Focus.</li>
+                      <li>Use o Verify Token <code>nexus_whatsapp_token</code>.</li>
                       <li>Ative a inscrição no evento <code>messages</code>.</li>
                     </ol>
                   </div>
@@ -474,13 +474,13 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
                     <ol className="list-decimal list-inside text-slate-600 dark:text-slate-300 space-y-1 text-[11px]">
                       <li>Conecte seu WhatsApp com leitor de QR Code na sua instância.</li>
                       <li>Configure a URL de Webhook para enviar eventos do tipo <code>MESSAGES_UPSERT</code>.</li>
-                      <li>Cadastre a URL do Aura. Prontinho!</li>
+                      <li>Cadastre a URL do Nexus Focus. Prontinho!</li>
                     </ol>
                   </div>
                 </div>
 
                 <div className="p-3 bg-slate-900 text-slate-200 rounded-xl font-mono text-[11px]">
-                  <p className="text-slate-400 mb-1">// Exemplo de requisição POST aceita pelo webhook do Aura:</p>
+                  <p className="text-slate-400 mb-1">// Exemplo de requisição POST aceita pelo webhook do Nexus Focus:</p>
                   <pre className="text-emerald-400 overflow-x-auto p-2 bg-slate-950 rounded border border-slate-800">
 {`POST ${webhookUrl}
 Content-Type: application/json

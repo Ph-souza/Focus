@@ -1,11 +1,10 @@
 {
-  "name": "react-example",
+  "name": "nexus-focus",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "dev:client": "vite",
     "build": "tsc",
     "start": "node dist/server.js",
     "build:client": "vite build",

@@ -15,7 +15,7 @@ export function TaskAnalyzer({ tasks }: TaskAnalyzerProps) {
     setIsAnalyzing(true);
     setAnalysisResult(null);
 
-    // Simulate Aurora analysis delay
+    // Simulate Nexus Focus analysis delay
     setTimeout(() => {
       // Very basic simulated logic for demonstration
       const taskTitles = tasks.map(t => t.title.toLowerCase());
@@ -41,7 +41,7 @@ export function TaskAnalyzer({ tasks }: TaskAnalyzerProps) {
         if (tasks.length > 2) {
            suggestions.grouped.push("Você tem várias tarefas esparsas. Que tal agrupar as de prioridade baixa para o final do dia?");
         } else {
-           suggestions.grouped.push("Adicione mais tarefas para que a Aurora possa encontrar padrões de agrupamento.");
+           suggestions.grouped.push("Adicione mais tarefas para que o Nexus Focus possa encontrar padrões de agrupamento.");
         }
       }
 
@@ -59,7 +59,7 @@ export function TaskAnalyzer({ tasks }: TaskAnalyzerProps) {
           <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
             <Sparkles size={16} />
           </div>
-          <h2 className="text-sm font-bold text-white tracking-wide">Análise Inteligente Aurora</h2>
+          <h2 className="text-sm font-bold text-white tracking-wide">Análise Inteligente Nexus Focus</h2>
         </div>
         {!analysisResult && !isAnalyzing && (
           <button 
@@ -72,7 +72,7 @@ export function TaskAnalyzer({ tasks }: TaskAnalyzerProps) {
       </div>
 
       <p className="text-xs text-slate-400 mb-4 relative z-10">
-        A Aurora analisa a frequência das suas tarefas e sugere como você pode agrupá-las ou automatizá-las para economizar tempo.
+        O Nexus Focus analisa a frequência das suas tarefas e sugere como você pode agrupá-las ou automatizá-las para economizar tempo.
       </p>
 
       <AnimatePresence mode="wait">
@@ -85,7 +85,7 @@ export function TaskAnalyzer({ tasks }: TaskAnalyzerProps) {
             className="flex flex-col items-center justify-center py-6 relative z-10"
           >
             <Loader2 className="w-6 h-6 text-indigo-500 animate-spin mb-3" />
-            <p className="text-xs text-indigo-300 font-medium animate-pulse">Aurora está analisando seus padrões...</p>
+            <p className="text-xs text-amber-300 font-medium animate-pulse">Nexus Focus está analisando seus padrões...</p>
           </motion.div>
         ) : analysisResult ? (
           <motion.div 

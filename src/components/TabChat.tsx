@@ -264,9 +264,9 @@ ${recentTasks || 'Nenhuma tarefa pendente/recente.'}`;
   };
 
   const createTaskFromText = async (text: string) => {
-    const title = text.replace(/tarefa|lembrete/gi, '').trim() || 'Nova Tarefa via Aurora';
+    const title = text.replace(/tarefa|lembrete/gi, '').trim() || 'Nova Tarefa via Nexus Focus';
     
-    if (!window.confirm(`Deseja que a Aurora crie a tarefa "${title}"?`)) {
+    if (!window.confirm(`Deseja que o Mentor Nexus crie a tarefa "${title}"?`)) {
       addMessageToDb(`Criação da tarefa "${title}" cancelada.`, 'ai');
       return;
     }
@@ -277,7 +277,7 @@ ${recentTasks || 'Nenhuma tarefa pendente/recente.'}`;
         title: title,
         completed: false,
         priority: 'medium',
-        description: 'Criado via Aurora Sync Chat',
+        description: 'Criado via Nexus Focus Chat',
         userId: user.id,
         createdAt: serverTimestamp()
       };
@@ -370,14 +370,16 @@ ${recentTasks || 'Nenhuma tarefa pendente/recente.'}`;
     <motion.div 
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="max-w-2xl mx-auto h-[calc(100vh-120px)] md:h-[calc(100vh-80px)] bg-slate-900 rounded-xl p-5 flex flex-col gap-4 text-white relative shadow-2xl overflow-hidden"
+      className="max-w-2xl mx-auto h-[calc(100vh-120px)] md:h-[calc(100vh-80px)] bg-[#121216] border border-[#27272a] rounded-2xl p-5 flex flex-col gap-4 text-white relative shadow-2xl overflow-hidden"
     >
       <div className="flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold italic shadow-sm">M</div>
+          <div className="h-9 w-9 bg-gradient-to-br from-amber-500 to-amber-600 text-zinc-950 rounded-xl flex items-center justify-center font-black text-sm shadow-md">
+            N
+          </div>
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-indigo-400">Mentor Focus</p>
-            <p className="text-[10px] text-slate-400 italic">Alta Performance</p>
+            <p className="text-xs font-extrabold uppercase tracking-widest text-amber-400">Mentor Nexus Focus</p>
+            <p className="text-[10px] text-zinc-400 font-medium">Alta Performance & Finanças</p>
           </div>
         </div>
         <button 

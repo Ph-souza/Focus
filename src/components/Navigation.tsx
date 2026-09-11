@@ -159,14 +159,14 @@ export function Navigation({
             onClick={() => onTabChange('home')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'home' 
-                ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' 
-                : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
+                ? 'text-amber-500 font-bold scale-105' 
+                : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <Home size={21} className={activeTab === 'home' ? 'text-indigo-600 dark:text-indigo-400' : ''} />
+              <Home size={21} className={activeTab === 'home' ? 'text-amber-500' : ''} />
               {activeTab === 'home' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full"></span>
               )}
             </div>
             <span>Home</span>
@@ -178,14 +178,14 @@ export function Navigation({
             onClick={() => onTabChange('transactions')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'transactions' || activeTab === 'reports' 
-                ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' 
-                : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
+                ? 'text-amber-500 font-bold scale-105' 
+                : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <BarChart3 size={21} className={activeTab === 'transactions' || activeTab === 'reports' ? 'text-indigo-600 dark:text-indigo-400' : ''} />
+              <BarChart3 size={21} className={activeTab === 'transactions' || activeTab === 'reports' ? 'text-amber-500' : ''} />
               {(activeTab === 'transactions' || activeTab === 'reports') && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full"></span>
               )}
             </div>
             <span>Finanças</span>
@@ -207,11 +207,11 @@ export function Navigation({
               }}
               title="Abrir Modo Foco"
               aria-label="Abrir Modo Foco"
-              className="w-13 h-13 sm:w-14 sm:h-14 bg-gradient-to-tr from-indigo-600 via-indigo-500 to-indigo-400 text-white rounded-full flex items-center justify-center shadow-[0_8px_20px_rgba(99,102,241,0.45)] hover:shadow-[0_10px_25px_rgba(99,102,241,0.6)] hover:scale-105 active:scale-95 transition-all cursor-pointer border-[3.5px] border-white dark:border-[#09090b] relative group"
+              className="w-13 h-13 sm:w-14 sm:h-14 bg-gradient-to-tr from-amber-500 via-amber-600 to-amber-400 text-zinc-950 rounded-full flex items-center justify-center shadow-[0_8px_20px_rgba(245,158,11,0.4)] hover:shadow-[0_10px_25px_rgba(245,158,11,0.55)] hover:scale-105 active:scale-95 transition-all cursor-pointer border-[3.5px] border-white dark:border-[#09090b] relative group"
             >
-              <Target size={26} className="text-white group-hover:rotate-12 transition-transform duration-300" />
+              <Target size={26} className="text-zinc-950 group-hover:rotate-12 transition-transform duration-300" />
             </button>
-            <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-tight mt-0.5 pointer-events-none">
+            <span className="text-[9px] font-bold text-amber-500 uppercase tracking-tight mt-0.5 pointer-events-none">
               Foco
             </span>
           </div>
@@ -222,33 +222,33 @@ export function Navigation({
             onClick={() => onTabChange('goals')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'goals' 
-                ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' 
-                : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
+                ? 'text-amber-500 font-bold scale-105' 
+                : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <Package size={21} className={activeTab === 'goals' ? 'text-indigo-600 dark:text-indigo-400' : ''} />
+              <Package size={21} className={activeTab === 'goals' ? 'text-amber-500' : ''} />
               {activeTab === 'goals' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full"></span>
               )}
             </div>
             <span>Caixinhas</span>
           </button>
 
-          {/* 5. Tarefas Button (Substituindo o antigo botão Aurora) */}
+          {/* 5. Tarefas Button */}
           <button 
             type="button"
             onClick={() => onTabChange('tasks')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'tasks' 
-                ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-105' 
-                : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
+                ? 'text-amber-500 font-bold scale-105' 
+                : 'text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <CheckSquare size={21} className={activeTab === 'tasks' ? 'text-indigo-600 dark:text-indigo-400' : ''} />
+              <CheckSquare size={21} className={activeTab === 'tasks' ? 'text-amber-500' : ''} />
               {activeTab === 'tasks' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-full"></span>
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full"></span>
               )}
             </div>
             <span>Tarefas</span>
@@ -266,12 +266,12 @@ export function Navigation({
         <div className="flex items-center justify-between p-6 mb-2 relative z-10">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 bg-gradient-to-br from-[#27272a] to-[#09090b] border border-[#3f3f46] rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden backdrop-blur-md flex-shrink-0">
-              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-yellow-500/10 mix-blend-overlay"></div>
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-amber-500/20 mix-blend-overlay"></div>
               <AuraLogo className="w-6 h-6 relative z-10" />
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-tight text-slate-800 dark:text-white leading-tight drop-shadow-sm">AURA SYNC</h1>
-              <p className="text-[9px] uppercase tracking-widest text-slate-500 dark:text-[#afafaf] font-bold leading-none mt-1">POWERED BY NEXUS FLOW</p>
+              <h1 className="text-lg font-black tracking-tight text-slate-800 dark:text-white leading-tight drop-shadow-sm">NEXUS FOCUS</h1>
+              <p className="text-[9px] uppercase tracking-widest text-amber-500/90 dark:text-amber-400 font-bold leading-none mt-1">POWERED BY NEXUS FLOW</p>
             </div>
           </div>
           <button 
@@ -295,13 +295,13 @@ export function Navigation({
                 onTabChange('tasks');
               }
             }}
-            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 font-semibold text-xs hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-all cursor-pointer shadow-sm group"
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-semibold text-xs hover:bg-amber-500/20 transition-all cursor-pointer shadow-sm group"
           >
             <div className="flex items-center gap-2.5">
-              <Target size={18} className="text-indigo-600 dark:text-indigo-400 group-hover:rotate-45 transition-transform duration-300" />
+              <Target size={18} className="text-amber-500 group-hover:rotate-45 transition-transform duration-300" />
               <span>Modo Foco</span>
             </div>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600 text-white font-bold tracking-wider uppercase">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-extrabold tracking-wider uppercase shadow-sm">
               Iniciar
             </span>
           </button>
@@ -316,7 +316,7 @@ export function Navigation({
               onClick={() => onTabChange(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 cursor-pointer ${
                 activeTab === item.id 
-                  ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium border border-transparent dark:border-indigo-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]' 
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20 shadow-[inset_0_1px_0_rgba(245,158,11,0.15)]' 
                   : 'text-slate-500 dark:text-[#afafaf] hover:bg-slate-50 dark:hover:bg-[#121214] font-medium dark:hover:text-white'
               }`}
             >

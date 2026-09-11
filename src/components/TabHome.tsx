@@ -49,6 +49,15 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
 
   const balance = totalIncome - totalExpense;
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return 'Bom dia';
+    if (hour >= 12 && hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
+
+  const firstName = user?.name?.split(' ')[0] || 'Investidor';
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
@@ -145,8 +154,8 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
               )}
             </button>
             <div className="flex flex-col">
-              <span className="text-[10px] text-slate-400 font-medium">Boa noite,</span>
-              <span className="text-slate-800 dark:text-white font-bold text-base leading-tight">{user?.name || 'Usuário'}</span>
+              <span className="text-[10px] text-slate-400 font-medium">{getGreeting()},</span>
+              <span className="text-slate-800 dark:text-white font-bold text-base leading-tight">{user?.name || 'Investidor'}</span>
             </div>
           </div>
           <button
@@ -160,7 +169,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
 
         {/* Desktop Header */}
         <div className="hidden md:flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Boas-vindas, {user?.name.split(' ')[0] || 'Carlos'}</h2>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{getGreeting()}, {firstName}</h2>
           <div className="flex gap-2">
             <button
               onClick={() => onTabChange('transactions')}

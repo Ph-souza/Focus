@@ -15,11 +15,11 @@ export default defineConfig(() => {
           enabled: true
         },
         manifest: {
-          name: 'Aura',
-          short_name: 'Aura',
-          description: 'Aura Sync - Mentor Financeiro',
-          theme_color: '#18181b',
-          background_color: '#18181b',
+          name: 'Nexus Focus',
+          short_name: 'Nexus Focus',
+          description: 'Nexus Focus - Powered by Nexus Flow',
+          theme_color: '#09090b',
+          background_color: '#09090b',
           display: 'standalone',
           icons: [
             {

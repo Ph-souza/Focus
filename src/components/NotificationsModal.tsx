@@ -11,7 +11,7 @@ export function NotificationsModal({ isOpen, onClose }: NotificationsModalProps)
   const [notifications] = useState([
     { id: 1, title: 'Boleto próximo do vencimento', message: 'Sua conta de energia vence amanhã.', type: 'warning', date: 'Há 2h' },
     { id: 2, title: 'Meta atingida!', message: 'Você atingiu 50% da sua meta "Reserva de Emergência".', type: 'success', date: 'Há 1 dia' },
-    { id: 3, title: 'Dica da Aurora', message: 'Notei que você reduziu os gastos com transporte este mês. Ótimo trabalho!', type: 'info', date: 'Há 2 dias' },
+    { id: 3, title: 'Dica do Mentor Nexus', message: 'Notei que você reduziu os gastos com transporte este mês. Ótimo trabalho!', type: 'info', date: 'Há 2 dias' },
   ]);
 
   if (!isOpen) return null;

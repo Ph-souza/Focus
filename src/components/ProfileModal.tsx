@@ -120,11 +120,11 @@ export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, 
                   />
                 </div>
                 <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400">
-                  Usado pela Mentoria Aurora para personalizar dicas para sua faixa etária.
+                  Usado pela Mentoria Nexus Focus para personalizar análises para sua faixa etária.
                 </p>
               </div>
 
-              {/* WhatsApp Aurora Integration Button */}
+              {/* WhatsApp Nexus Focus Integration Button */}
               <div className="pt-2">
                 <button
                   type="button"
@@ -136,7 +136,7 @@ export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, 
                 >
                   <div className="flex items-center gap-2 font-semibold">
                     <span className="text-base">💬</span>
-                    <span>Integração WhatsApp - Aurora Sync</span>
+                    <span>Integração WhatsApp - Nexus Focus</span>
                   </div>
                   <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
                     Configurar

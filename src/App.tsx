@@ -41,7 +41,13 @@ function Dashboard() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nexus_dark_mode');
+      if (saved !== null) return saved === 'true';
+    }
+    return true;
+  });
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isFocusModeOpen, setIsFocusModeOpen] = useState(false);
   const [isSmartCaptureOpen, setIsSmartCaptureOpen] = useState(false);
@@ -274,6 +280,9 @@ function Dashboard() {
       document.body.classList.add('dark');
     } else {
       document.body.classList.remove('dark');
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nexus_dark_mode', isDarkMode ? 'true' : 'false');
     }
   }, [isDarkMode]);
 

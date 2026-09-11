@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, ArrowUpRight, ArrowDownRight, Coffee, Monitor, Home, Briefcase, Trash2, Sparkles } from 'lucide-react';
+import { Plus, ArrowUpRight, ArrowDownRight, Coffee, Monitor, Home, Briefcase, Trash2, Sparkles, Receipt } from 'lucide-react';
 import { Transaction, User } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
@@ -126,12 +126,12 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
     >
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Transações</h2>
-          <p className="text-slate-600 dark:text-slate-400 mt-1">Histórico de fluxo de caixa.</p>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Transações e Fluxo Financeiro</h2>
+          <p className="text-slate-500 dark:text-zinc-400 text-sm mt-0.5">Gestão em tempo real de receitas, despesas e orçamento inteligente.</p>
         </div>
         <button 
           onClick={() => setIsAdding(!isAdding)}
-          className="px-4 py-2 bg-[#10B981] text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+          className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-semibold transition-all shadow-sm hover:shadow-emerald-500/20 flex items-center gap-2 cursor-pointer active:scale-95"
         >
           <Plus size={16} /> <span className="hidden sm:inline">Nova Transação</span>
         </button>
@@ -305,8 +305,14 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
           </AnimatePresence>
           
           {transactions.filter(tx => (filter === 'all' || tx.type === filter) && (categoryFilter === 'all' || tx.category === categoryFilter)).length === 0 && (
-            <div className="p-8 text-center text-slate-500 text-sm">
-              Nenhuma transação encontrada com esses filtros.
+            <div className="py-14 px-4 flex flex-col items-center justify-center text-center">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 mb-3 shadow-inner">
+                <Receipt size={22} />
+              </div>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Nenhuma movimentação encontrada</p>
+              <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-xs mt-1 leading-relaxed">
+                Não há registros com os filtros selecionados. Alterne as categorias ou registre uma nova transação acima.
+              </p>
             </div>
           )}
         </div>
