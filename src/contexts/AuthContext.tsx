@@ -1,8 +1,3 @@
-// Contas com acesso Pro / Vitalício garantido
-const PRO_ACCOUNTS = [
-  'phillipe.souza27@gmail.com'
-];
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
@@ -17,6 +12,16 @@ export interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Contas com acesso Pro / Vitalício garantido
+export const PRO_ACCOUNTS = [
+  'phillipe.souza27@gmail.com'
+];
+
+export function isWhitelistedPro(email?: string | null): boolean {
+  if (!email || typeof email !== 'string') return false;
+  return PRO_ACCOUNTS.includes(email.trim().toLowerCase());
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -35,53 +40,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user) {
         setCurrentUser(user);
 
-        const userDocRef = doc(db, 'users', user.uid);
+        const email = (user.email || user.providerData?.[0]?.email || '').trim().toLowerCase();
+        const isPro = isWhitelistedPro(email);
 
-        const isProWhitelisted = Boolean(user.email && PRO_ACCOUNTS.includes(user.email.trim().toLowerCase()));
+        // Se for conta Pro whitelisted, ativa imediatamente sem esperar rede
+        if (isPro) {
+          setIsPremium(true);
+          setIsLoading(false);
+        }
+
+        const userDocRef = doc(db, 'users', user.uid);
 
         // Assure document exists in Firestore and check Guest Checkout Binding
         try {
           const snap = await getDoc(userDocRef);
-          let userIsPremium = isProWhitelisted || (snap.exists() ? Boolean(snap.data()?.isPremium) : false);
+          let userIsPremium = isPro || (snap.exists() ? Boolean(snap.data()?.isPremium) : false);
 
           // Guest Checkout Binding: se a conta ainda não for premium, verificar se há compra pelo e-mail
-          if (!userIsPremium && user.email) {
+          if (!userIsPremium && email) {
             try {
-              const emailDocRef = doc(db, 'users', user.email.trim().toLowerCase());
+              const emailDocRef = doc(db, 'users', email);
               const emailSnap = await getDoc(emailDocRef);
               if (emailSnap.exists() && emailSnap.data()?.isPremium) {
                 userIsPremium = true;
-                console.log('[Guest Checkout Binding] Licença Premium vinculada com sucesso a partir do e-mail:', user.email);
+                console.log('[Guest Checkout Binding] Licença Premium vinculada com sucesso a partir do e-mail:', email);
               }
             } catch (bindingErr) {
               console.warn('[Guest Checkout Binding] Verificação por e-mail:', bindingErr);
             }
           }
 
+          if (isPro) {
+            userIsPremium = true;
+            setIsPremium(true);
+          }
+
           if (!snap.exists()) {
             await setDoc(userDocRef, {
-              name: user.displayName || user.email?.split('@')[0] || 'Usuário',
-              email: user.email || '',
-              photoURL: user.photoURL || '',
+              name: user.displayName || user.providerData?.[0]?.displayName || email.split('@')[0] || 'Usuário',
+              email: email || '',
+              photoURL: user.photoURL || user.providerData?.[0]?.photoURL || '',
               isPremium: userIsPremium,
               plan: userIsPremium ? 'pro_unlimited' : 'free',
-              role: isProWhitelisted ? 'admin_pro' : 'user',
+              role: isPro ? 'admin_pro' : 'user',
               createdAt: serverTimestamp()
             });
           } else if (userIsPremium && (!snap.data()?.isPremium || snap.data()?.plan !== 'pro_unlimited')) {
             await setDoc(userDocRef, {
               isPremium: true,
               plan: 'pro_unlimited',
-              role: isProWhitelisted ? 'admin_pro' : (snap.data()?.role || 'premium_user')
+              role: isPro ? 'admin_pro' : (snap.data()?.role || 'premium_user')
             }, { merge: true });
           }
         } catch (err) {
           console.warn('Notice ensuring user doc exists:', err);
+          if (isPro) {
+            setIsPremium(true);
+          }
         }
 
         // Realtime listener for isPremium status changes
         unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
-          if (isProWhitelisted) {
+          if (isPro) {
             setIsPremium(true);
           } else if (docSnap.exists()) {
             const data = docSnap.data();
@@ -92,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsLoading(false);
         }, (err) => {
           console.error('Firestore user snapshot error:', err);
-          if (isProWhitelisted) {
+          if (isPro) {
             setIsPremium(true);
           } else {
             setIsPremium(false);

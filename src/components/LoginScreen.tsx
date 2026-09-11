@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Sparkles, Shield, AlertCircle, Loader2 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { AuraLogo } from './AuraLogo';
 import { mapAuthError } from '../lib/firebase';
 
@@ -11,9 +11,12 @@ export function LoginScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
+  const hasAccess = isPremium || isWhitelistedPro(userEmail);
+
   // Redirecionamento automático se já autenticado
   if (!isLoading && currentUser) {
-    return <Navigate to={isPremium ? "/dashboard" : "/checkout"} replace />;
+    return <Navigate to={hasAccess ? "/dashboard" : "/checkout"} replace />;
   }
 
   const handleGoogleClick = async () => {

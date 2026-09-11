@@ -98,35 +98,21 @@ const getGeminiApiKey = () => process.env.GEMINI_API_KEY?.trim() || process.env.
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 // Web Push setup
-let vapidPublicKey = process.env.VAPID_PUBLIC_KEY?.trim();
-let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY?.trim();
+let vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
+let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
 
-const isPlaceholder = (k?: string) => !k || k.includes("YOUR_VAPID_") || k.length < 20;
-
-if (isPlaceholder(vapidPublicKey) || isPlaceholder(vapidPrivateKey)) {
+if (!vapidPublicKey || !vapidPrivateKey) {
   const keys = webpush.generateVAPIDKeys();
   vapidPublicKey = keys.publicKey;
   vapidPrivateKey = keys.privateKey;
   console.log("Generated VAPID keys locally for preview.");
 }
 
-try {
-  webpush.setVapidDetails(
-    "mailto:phillipe.souza27@gmail.com",
-    vapidPublicKey,
-    vapidPrivateKey
-  );
-} catch (err: any) {
-  console.warn("Falha ao configurar VAPID com as chaves fornecidas, gerando novas:", err?.message);
-  const keys = webpush.generateVAPIDKeys();
-  vapidPublicKey = keys.publicKey;
-  vapidPrivateKey = keys.privateKey;
-  webpush.setVapidDetails(
-    "mailto:phillipe.souza27@gmail.com",
-    vapidPublicKey,
-    vapidPrivateKey
-  );
-}
+webpush.setVapidDetails(
+  "mailto:suporte@aurasync.com",
+  vapidPublicKey,
+  vapidPrivateKey
+);
 
 // In-memory store for subscriptions (in production, use Firestore)
 const subscriptions: any[] = [];
@@ -959,6 +945,67 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
         error: error.message || "Erro ao processar mensagem do WhatsApp",
         reply: "Ops! Não consegui processar essa mensagem agora. Tente novamente em instantes."
       });
+    }
+  });
+
+  // Auto-seed Pro Admin Account into Cloud Firestore
+  try {
+    const adminEmail = "phillipe.souza27@gmail.com";
+    const emailRef = adminDb.collection("users").doc(adminEmail);
+    await emailRef.set({
+      email: adminEmail,
+      isPremium: true,
+      role: "admin_pro",
+      plan: "pro_unlimited",
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    const matchingUsersSnap = await adminDb.collection("users").where("email", "==", adminEmail).get();
+    const batch = adminDb.batch();
+    matchingUsersSnap.forEach((docSnap) => {
+      batch.set(docSnap.ref, {
+        isPremium: true,
+        role: "admin_pro",
+        plan: "pro_unlimited",
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+    await batch.commit();
+    console.log(`[Auto-Seed Pro] Conta ${adminEmail} garantida com sucesso como Pro no Firestore.`);
+  } catch (seedErr: any) {
+    console.warn("[Auto-Seed Pro] Aviso ao inicializar conta Pro:", seedErr?.message);
+  }
+
+  // Admin Route to ensure Pro status on demand
+  app.post('/api/admin/activate-pro', async (req, res) => {
+    try {
+      const { email } = req.body || {};
+      const targetEmail = (email || "phillipe.souza27@gmail.com").trim().toLowerCase();
+
+      const emailRef = adminDb.collection("users").doc(targetEmail);
+      await emailRef.set({
+        email: targetEmail,
+        isPremium: true,
+        role: "admin_pro",
+        plan: "pro_unlimited",
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      const matchingUsersSnap = await adminDb.collection("users").where("email", "==", targetEmail).get();
+      const batch = adminDb.batch();
+      matchingUsersSnap.forEach((docSnap) => {
+        batch.set(docSnap.ref, {
+          isPremium: true,
+          role: "admin_pro",
+          plan: "pro_unlimited",
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      await batch.commit();
+
+      return res.json({ success: true, email: targetEmail, isPremium: true });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message });
     }
   });
 
