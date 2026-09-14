@@ -48,7 +48,7 @@ export function LoginScreen() {
         {/* Logo and Brand */}
         <div className="mb-6 flex flex-col items-center">
           <div className="p-3.5 bg-gradient-to-br from-[#1c1c20] to-[#09090b] border border-white/20 rounded-2xl shadow-2xl backdrop-blur-xl mb-4">
-            <NexusFocusLogo className="w-12 h-12" />
+            <NexusFocusLogo className="w-12 h-12" variant="dark" />
           </div>
           <div className="flex flex-col items-center gap-1.5 mb-3">
             <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/10 border border-white/20 text-white text-xs font-bold tracking-wider uppercase shadow-sm">
@@ -56,7 +56,7 @@ export function LoginScreen() {
               Nexus Focus
             </div>
             <span className="text-[10px] font-extrabold uppercase tracking-[0.25em] text-zinc-400 mt-0.5">
-              A EVOLUÇÃO DA SUA TI
+              FINANÇAS • ORGANIZAÇÃO • TAREFAS
             </span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-2">

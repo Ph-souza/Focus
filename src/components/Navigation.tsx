@@ -266,11 +266,11 @@ export function Navigation({
         <div className="flex items-center justify-between p-6 mb-2 relative z-10">
           <div className="flex items-center gap-3">
             <div className="h-11 w-11 bg-zinc-900 dark:bg-gradient-to-br dark:from-[#1c1c20] dark:to-[#09090b] border border-zinc-800 dark:border-white/20 rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden flex-shrink-0">
-              <AuraLogo className="w-7 h-7 relative z-10" />
+              <AuraLogo className="w-7 h-7 relative z-10" variant="dark" />
             </div>
             <div>
               <h1 className="text-lg font-black tracking-tight text-zinc-900 dark:text-white leading-tight drop-shadow-sm">NEXUS FOCUS</h1>
-              <p className="text-[9px] uppercase tracking-widest text-zinc-500 dark:text-zinc-400 font-extrabold leading-none mt-1">A EVOLUÇÃO DA SUA TI</p>
+              <p className="text-[9px] uppercase tracking-widest text-zinc-500 dark:text-zinc-400 font-extrabold leading-none mt-1">FINANÇAS • ORGANIZAÇÃO • TAREFAS</p>
             </div>
           </div>
           <button 
@@ -297,8 +297,8 @@ export function Navigation({
             className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300 dark:bg-white/5 dark:border-white/10 dark:hover:border-white/20 dark:text-white font-semibold text-xs transition-all cursor-pointer shadow-sm group"
           >
             <div className="flex items-center gap-2.5">
-              <Target size={18} className="text-zinc-700 dark:text-zinc-300 group-hover:rotate-45 transition-transform duration-300" />
-              <span className="font-bold">Modo Foco</span>
+              <Target size={18} className="text-zinc-900 dark:text-zinc-300 group-hover:rotate-45 transition-transform duration-300" />
+              <span className="font-bold text-zinc-900 dark:text-white">Modo Foco</span>
             </div>
             <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-zinc-900 text-white dark:bg-white dark:text-black font-extrabold tracking-wider uppercase shadow-sm">
               Iniciar

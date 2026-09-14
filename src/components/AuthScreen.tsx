@@ -147,15 +147,15 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
             <div className="absolute inset-0 bg-white/10 blur-xl rounded-full opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
             <div className="w-18 h-18 bg-gradient-to-br from-[#27272a] to-[#09090b] border border-white/20 rounded-2xl flex items-center justify-center shadow-2xl relative overflow-hidden backdrop-blur-md">
               <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent mix-blend-overlay"></div>
-              <AuraLogo className="w-9 h-9 relative z-10" />
+              <AuraLogo className="w-9 h-9 relative z-10" variant="dark" />
             </div>
           </div>
           
           <h1 className="text-[28px] sm:text-[32px] font-black tracking-[-0.04em] text-white leading-none mb-1.5 shadow-black drop-shadow-lg">
             NEXUS FOCUS
           </h1>
-          <p className="text-[9px] font-bold tracking-[0.22em] text-[#a1a1aa] uppercase opacity-90 flex items-center gap-1.5">
-            <span>A EVOLUÇÃO DA SUA TI • POWERED BY NEXUS FLOW</span>
+          <p className="text-[9px] font-bold tracking-[0.22em] text-zinc-400 uppercase opacity-90 flex items-center gap-1.5">
+            <span>FINANÇAS • ORGANIZAÇÃO • TAREFAS</span>
           </p>
         </div>
 

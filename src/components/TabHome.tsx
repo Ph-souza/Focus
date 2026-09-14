@@ -186,7 +186,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              className="hidden md:flex bg-emerald-50 dark:bg-[#121214] border border-emerald-100 dark:border-[#27272a] p-4 rounded-xl gap-3 items-start md:items-center shadow-sm"
+              className="hidden md:flex bg-emerald-50 dark:bg-[#121216] border border-emerald-100 dark:border-zinc-800 p-4 rounded-xl gap-3 items-start md:items-center shadow-sm"
             >
               <div className="bg-emerald-100 dark:bg-[#10B981]/10 p-2 rounded-lg text-emerald-600 dark:text-[#10B981] shrink-0">
                 <Lightbulb size={20} />
@@ -313,7 +313,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
               <ArrowUpRight size={14} className="text-[#10B981]" />
             </p>
             <p className="text-2xl font-black text-[#10B981] drop-shadow-sm relative z-10">{formatCurrency(totalIncome)}</p>
-            <div className="mt-2 flex h-1.5 w-full bg-slate-100 dark:bg-slate-800/50 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800 relative z-10">
+            <div className="mt-2 flex h-1.5 w-full bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden border border-slate-200 dark:border-zinc-800 relative z-10">
               <div className="h-full bg-gradient-to-r from-[#10B981]/50 to-[#10B981] w-4/5 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
             </div>
           </div>
@@ -326,7 +326,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
               <ArrowDownRight size={14} className="text-rose-500" />
             </p>
             <p className="text-2xl font-black text-rose-600 dark:text-rose-400 drop-shadow-sm relative z-10">{formatCurrency(totalExpense)}</p>
-            <div className="mt-2 flex h-1.5 w-full bg-slate-100 dark:bg-slate-800/50 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800 relative z-10">
+            <div className="mt-2 flex h-1.5 w-full bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden border border-slate-200 dark:border-zinc-800 relative z-10">
               <div className="h-full bg-gradient-to-r from-rose-500/50 to-rose-500 w-2/5 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></div>
             </div>
           </div>
@@ -339,7 +339,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
 
       {/* Mobile Tasks List (Hidden on md) */}
       <div className="md:hidden mt-2 mb-8 px-1">
-        <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-slate-800/50 pb-2">
+        <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-zinc-800 pb-2">
           <h3 className="font-bold text-sm text-slate-800 dark:text-white tracking-wide">Tarefas do Dia</h3>
           <span onClick={() => onTabChange('tasks')} className="text-[10px] font-bold text-blue-500 cursor-pointer">Organizar</span>
         </div>
@@ -347,7 +347,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
         <div className="flex flex-col gap-5 mb-8">
           {tasks.filter(t => !t.completed).slice(0, 2).map((task) => (
             <div key={task.id} className="flex items-start gap-4">
-              <div className="mt-1 w-1 h-8 rounded-full bg-slate-200 dark:bg-slate-700 relative">
+              <div className="mt-1 w-1 h-8 rounded-full bg-slate-200 dark:bg-zinc-800 relative">
                 <div className={`absolute top-0 left-0 w-full rounded-full ${task.priority === 'high' ? 'h-full bg-red-400' : task.priority === 'medium' ? 'h-1/2 bg-zinc-300' : 'h-1/3 bg-zinc-400'}`}></div>
               </div>
               <div className="flex-1">
@@ -359,7 +359,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
             </div>
           ))}
           {tasks.filter(t => !t.completed).length === 0 && (
-            <div className="text-center py-4 bg-slate-50 dark:bg-[#121214] border border-dashed border-slate-200 dark:border-[#27272a] rounded-2xl">
+            <div className="text-center py-4 bg-slate-50 dark:bg-[#121216] border border-dashed border-slate-200 dark:border-zinc-800 rounded-2xl">
               <p className="text-xs text-slate-500 font-medium">Você concluiu tudo! 🎉</p>
             </div>
           )}
@@ -384,7 +384,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
             </button>
           </div>
 
-          <div className="bg-slate-50 dark:bg-zinc-900/70 border border-slate-100 dark:border-zinc-800/60 rounded-xl p-2.5">
+          <div className="bg-slate-50 dark:bg-[#18181b] border border-slate-100 dark:border-zinc-800 rounded-xl p-2.5">
             <div className="flex items-center gap-1.5 mb-1">
               <div className="w-1.5 h-1.5 rounded-full bg-zinc-800 dark:bg-white"></div>
               <span className="text-[9px] font-bold text-zinc-700 dark:text-zinc-200">

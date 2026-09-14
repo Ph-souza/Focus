@@ -157,16 +157,20 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
                   value={budgetInput}
                   onChange={(e) => setBudgetInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSave(e);
+                    } else if (e.key === 'Escape') {
                       handleCancel();
                     }
                   }}
                   placeholder="0.00"
-                  className="w-full bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-[#27272a] rounded-xl pl-9 pr-4 py-2 text-slate-800 dark:text-slate-100 text-sm focus:ring-1 focus:ring-white focus:border-white focus:outline-none transition-all"
+                  className="w-full bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-slate-800 dark:text-slate-100 text-sm focus:ring-1 focus:ring-white focus:border-white focus:outline-none transition-all"
                 />
               </div>
               <button
                 type="submit"
+                onClick={handleSave}
                 title="Salvar orçamento"
                 className="w-10 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition-all active:scale-95 shadow-sm cursor-pointer"
               >
@@ -176,7 +180,7 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
                 type="button"
                 onClick={handleCancel}
                 title="Cancelar edição"
-                className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-[#27272a] hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-[#18181b] border border-transparent dark:border-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
               >
                 <X size={18} className="pointer-events-none" />
               </button>
@@ -199,7 +203,7 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
                   / {currentBudget > 0 ? formatCurrency(currentBudget) : 'Não definido'}
                 </span>
               </div>
-              <span className={`text-xs font-bold px-2 py-1 rounded-md ${isOverBudget ? 'bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400' : 'bg-slate-100 text-slate-600 dark:bg-[#27272a] dark:text-slate-400'}`}>
+              <span className={`text-xs font-bold px-2 py-1 rounded-md ${isOverBudget ? 'bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400' : 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-slate-300'}`}>
                 {currentBudget > 0 ? `${percentage.toFixed(0)}%` : '-'}
               </span>
             </div>

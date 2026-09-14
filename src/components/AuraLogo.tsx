@@ -1,11 +1,35 @@
 import React from 'react';
 
 /**
- * Official Nexus IT / Nexus Focus Brand Symbol:
- * Stylized Spartan Helmet crowned (Elmo espartano estilizado com a coroa).
- * Precision monochrome design in pure white, platinum, and deep carbon.
+ * Official Nexus Focus Brand Symbol:
+ * 3 Stacked Floating Layers / Plates (Isometric Rounded Rhombus & Chevrons).
+ * Precision monochrome corporate design conforming to official brand guidelines.
  */
-export function NexusFocusLogo({ className = "w-8 h-8", style }: { className?: string, style?: React.CSSProperties }) {
+export interface NexusFocusLogoProps {
+  className?: string;
+  style?: React.CSSProperties;
+  variant?: 'auto' | 'dark' | 'light';
+}
+
+export function NexusFocusLogo({ className = "w-8 h-8", style, variant = 'auto' }: NexusFocusLogoProps) {
+  const topFill = variant === 'dark' 
+    ? 'url(#nexusLayerPrimaryDark)' 
+    : variant === 'light' 
+      ? 'url(#nexusLayerPrimaryLight)' 
+      : undefined;
+
+  const midFill = variant === 'dark' 
+    ? 'url(#nexusLayerAccentDark)' 
+    : variant === 'light' 
+      ? 'url(#nexusLayerAccentLight)' 
+      : undefined;
+
+  const botFill = variant === 'dark' 
+    ? 'url(#nexusLayerBaseDark)' 
+    : variant === 'light' 
+      ? 'url(#nexusLayerBaseLight)' 
+      : undefined;
+
   return (
     <svg 
       className={className} 
@@ -15,93 +39,55 @@ export function NexusFocusLogo({ className = "w-8 h-8", style }: { className?: s
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
-        <linearGradient id="nexusPlatinum" x1="20" y1="10" x2="80" y2="90" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#FFFFFF" />
-          <stop offset="35%" stopColor="#F8FAFC" />
-          <stop offset="70%" stopColor="#CBD5E1" />
-          <stop offset="100%" stopColor="#94A3B8" />
-        </linearGradient>
-        <linearGradient id="nexusSilverLight" x1="50" y1="0" x2="50" y2="100" gradientUnits="userSpaceOnUse">
+        {/* Dark Theme Gradients (White / Platinum / Titanium Slate) */}
+        <linearGradient id="nexusLayerPrimaryDark" x1="20" y1="12" x2="80" y2="50" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#FFFFFF" />
           <stop offset="100%" stopColor="#E2E8F0" />
         </linearGradient>
-        <linearGradient id="nexusSteel" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#64748B" />
-          <stop offset="100%" stopColor="#334155" />
+        <linearGradient id="nexusLayerAccentDark" x1="20" y1="40" x2="80" y2="70" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#CBD5E1" />
+          <stop offset="100%" stopColor="#94A3B8" />
+        </linearGradient>
+        <linearGradient id="nexusLayerBaseDark" x1="20" y1="61" x2="80" y2="91" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FFFFFF" />
+          <stop offset="100%" stopColor="#E2E8F0" />
+        </linearGradient>
+
+        {/* Light Theme Gradients (Dark Graphite / Titanium Grey) */}
+        <linearGradient id="nexusLayerPrimaryLight" x1="20" y1="12" x2="80" y2="50" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#27272A" />
+          <stop offset="100%" stopColor="#09090B" />
+        </linearGradient>
+        <linearGradient id="nexusLayerAccentLight" x1="20" y1="40" x2="80" y2="70" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#8E939C" />
+          <stop offset="100%" stopColor="#64748B" />
+        </linearGradient>
+        <linearGradient id="nexusLayerBaseLight" x1="20" y1="61" x2="80" y2="91" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#27272A" />
+          <stop offset="100%" stopColor="#09090B" />
         </linearGradient>
       </defs>
 
-      <g id="spartan-helmet-crown">
-        {/* 1. The Stylized Crown on Top of Helmet */}
-        <path 
-          d="M50 8 L61 23 L75 16 L69 31 L31 31 L25 16 L39 23 Z" 
-          fill="url(#nexusSilverLight)" 
-        />
-        {/* Crown Central Facet */}
-        <path 
-          d="M50 8 L61 23 L50 31 L39 23 Z" 
-          fill="url(#nexusPlatinum)" 
-          opacity="0.95"
-        />
-        {/* Crown Jewel Points */}
-        <circle cx="50" cy="12" r="1.8" fill="#FFFFFF" />
-        <circle cx="27" cy="18" r="1.4" fill="#FFFFFF" />
-        <circle cx="73" cy="18" r="1.4" fill="#FFFFFF" />
-        
-        {/* Crown Base Crest Band */}
-        <path 
-          d="M23 31 L77 31 L74 36 L26 36 Z" 
-          fill="url(#nexusPlatinum)" 
-        />
+      {/* Top Plate (Isometric Rounded Rhombus) */}
+      <path
+        d="M 21.5 29 L 46.5 14 Q 50 12 53.5 14 L 78.5 29 Q 82 31 78.5 33 L 53.5 48 Q 50 50 46.5 48 L 21.5 33 Q 18 31 21.5 29 Z"
+        fill={topFill}
+        className={variant === 'auto' ? 'fill-[url(#nexusLayerPrimaryLight)] dark:fill-[url(#nexusLayerPrimaryDark)] transition-colors' : undefined}
+      />
 
-        {/* 2. Spartan Helmet Brow & Forehead Dome */}
-        <path 
-          d="M26 36 L74 36 C76 36 78 38 78 41 L80 56 C80 57.5 79 58 77 58 L57 58 L54 39 L46 39 L43 58 L23 58 C21 58 20 57.5 20 56 L22 41 C22 38 24 36 26 36 Z" 
-          fill="url(#nexusPlatinum)" 
-        />
+      {/* Middle Plate (Floating Titanium Rounded Chevron) */}
+      <path
+        d="M 21.5 40 L 46.5 55 Q 50 57 53.5 55 L 78.5 40 Q 82.5 46.5 78.5 53 L 53.5 68 Q 50 70 46.5 68 L 21.5 53 Q 17.5 46.5 21.5 40 Z"
+        fill={midFill}
+        className={variant === 'auto' ? 'fill-[url(#nexusLayerAccentLight)] dark:fill-[url(#nexusLayerAccentDark)] transition-colors' : undefined}
+      />
 
-        {/* 3. Central Spartan Nose Guard (Nasal) */}
-        <path 
-          d="M46 39 L54 39 L53 68 L50 72 L47 68 Z" 
-          fill="#FFFFFF" 
-        />
-
-        {/* 4. Left Spartan Cheek Guard */}
-        <path 
-          d="M20 58 L42 58 L37 72 L32 88 C31.5 89.5 29.5 89.5 29 88 L22 68 Z" 
-          fill="url(#nexusSilverLight)" 
-        />
-        <path 
-          d="M22 60 L35 72 L30 87 L23 68 Z" 
-          fill="url(#nexusSteel)" 
-          opacity="0.25"
-        />
-
-        {/* 5. Right Spartan Cheek Guard */}
-        <path 
-          d="M80 58 L58 58 L63 72 L68 88 C68.5 89.5 70.5 89.5 71 88 L78 68 Z" 
-          fill="url(#nexusSilverLight)" 
-        />
-        <path 
-          d="M78 60 L65 72 L70 87 L77 68 Z" 
-          fill="url(#nexusSteel)" 
-          opacity="0.35"
-        />
-
-        {/* 6. Iconic Spartan T-Visor Eye Slits and Breath Slot */}
-        <path 
-          d="M26 60 L44 60 L45 64 L28 64 Z" 
-          fill="#09090b" 
-        />
-        <path 
-          d="M74 60 L56 60 L55 64 L72 64 Z" 
-          fill="#09090b" 
-        />
-        <path 
-          d="M48 68 L52 68 L53 82 L50 85 L47 82 Z" 
-          fill="#09090b" 
-        />
-      </g>
+      {/* Bottom Plate (Floating Base Rounded Chevron) */}
+      <path
+        d="M 21.5 61 L 46.5 76 Q 50 78 53.5 76 L 78.5 61 Q 82.5 67.5 78.5 74 L 53.5 89 Q 50 91 46.5 89 L 21.5 74 Q 17.5 67.5 21.5 61 Z"
+        fill={botFill}
+        className={variant === 'auto' ? 'fill-[url(#nexusLayerBaseLight)] dark:fill-[url(#nexusLayerBaseDark)] transition-colors' : undefined}
+      />
     </svg>
   );
 }
@@ -110,5 +96,3 @@ export function NexusFocusLogo({ className = "w-8 h-8", style }: { className?: s
 export const AuraLogo = NexusFocusLogo;
 export const SpartanCrownLogo = NexusFocusLogo;
 export default NexusFocusLogo;
-
-
