@@ -15,7 +15,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Contas com acesso Pro / Vitalício garantido
 export const PRO_ACCOUNTS = [
-  'phillipe.souza27@gmail.com'
+  'phillipe.souza27@gmail.com',
+  'lvfernandes11@gmail.com'
 ];
 
 export function isWhitelistedPro(email?: string | null): boolean {
