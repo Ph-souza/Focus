@@ -13,7 +13,7 @@ interface MonthlyBudgetWidgetProps {
 export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [currentBudget, setCurrentBudget] = useState<number>(() => {
-    if (typeof user.monthlyBudget === 'number' && user.monthlyBudget > 0) {
+    if (typeof user?.monthlyBudget === 'number' && user.monthlyBudget > 0) {
       return user.monthlyBudget;
     }
     if (typeof window !== 'undefined') {
@@ -23,7 +23,7 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
         if (!isNaN(parsed)) return parsed;
       }
     }
-    return user.monthlyBudget || 0;
+    return user?.monthlyBudget || 0;
   });
 
   const [budgetInput, setBudgetInput] = useState(currentBudget > 0 ? currentBudget.toString() : '');
@@ -69,35 +69,34 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
       e.stopPropagation();
     }
 
-    // 1. Fechar imediatamente o modo de edição para alternar para a visualização limpa
-    setIsEditing(false);
-
     const cleanInput = (budgetInput ?? '').toString().replace(',', '.').trim();
     const newVal = cleanInput === '' ? 0 : parseFloat(cleanInput);
+    const validVal = (!isNaN(newVal) && newVal >= 0) ? newVal : currentBudget;
 
-    if (!isNaN(newVal) && newVal >= 0) {
-      // 2. Atualização síncrona local imediata
-      setCurrentBudget(newVal);
+    // 1. Fechar imediatamente o modo de edição para alternar para a visualização limpa sem travamentos
+    setIsEditing(false);
 
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('nexus_monthly_budget', newVal.toString());
-        } catch {
-          // Ignorar erros de quota/armazenamento local
-        }
+    // 2. Atualização síncrona local imediata
+    setCurrentBudget(validVal);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('nexus_monthly_budget', validVal.toString());
+      } catch {
+        // Ignorar erros de quota/armazenamento local
       }
+    }
 
-      // 3. Persistência assíncrona desacoplada no Firestore
-      if (user?.id) {
-        setDoc(doc(db, `users/${user.id}`), { monthlyBudget: newVal }, { merge: true })
-          .catch((err) => {
-            handleFirestoreError(err, OperationType.UPDATE, `users/${user.id}`);
-          });
-      }
+    // 3. Persistência assíncrona desacoplada no Firestore
+    if (user?.id) {
+      setDoc(doc(db, `users/${user.id}`), { monthlyBudget: validVal }, { merge: true })
+        .catch((err) => {
+          handleFirestoreError(err, OperationType.UPDATE, `users/${user.id}`);
+        });
     }
   };
 
-  const handleCancel = (e?: React.MouseEvent) => {
+  const handleCancel = (e?: React.MouseEvent | React.KeyboardEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -138,14 +137,14 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
         )}
       </div>
 
-      <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence initial={false}>
         {isEditing ? (
           <motion.div
             key="editing-budget-card"
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
           >
             <form onSubmit={handleSave} className="flex items-center gap-3 mb-2">
               <div className="flex-1 relative">
@@ -157,19 +156,18 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
                   value={budgetInput}
                   onChange={(e) => setBudgetInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleSave(e);
-                    } else if (e.key === 'Escape') {
+                    if (e.key === 'Escape') {
                       handleCancel();
+                    } else if (e.key === 'Enter') {
+                      handleSave(e);
                     }
                   }}
                   placeholder="0.00"
-                  className="w-full bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-slate-800 dark:text-slate-100 text-sm focus:ring-1 focus:ring-white focus:border-white focus:outline-none transition-all"
+                  className="w-full bg-slate-50 dark:bg-[#09090b] border border-slate-200 dark:border-[#27272a] rounded-xl pl-9 pr-4 py-2 text-slate-800 dark:text-slate-100 text-sm focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white focus:border-zinc-900 dark:focus:border-white focus:outline-none transition-all"
                 />
               </div>
               <button
-                type="submit"
+                type="button"
                 onClick={handleSave}
                 title="Salvar orçamento"
                 className="w-10 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition-all active:scale-95 shadow-sm cursor-pointer"
@@ -180,7 +178,7 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
                 type="button"
                 onClick={handleCancel}
                 title="Cancelar edição"
-                className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-[#18181b] border border-transparent dark:border-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-[#27272a] hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
               >
                 <X size={18} className="pointer-events-none" />
               </button>
@@ -192,7 +190,7 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
           >
             <div className="flex items-end justify-between mb-2">
               <div>
@@ -203,14 +201,14 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
                   / {currentBudget > 0 ? formatCurrency(currentBudget) : 'Não definido'}
                 </span>
               </div>
-              <span className={`text-xs font-bold px-2 py-1 rounded-md ${isOverBudget ? 'bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400' : 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-slate-300'}`}>
+              <span className={`text-xs font-bold px-2 py-1 rounded-md ${isOverBudget ? 'bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400' : 'bg-slate-100 text-slate-800 dark:bg-[#27272a] dark:text-slate-200'}`}>
                 {currentBudget > 0 ? `${percentage.toFixed(0)}%` : '-'}
               </span>
             </div>
 
-            <div className="w-full h-3 bg-slate-100 dark:bg-[#09090b] rounded-full overflow-hidden mt-3 mb-1">
+            <div className="w-full h-3 bg-slate-100 dark:bg-[#09090b] border border-slate-200/60 dark:border-zinc-800 rounded-full overflow-hidden mt-3 mb-1">
               <div
-                className={`h-full rounded-full transition-all duration-1000 ease-out ${isOverBudget ? 'bg-rose-500' : 'bg-white'}`}
+                className={`h-full rounded-full transition-all duration-700 ease-out ${isOverBudget ? 'bg-rose-500' : 'bg-zinc-900 dark:bg-white'}`}
                 style={{ width: `${percentage}%` }}
               ></div>
             </div>
@@ -221,7 +219,7 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
               </p>
             )}
             {!isOverBudget && currentBudget > 0 && percentage > 80 && (
-              <p className="text-xs font-semibold text-zinc-400 dark:text-zinc-300 mt-2 flex items-center gap-1.5">
+              <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 mt-2 flex items-center gap-1.5">
                 <AlertCircle size={12} /> Atenção! Você está perto do limite.
               </p>
             )}

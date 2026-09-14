@@ -146,7 +146,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
         {/* Mobile Top Header (Hidden on md) */}
         <div className="md:hidden flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
-            <button onClick={onOpenProfile} className="w-12 h-12 bg-[#6366f1] rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button onClick={onOpenProfile} className="w-12 h-12 bg-zinc-900 text-white dark:bg-white dark:text-black border border-zinc-700 dark:border-zinc-300 rounded-full flex items-center justify-center font-bold text-lg shadow-md relative overflow-hidden focus:outline-none cursor-pointer">
               {user?.photoURL ? (
                 <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
@@ -160,10 +160,10 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
           </div>
           <button
             onClick={() => setIsNotificationsOpen(true)}
-            className="w-10 h-10 bg-slate-100 dark:bg-[#18181b] rounded-[14px] flex items-center justify-center relative shadow-sm"
+            className="w-10 h-10 bg-slate-100 dark:bg-[#121216] border border-slate-200 dark:border-zinc-800 rounded-[14px] flex items-center justify-center relative shadow-sm cursor-pointer"
           >
-            <Bell size={20} className="text-zinc-200" />
-            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border border-[#18181b]"></span>
+            <Bell size={20} className="text-zinc-700 dark:text-zinc-200" />
+            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border border-white dark:border-[#121216]"></span>
           </button>
         </div>
 
@@ -264,31 +264,30 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
 
       {/* Mobile Unified Balance Card (Hidden on md) */}
       <div
-        className="md:hidden bg-gradient-to-br from-[#6366f1] to-[#4f46e5] rounded-[24px] p-5 text-white shadow-lg relative overflow-hidden mb-4 cursor-pointer"
+        className="md:hidden bg-zinc-950 dark:bg-[#121216] border border-zinc-800 rounded-[24px] p-5 text-white shadow-xl relative overflow-hidden mb-4 cursor-pointer"
         onClick={() => setIsStatementModalOpen(true)}
       >
+        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-zinc-700/60 to-transparent pointer-events-none"></div>
         <div className="flex justify-between items-center mb-4 relative z-10">
-          <p className="text-white/80 text-xs font-semibold flex items-center gap-1.5">
+          <p className="text-zinc-400 text-xs font-semibold flex items-center gap-1.5">
             Saldo Disponível
           </p>
-          <span className="bg-white/20 text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full backdrop-blur-sm">Mentor</span>
+          <span className="bg-white/10 text-[10px] font-bold tracking-wider px-2.5 py-0.5 rounded-full backdrop-blur-sm border border-white/10 text-white">
+            Mentor
+          </span>
         </div>
         <p className="text-3xl font-black mb-4 tracking-tight relative z-10">{formatCurrency(balance)}</p>
 
-        <div className="flex bg-black/20 rounded-xl p-3 backdrop-blur-md relative z-10">
+        <div className="flex bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-md relative z-10">
           <div className="flex-1 border-r border-white/10">
-            <p className="text-white/70 text-[9px] font-bold uppercase tracking-wider mb-0.5">Receitas</p>
-            <p className="font-bold text-sm">{formatCurrency(totalIncome)}</p>
+            <p className="text-zinc-400 text-[9px] font-bold uppercase tracking-wider mb-0.5">Receitas</p>
+            <p className="font-bold text-sm text-[#10B981]">{formatCurrency(totalIncome)}</p>
           </div>
           <div className="flex-1 pl-4">
-            <p className="text-white/70 text-[9px] font-bold uppercase tracking-wider mb-0.5">Despesas</p>
-            <p className="font-bold text-sm text-rose-300">{formatCurrency(totalExpense)}</p>
+            <p className="text-zinc-400 text-[9px] font-bold uppercase tracking-wider mb-0.5">Despesas</p>
+            <p className="font-bold text-sm text-rose-400">{formatCurrency(totalExpense)}</p>
           </div>
         </div>
-
-        {/* Background decorative elements */}
-        <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-        <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-[#4f46e5] rounded-full blur-2xl"></div>
       </div>
 
       {/* Desktop Quick Stats Grid & Tasks */}
@@ -313,7 +312,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
               <ArrowUpRight size={14} className="text-[#10B981]" />
             </p>
             <p className="text-2xl font-black text-[#10B981] drop-shadow-sm relative z-10">{formatCurrency(totalIncome)}</p>
-            <div className="mt-2 flex h-1.5 w-full bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden border border-slate-200 dark:border-zinc-800 relative z-10">
+            <div className="mt-2 flex h-1.5 w-full bg-slate-100 dark:bg-slate-800/50 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800 relative z-10">
               <div className="h-full bg-gradient-to-r from-[#10B981]/50 to-[#10B981] w-4/5 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
             </div>
           </div>
@@ -326,7 +325,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
               <ArrowDownRight size={14} className="text-rose-500" />
             </p>
             <p className="text-2xl font-black text-rose-600 dark:text-rose-400 drop-shadow-sm relative z-10">{formatCurrency(totalExpense)}</p>
-            <div className="mt-2 flex h-1.5 w-full bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden border border-slate-200 dark:border-zinc-800 relative z-10">
+            <div className="mt-2 flex h-1.5 w-full bg-slate-100 dark:bg-slate-800/50 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800 relative z-10">
               <div className="h-full bg-gradient-to-r from-rose-500/50 to-rose-500 w-2/5 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></div>
             </div>
           </div>
@@ -341,13 +340,13 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
       <div className="md:hidden mt-2 mb-8 px-1">
         <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-zinc-800 pb-2">
           <h3 className="font-bold text-sm text-slate-800 dark:text-white tracking-wide">Tarefas do Dia</h3>
-          <span onClick={() => onTabChange('tasks')} className="text-[10px] font-bold text-blue-500 cursor-pointer">Organizar</span>
+          <span onClick={() => onTabChange('tasks')} className="text-[10px] font-bold text-zinc-900 dark:text-white hover:underline cursor-pointer">Organizar</span>
         </div>
 
         <div className="flex flex-col gap-5 mb-8">
           {tasks.filter(t => !t.completed).slice(0, 2).map((task) => (
             <div key={task.id} className="flex items-start gap-4">
-              <div className="mt-1 w-1 h-8 rounded-full bg-slate-200 dark:bg-zinc-800 relative">
+              <div className="mt-1 w-1 h-8 rounded-full bg-slate-200 dark:bg-slate-700 relative">
                 <div className={`absolute top-0 left-0 w-full rounded-full ${task.priority === 'high' ? 'h-full bg-red-400' : task.priority === 'medium' ? 'h-1/2 bg-zinc-300' : 'h-1/3 bg-zinc-400'}`}></div>
               </div>
               <div className="flex-1">
@@ -384,7 +383,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
             </button>
           </div>
 
-          <div className="bg-slate-50 dark:bg-[#18181b] border border-slate-100 dark:border-zinc-800 rounded-xl p-2.5">
+          <div className="bg-slate-50 dark:bg-zinc-900/70 border border-slate-100 dark:border-zinc-800/60 rounded-xl p-2.5">
             <div className="flex items-center gap-1.5 mb-1">
               <div className="w-1.5 h-1.5 rounded-full bg-zinc-800 dark:bg-white"></div>
               <span className="text-[9px] font-bold text-zinc-700 dark:text-zinc-200">
