@@ -92,7 +92,7 @@ export function Navigation({
         <h3 className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">Agenda Mensal</h3>
         <div 
           onClick={() => setIsCalendarModalOpen(true)}
-          className="bg-slate-50 dark:bg-[#121216] rounded-xl p-3 border border-slate-200 dark:border-zinc-800 cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors"
+          className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 border border-slate-100 dark:border-slate-700 cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors"
         >
           <div className="flex items-center justify-between mb-3 text-slate-800 dark:text-slate-200">
             <button className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors invisible"><ChevronLeft size={16} /></button>
@@ -115,13 +115,13 @@ export function Navigation({
                 <div 
                   key={i} 
                   className={`w-6 h-6 flex items-center justify-center rounded-full transition-colors relative ${
-                    isSelected ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-white font-bold' :
-                    isToday ? 'bg-zinc-900 text-white dark:bg-white dark:text-black shadow-sm font-bold' : 'text-slate-600 dark:text-slate-300'
+                    isSelected ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400' :
+                    isToday ? 'bg-indigo-600 text-white shadow-sm font-bold' : 'text-slate-600 dark:text-slate-300'
                   }`}
                 >
                   {day}
                   {hasMeeting && !isToday && !isSelected && (
-                    <span className="absolute bottom-0 w-1 h-1 bg-zinc-900 dark:bg-white rounded-full"></span>
+                    <span className="absolute bottom-0 w-1 h-1 bg-indigo-500 rounded-full"></span>
                   )}
                 </div>
               );
@@ -265,16 +265,12 @@ export function Navigation({
         {/* Brand Header */}
         <div className="flex items-center justify-between p-6 mb-2 relative z-10">
           <div className="flex items-center gap-3">
-            <div className={`h-11 w-11 rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden flex-shrink-0 border ${
-              isDarkMode 
-                ? 'bg-gradient-to-br from-[#1c1c20] to-[#09090b] border-white/20' 
-                : 'bg-zinc-950 border-zinc-800'
-            }`}>
+            <div className="h-11 w-11 bg-zinc-900 dark:bg-gradient-to-br dark:from-[#1c1c20] dark:to-[#09090b] border border-zinc-800 dark:border-white/20 rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden flex-shrink-0">
               <AuraLogo className="w-7 h-7 relative z-10" />
             </div>
             <div>
               <h1 className="text-lg font-black tracking-tight text-zinc-900 dark:text-white leading-tight drop-shadow-sm">NEXUS FOCUS</h1>
-              <p className="text-[9px] uppercase tracking-widest text-zinc-500 dark:text-zinc-400 font-extrabold leading-none mt-1">A EVOLUÇÃO DA SUA TI</p>
+              <p className="text-[10px] font-medium tracking-wide text-zinc-500 dark:text-zinc-400 leading-none mt-1">powered by Nexus Flow</p>
             </div>
           </div>
           <button 
@@ -298,19 +294,13 @@ export function Navigation({
                 onTabChange('tasks');
               }
             }}
-            className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer shadow-sm group border ${
-              isDarkMode
-                ? 'bg-[#121216] text-white border-zinc-800 hover:bg-zinc-800/80 hover:border-zinc-700'
-                : 'bg-white text-zinc-900 border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300'
-            }`}
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300 dark:bg-zinc-900/90 dark:text-white dark:border-zinc-800 dark:hover:bg-zinc-800 font-semibold text-xs transition-all cursor-pointer shadow-sm group"
           >
             <div className="flex items-center gap-2.5">
-              <Target size={18} className={`${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'} group-hover:rotate-45 transition-transform duration-300`} />
-              <span className="font-bold">Modo Foco</span>
+              <Target size={18} className="text-zinc-800 dark:text-zinc-200 group-hover:rotate-45 transition-transform duration-300" />
+              <span className="font-bold text-zinc-900 dark:text-white">Modo Foco</span>
             </div>
-            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-extrabold tracking-wider uppercase shadow-sm ${
-              isDarkMode ? 'bg-white text-black' : 'bg-zinc-900 text-white'
-            }`}>
+            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-zinc-900 text-white dark:bg-white dark:text-black font-extrabold tracking-wider uppercase shadow-sm">
               Iniciar
             </span>
           </button>

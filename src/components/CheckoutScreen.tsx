@@ -102,7 +102,7 @@ export function CheckoutScreen() {
         {/* Brand Header */}
         <div className="text-center mb-7 flex flex-col items-center">
           <div className="p-3.5 bg-gradient-to-br from-[#1c1c20] to-[#09090b] border border-white/20 rounded-2xl shadow-xl backdrop-blur-xl mb-3 flex items-center justify-center">
-            <NexusFocusLogo className="w-10 h-10" variant="dark" />
+            <NexusFocusLogo className="w-10 h-10" />
           </div>
 
           <div className="flex flex-col items-center gap-1 mb-2">
@@ -110,8 +110,8 @@ export function CheckoutScreen() {
               <Sparkles className="w-3 h-3 text-white" />
               Nexus Focus Pro
             </div>
-            <span className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-zinc-400">
-              FINANÇAS • ORGANIZAÇÃO • TAREFAS
+            <span className="text-[11px] font-medium text-zinc-400 tracking-wide mt-0.5">
+              powered by Nexus Flow
             </span>
           </div>
 
