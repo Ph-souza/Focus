@@ -34,40 +34,42 @@ export function LoginScreen() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col justify-center items-center px-4 sm:px-6 py-10 relative overflow-x-hidden bg-[url('/login-desktop-bg.jpg')] bg-cover bg-center bg-no-repeat selection:bg-zinc-900 selection:text-white">
+    <div className="min-h-screen w-full flex flex-col justify-between items-center px-4 sm:px-6 py-6 sm:py-8 relative overflow-x-hidden bg-[url('/login-desktop-bg.jpg')] bg-cover bg-center bg-no-repeat selection:bg-zinc-900 selection:text-white">
       {/* Soft Ambient Light Glow Overlay */}
       <div className="absolute inset-0 bg-radial-[circle_at_center_top] from-white/30 via-transparent to-transparent pointer-events-none" />
 
+      {/* Top Spacer to balance vertical centering */}
+      <div className="h-2 sm:h-6 w-full shrink-0" />
+
+      {/* Main Center Container */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-xl flex flex-col items-center text-center relative z-10"
+        className="w-full max-w-xl flex flex-col items-center text-center relative z-10 my-auto py-2 sm:py-4"
       >
         {/* Logo Card */}
-        <div className="mb-5 flex flex-col items-center">
-          <div className="w-20 h-20 sm:w-22 sm:h-22 bg-white/95 rounded-2xl sm:rounded-3xl shadow-[0_12px_32px_rgba(0,0,0,0.07),0_2px_8px_rgba(0,0,0,0.04)] border border-white flex items-center justify-center mb-4 transition-transform duration-300 hover:scale-[1.03]">
-            <NexusFocusLogo className="w-12 h-12" variant="dark" />
-          </div>
+        <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white/95 rounded-2xl sm:rounded-3xl shadow-[0_12px_32px_rgba(0,0,0,0.07),0_2px_8px_rgba(0,0,0,0.04)] border border-white flex items-center justify-center mb-5 sm:mb-6 transition-transform duration-300 hover:scale-[1.03]">
+          <NexusFocusLogo className="w-12 h-12 sm:w-14 sm:h-14" variant="dark" />
+        </div>
 
-          {/* Brand Name (Spaced Out) - Tagline removed as requested */}
-          <span className="text-[13px] sm:text-sm font-bold tracking-[0.28em] text-zinc-900 uppercase mb-4">
-            NEXUS FOCUS
-          </span>
+        {/* Brand Title (Now dominant, prominent and larger than the impact headline) */}
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-[0.25em] text-zinc-950 uppercase mb-8 sm:mb-10">
+          NEXUS FOCUS
+        </h1>
 
-          {/* Main Headline */}
-          <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-extrabold tracking-tight text-zinc-950 mb-3 leading-[1.15]">
+        {/* Impact Section with distinct spacing */}
+        <div className="flex flex-col items-center mb-6 sm:mb-8">
+          <h2 className="text-xl sm:text-2xl lg:text-[28px] font-bold tracking-tight text-zinc-800 mb-2 sm:mb-2.5 leading-snug">
             Sua rotina, mais inteligente.
-          </h1>
-
-          {/* Description */}
+          </h2>
           <p className="text-zinc-600 text-sm sm:text-base max-w-md leading-relaxed">
             Seu assistente pessoal para organização, produtividade e controle financeiro em uma única experiência.
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="w-full max-w-[430px] bg-white/80 backdrop-blur-xl border border-white/90 rounded-[28px] p-5 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] mt-1">
+        <div className="w-full max-w-[430px] bg-white/80 backdrop-blur-xl border border-white/90 rounded-[28px] p-5 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)]">
           {errorMsg && (
             <motion.div
               initial={{ opacity: 0, y: -6 }}
@@ -128,12 +130,17 @@ export function LoginScreen() {
             <div className="h-px flex-1 bg-zinc-200/80" />
           </div>
         </div>
-
-        {/* Footer Terms */}
-        <p className="mt-7 text-zinc-500 text-xs text-center max-w-sm leading-relaxed">
-          Ao continuar, você concorda com nossos <span className="font-semibold text-zinc-800 hover:underline cursor-pointer">Termos de Uso</span> e <span className="font-semibold text-zinc-800 hover:underline cursor-pointer">Política de Privacidade</span>.
-        </p>
       </motion.div>
+
+      {/* Footer Terms: Docked cleanly to the screen bottom */}
+      <footer className="w-full relative z-10 pb-2 sm:pb-3 text-center shrink-0">
+        <p className="text-zinc-500 text-xs text-center max-w-md mx-auto leading-relaxed">
+          Ao continuar, você concorda com nossos{' '}
+          <span className="font-semibold text-zinc-800 hover:underline cursor-pointer">Termos de Uso</span>{' '}
+          e{' '}
+          <span className="font-semibold text-zinc-800 hover:underline cursor-pointer">Política de Privacidade</span>.
+        </p>
+      </footer>
     </div>
   );
 }
