@@ -356,7 +356,7 @@ export function Navigation({
             <div className="h-1 bg-slate-200 dark:bg-[#27272a] rounded-full w-full relative z-10 overflow-hidden">
               <div className="h-full bg-gradient-to-r from-zinc-500 to-zinc-900 dark:from-zinc-500 dark:to-white w-full rounded-full shadow-[0_0_8px_rgba(0,0,0,0.1)] dark:shadow-[0_0_8px_rgba(255,255,255,0.35)]"></div>
             </div>
-            <p className="text-[9px] tracking-widest uppercase font-extrabold text-zinc-700 dark:text-white mt-2 relative z-10 text-right">Acesso Elite</p>
+            <p className="text-[9px] tracking-widest uppercase font-extrabold text-zinc-700 dark:text-white mt-2 relative z-10 text-right">Acesso Ativo</p>
           </div>
         </div>
       </aside>

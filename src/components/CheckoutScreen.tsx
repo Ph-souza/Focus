@@ -143,7 +143,7 @@ export function CheckoutScreen() {
   ];
 
   const planGuarantees = [
-    'Acesso completo a todos os recursos Pro',
+    'Acesso completo a todos os recursos',
     'Suporte prioritário',
     'Atualizações e novos recursos incluídos',
     'Cancele quando quiser, sem complicação'
@@ -217,7 +217,7 @@ export function CheckoutScreen() {
                 <div className="relative w-full max-w-[240px] sm:max-w-[260px] flex items-center justify-center">
                   <img
                     src="/checkout-pedestal.png"
-                    alt="Nexus Focus Pro - Mais foco, controle e resultados"
+                    alt="Nexus Focus - Mais foco, controle e resultados"
                     className="w-full object-contain drop-shadow-sm select-none pointer-events-none"
                   />
                 </div>
@@ -304,7 +304,7 @@ export function CheckoutScreen() {
               </div>
               <div>
                 <h2 className="text-xs sm:text-sm font-black tracking-wider text-zinc-950 uppercase">
-                  NEXUS FOCUS PRO
+                  NEXUS FOCUS
                 </h2>
                 <span className="text-[11px] text-zinc-400 font-medium block">
                   powered by Nexus Flow
@@ -316,7 +316,7 @@ export function CheckoutScreen() {
             <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 sm:p-4.5 flex justify-between items-center mb-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
               <div>
                 <span className="text-[11px] font-black text-zinc-900 tracking-wider uppercase block mb-0.5">
-                  PLANO PRO MENSAL
+                  PLANO MENSAL
                 </span>
                 <span className="text-[11px] text-zinc-500">
                   Renovação corporativa flexível
@@ -330,7 +330,7 @@ export function CheckoutScreen() {
               </div>
             </div>
 
-            {/* Pro Plan Guarantees Checklist */}
+            {/* Plan Guarantees Checklist */}
             <div className="space-y-3 mb-6">
               {planGuarantees.map((item, idx) => (
                 <div key={idx} className="flex items-center gap-2.5 text-xs sm:text-[13px] text-zinc-700 font-medium">
@@ -411,7 +411,7 @@ export function CheckoutScreen() {
               className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold py-3.5 sm:py-4 px-5 rounded-2xl shadow-[0_6px_20px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.18)] transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed mb-3.5"
             >
               <Lock size={15} className="text-white" />
-              <span className="text-[14px] sm:text-base font-bold">Desbloquear Acesso Pro Agora</span>
+              <span className="text-[14px] sm:text-base font-bold">Desbloquear Acesso Agora</span>
               <ArrowRight size={15} className="text-white" />
             </button>
 
@@ -451,7 +451,7 @@ export function CheckoutScreen() {
                     Pagamento Seguro Mercado Pago
                   </h3>
                   <p className="text-xs text-zinc-500">
-                    Assinatura Nexus Focus Pro ({couponApplied ? 'R$ 24,90' : 'R$ 29,90'}/mês)
+                    Assinatura Nexus Focus ({couponApplied ? 'R$ 24,90' : 'R$ 29,90'}/mês)
                   </p>
                 </div>
               </div>
