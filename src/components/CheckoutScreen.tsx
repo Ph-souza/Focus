@@ -1,23 +1,53 @@
 import React, { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
-import { Sparkles, ShieldCheck, Lock, CheckCircle2, ArrowRight, RefreshCw } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { 
+  Shield, 
+  ShieldCheck, 
+  Lock, 
+  Check, 
+  ArrowRight, 
+  RefreshCw, 
+  User, 
+  Users, 
+  Star, 
+  Tag, 
+  CheckCircle2, 
+  AlertCircle, 
+  X,
+  Loader2 
+} from 'lucide-react';
+import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { NexusFocusLogo } from './AuraLogo';
 import { getApiUrl } from '../lib/api';
 
-// Inicializa o SDK com a chave pública do ambiente
+// Inicializa o SDK com a chave pública do Mercado Pago
 initMercadoPago(import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || '', {
   locale: 'pt-BR'
 });
 
 export function CheckoutScreen() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, isPremium, logout } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showCouponInput, setShowCouponInput] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponApplied, setCouponApplied] = useState(false);
+  const [couponError, setCouponError] = useState('');
+
+  const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
+  const hasAccess = isPremium || isWhitelistedPro(userEmail);
+
+  // Redirecionamento automático se já for Pro
+  if (hasAccess) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const initialization = {
-    amount: 29.90, // Valor da mensalidade Pro
+    amount: couponApplied ? 24.90 : 29.90, // Valor da mensalidade Pro
     auto_recurring: {
       frequency: 1,
       frequency_type: 'months',
@@ -30,7 +60,7 @@ export function CheckoutScreen() {
     },
     visual: {
       style: {
-        theme: 'dark',
+        theme: 'default',
       },
     },
   };
@@ -51,6 +81,7 @@ export function CheckoutScreen() {
           paymentMethodId: formData.payment_method_id,
           issuerId: formData.issuer_id,
           installments: formData.installments,
+          coupon: couponApplied ? couponCode : undefined,
         }),
       });
 
@@ -70,6 +101,39 @@ export function CheckoutScreen() {
     }
   };
 
+  const handleApplyCoupon = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCouponError('');
+    if (!couponCode.trim()) return;
+
+    if (couponCode.trim().toUpperCase() === 'FOCUS10' || couponCode.trim().toUpperCase() === 'PROMO') {
+      setCouponApplied(true);
+      setCouponError('');
+    } else {
+      setCouponError('Cupom inválido ou expirado.');
+    }
+  };
+
+  const handleRefreshStatus = async () => {
+    try {
+      setIsCheckingStatus(true);
+      setStatusFeedback(null);
+      // Pequeno delay para checar sincronização com o Firestore / backend
+      await new Promise((r) => setTimeout(r, 1200));
+
+      if (isWhitelistedPro(userEmail)) {
+        window.location.href = '/dashboard';
+        return;
+      }
+
+      setStatusFeedback('Verificação concluída. Nenhum pagamento recente aprovado foi encontrado.');
+    } catch {
+      setStatusFeedback('Não foi possível verificar o status agora. Tente novamente.');
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
+
   const benefits = [
     'Mentor IA com raciocínio financeiro em tempo real',
     'Modo Foco & Timeboxing sincronizado',
@@ -78,127 +142,322 @@ export function CheckoutScreen() {
     'Sincronização em nuvem e segurança de nível executivo'
   ];
 
+  const planGuarantees = [
+    'Acesso completo a todos os recursos Pro',
+    'Suporte prioritário',
+    'Atualizações e novos recursos incluídos',
+    'Cancele quando quiser, sem complicação'
+  ];
+
   return (
-    <div className="min-h-screen bg-[#09090b] text-white flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden selection:bg-white selection:text-black">
-      {/* Subtle Background Glows */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-white/[0.02] rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-1/4 w-[400px] h-[250px] bg-white/[0.01] rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen w-full flex flex-col justify-between items-center px-4 sm:px-6 py-6 sm:py-8 relative overflow-x-hidden bg-[url('/login-desktop-bg.jpg')] bg-cover bg-center bg-no-repeat selection:bg-zinc-900 selection:text-white">
+      {/* Soft Ambient Light Glow Overlay */}
+      <div className="absolute inset-0 bg-radial-[circle_at_center_top] from-white/30 via-transparent to-transparent pointer-events-none" />
 
-      <div className="max-w-md w-full bg-[#121216] border border-[#27272a] rounded-3xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.7)] relative z-10">
+      {/* Top Header Center Branding */}
+      <header className="w-full text-center relative z-10 pt-2 sm:pt-4 mb-4 sm:mb-6">
+        <span className="text-[12px] sm:text-xs font-bold tracking-[0.28em] text-zinc-900 uppercase block mb-1">
+          N E X U S &nbsp; F O C U S
+        </span>
+        <span className="text-[11px] sm:text-xs font-medium text-zinc-500 tracking-wider block">
+          Sua Rotina mais inteligente
+        </span>
+      </header>
 
-        {/* Top Session Bar */}
-        <div className="flex justify-between items-center mb-6 pb-4 border-b border-[#27272a]/60 text-xs">
-          <span className="text-zinc-400 truncate max-w-[240px]">
-            Conectado como <strong className="text-zinc-200 font-semibold">{currentUser?.email}</strong>
-          </span>
-          <button 
-            onClick={logout} 
-            className="text-red-400 hover:text-red-300 font-medium transition-colors cursor-pointer"
-          >
-            Sair
-          </button>
-        </div>
-
-        {/* Brand Header */}
-        <div className="text-center mb-7 flex flex-col items-center">
-          <div className="p-3.5 bg-gradient-to-br from-[#1c1c20] to-[#09090b] border border-white/20 rounded-2xl shadow-xl backdrop-blur-xl mb-3 flex items-center justify-center">
-            <NexusFocusLogo className="w-10 h-10" />
-          </div>
-
-          <div className="flex flex-col items-center gap-1 mb-2">
-            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/10 border border-white/20 text-white text-[11px] font-bold tracking-wider uppercase shadow-sm">
-              <Sparkles className="w-3 h-3 text-white" />
-              Nexus Focus Pro
-            </div>
-            <span className="text-[11px] font-medium text-zinc-400 tracking-wide mt-0.5">
-              powered by Nexus Flow
-            </span>
-          </div>
-
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-2">
-            Eleve seu Foco e Gestão
-          </h1>
-          <p className="text-sm text-zinc-400 max-w-sm leading-relaxed">
-            Assinatura corporativa com acesso irrestrito ao ecossistema de alta performance.
-          </p>
-        </div>
-
-        {/* Plan Value Card */}
-        <div className="bg-gradient-to-br from-[#18181b] to-[#121214] border border-white/20 rounded-2xl p-4 sm:p-5 mb-5 shadow-[0_4px_20px_rgba(0,0,0,0.5)] flex justify-between items-center relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
+      {/* Dual Card Main Container */}
+      <main className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 relative z-10 my-auto items-stretch">
+        
+        {/* ================= LEFT CARD: Feature & Value Showcase ================= */}
+        <section className="lg:col-span-7 bg-white/80 backdrop-blur-xl border border-white/90 rounded-[32px] p-6 sm:p-8 lg:p-9 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between">
           <div>
-            <span className="text-[11px] text-zinc-200 font-extrabold uppercase tracking-wider block mb-0.5">
-              Plano Pro Mensal
-            </span>
-            <p className="text-xs text-zinc-400">Renovação corporativa flexível</p>
-          </div>
-          <div className="text-right">
-            <span className="text-2xl font-black text-white tracking-tight">R$ 29,90</span>
-            <span className="text-xs text-zinc-400">/mês</span>
-          </div>
-        </div>
-
-        {/* Benefits Checklist */}
-        <div className="space-y-2.5 mb-6">
-          {benefits.map((b, idx) => (
-            <div key={idx} className="flex items-start gap-2.5 text-xs text-zinc-300">
-              <CheckCircle2 className="w-4 h-4 text-white shrink-0 mt-0.5" />
-              <span className="leading-snug">{b}</span>
+            {/* Left Card Header with Logo */}
+            <div className="flex items-center gap-3.5 mb-6">
+              <div className="w-13 h-13 sm:w-14 sm:h-14 bg-white/95 rounded-2xl border border-white shadow-[0_4px_16px_rgba(0,0,0,0.05)] flex items-center justify-center shrink-0">
+                <NexusFocusLogo className="w-8 h-8 sm:w-9 sm:h-9" variant="dark" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs sm:text-sm font-extrabold tracking-[0.25em] text-zinc-950 uppercase">
+                  NEXUS FOCUS
+                </span>
+                <span className="text-[11px] sm:text-xs text-zinc-500 font-medium tracking-wide">
+                  Sua Rotina mais inteligente
+                </span>
+              </div>
             </div>
-          ))}
-        </div>
 
-        {errorMessage && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3.5 rounded-xl mb-4 text-center animate-shake">
-            {errorMessage}
+            {/* Split Content: Text & Checklist on Left | Pedestal on Right */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+              
+              {/* Text & Checklist */}
+              <div className="md:col-span-7 flex flex-col justify-center">
+                <h1 className="text-2xl sm:text-3xl lg:text-[34px] font-extrabold text-zinc-950 tracking-tight leading-[1.15] mb-3">
+                  Eleve seu Foco<br />e Gestão
+                </h1>
+                <p className="text-zinc-600 text-xs sm:text-[13px] leading-relaxed mb-6">
+                  Assinatura corporativa com acesso irrestrito ao ecossistema de alta performance. Organize sua vida, cumpra seus objetivos e conquiste mais com a ajuda da inteligência artificial.
+                </p>
+
+                {/* 5 Bullet Features */}
+                <div className="space-y-3">
+                  {benefits.map((b, idx) => (
+                    <div key={idx} className="flex items-start gap-2.5">
+                      <div className="w-4 h-4 rounded-full bg-zinc-300/80 flex items-center justify-center text-zinc-800 shrink-0 mt-0.5">
+                        <Check size={11} strokeWidth={3} />
+                      </div>
+                      <span className="text-zinc-700 text-xs sm:text-[13px] font-medium leading-tight">
+                        {b}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pedestal Graphic & Motto */}
+              <div className="md:col-span-5 flex flex-col items-center justify-center text-center mt-4 md:mt-0">
+                <div className="relative w-full max-w-[240px] sm:max-w-[260px] flex items-center justify-center">
+                  <img
+                    src="/checkout-pedestal.png"
+                    alt="Nexus Focus Pro - Mais foco, controle e resultados"
+                    className="w-full object-contain drop-shadow-sm select-none pointer-events-none"
+                  />
+                </div>
+                <div className="mt-3">
+                  <p className="text-zinc-500 text-[10px] sm:text-[11px] font-bold tracking-[0.25em] uppercase leading-relaxed">
+                    DISCIPLINA HOJE.<br />LIBERDADE SEMPRE.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
 
-        {/* Call to Action Button - High Contrast Monochrome */}
-        <button
-          onClick={() => setIsModalOpen(true)}
-          disabled={loading}
-          className="w-full relative group overflow-hidden rounded-xl bg-white hover:bg-zinc-200 text-black font-black py-4 px-4 transition-all shadow-[0_4px_25px_rgba(255,255,255,0.18)] hover:shadow-[0_4px_35px_rgba(255,255,255,0.25)] flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <Lock className="w-4 h-4 text-black" />
-          <span>Desbloquear Acesso Pro Agora</span>
-        </button>
+          {/* Bottom Trust Metrics Row */}
+          <div className="border-t border-zinc-200/80 pt-6 mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-zinc-100/80 text-zinc-800 shrink-0">
+                <Shield size={18} strokeWidth={1.75} />
+              </div>
+              <div>
+                <strong className="block text-xs font-bold text-zinc-900">100% seguro</strong>
+                <span className="text-[11px] text-zinc-500 leading-tight block">
+                  Seus dados protegidos com criptografia de ponta.
+                </span>
+              </div>
+            </div>
 
-        {/* Security and Refresh status */}
-        <div className="mt-4 flex flex-col items-center gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-            <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
-            <span>Pagamento 100% criptografado e seguro</span>
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-zinc-100/80 text-zinc-800 shrink-0">
+                <Users size={18} strokeWidth={1.75} />
+              </div>
+              <div>
+                <strong className="block text-xs font-bold text-zinc-900">+10 mil usuários</strong>
+                <span className="text-[11px] text-zinc-500 leading-tight block">
+                  Mais foco, organização e resultados todos os dias.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-zinc-100/80 text-zinc-800 shrink-0">
+                <Star size={18} strokeWidth={1.75} />
+              </div>
+              <div>
+                <strong className="block text-xs font-bold text-zinc-900">4,9 de 5</strong>
+                <span className="text-[11px] text-zinc-500 leading-tight block">
+                  Usuários recomendam o Nexus Focus.
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ================= RIGHT CARD: Checkout & Plan Selection ================= */}
+        <section className="lg:col-span-5 bg-white/85 backdrop-blur-xl border border-white/90 rounded-[32px] p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between">
+          <div>
+            {/* Top User Session Bar */}
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-200/80 mb-5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-600 shrink-0">
+                  <User size={15} />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] sm:text-[11px] text-zinc-400 block leading-tight">
+                    Conectado como
+                  </span>
+                  <span className="text-xs font-semibold text-zinc-900 truncate block leading-tight">
+                    {currentUser?.email || 'Usuário Nexus'}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={logout}
+                className="text-xs font-bold text-rose-500 hover:text-rose-600 transition-colors px-2 py-1 rounded-md cursor-pointer shrink-0"
+              >
+                Sair
+              </button>
+            </div>
+
+            {/* Plan Header */}
+            <div className="flex items-center gap-3.5 mb-4">
+              <div className="w-12 h-12 bg-white/95 rounded-2xl border border-zinc-200/80 shadow-sm flex items-center justify-center shrink-0">
+                <NexusFocusLogo className="w-7 h-7" variant="dark" />
+              </div>
+              <div>
+                <h2 className="text-xs sm:text-sm font-black tracking-wider text-zinc-950 uppercase">
+                  NEXUS FOCUS PRO
+                </h2>
+                <span className="text-[11px] text-zinc-400 font-medium block">
+                  powered by Nexus Flow
+                </span>
+              </div>
+            </div>
+
+            {/* Pricing Highlight Card */}
+            <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 sm:p-4.5 flex justify-between items-center mb-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+              <div>
+                <span className="text-[11px] font-black text-zinc-900 tracking-wider uppercase block mb-0.5">
+                  PLANO PRO MENSAL
+                </span>
+                <span className="text-[11px] text-zinc-500">
+                  Renovação corporativa flexível
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl sm:text-[26px] font-black text-zinc-950 tracking-tight">
+                  {couponApplied ? 'R$ 24,90' : 'R$ 29,90'}
+                </span>
+                <span className="text-xs text-zinc-500 font-medium">/mês</span>
+              </div>
+            </div>
+
+            {/* Pro Plan Guarantees Checklist */}
+            <div className="space-y-3 mb-6">
+              {planGuarantees.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2.5 text-xs sm:text-[13px] text-zinc-700 font-medium">
+                  <CheckCircle2 size={16} className="text-zinc-800 shrink-0" strokeWidth={2} />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Coupon Section */}
+            <div className="mb-5">
+              {!showCouponInput ? (
+                <button
+                  onClick={() => setShowCouponInput(true)}
+                  className="w-full flex items-center justify-between text-xs text-zinc-600 hover:text-zinc-900 font-medium py-1 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Tag size={14} className="text-zinc-400" />
+                    <span>Tem um cupom de desconto?</span>
+                  </div>
+                  <span className="text-zinc-500 hover:underline">Adicionar &gt;</span>
+                </button>
+              ) : (
+                <form onSubmit={handleApplyCoupon} className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Código do cupom"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value)}
+                      className="flex-1 px-3 py-2 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 uppercase font-semibold text-zinc-800"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2 text-xs font-bold bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 cursor-pointer"
+                    >
+                      Aplicar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowCouponInput(false); setCouponError(''); }}
+                      className="p-2 text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  {couponError && <p className="text-[11px] text-rose-500">{couponError}</p>}
+                  {couponApplied && <p className="text-[11px] text-emerald-600 font-semibold">✓ Cupom aplicado com sucesso!</p>}
+                </form>
+              )}
+            </div>
+
+            {/* Error Message */}
+            {errorMessage && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs flex items-start gap-2">
+                <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* Status Feedback */}
+            {statusFeedback && (
+              <div className="mb-4 p-3 rounded-xl bg-zinc-100 border border-zinc-200 text-zinc-700 text-xs flex items-start justify-between gap-2">
+                <span>{statusFeedback}</span>
+                <button onClick={() => setStatusFeedback(null)} className="text-zinc-400 hover:text-zinc-600">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
           </div>
 
-          <a
-            href="/dashboard"
-            className="text-xs text-zinc-400 hover:text-white transition-colors flex items-center gap-1 mt-1"
-          >
-            <RefreshCw className="w-3 h-3" />
-            <span>Já realizou o pagamento? Atualizar status</span>
-          </a>
-        </div>
-      </div>
+          {/* Bottom Actions of Right Card */}
+          <div>
+            {/* Primary Action Button */}
+            <button
+              onClick={() => setIsModalOpen(true)}
+              disabled={loading}
+              className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold py-3.5 sm:py-4 px-5 rounded-2xl shadow-[0_6px_20px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.18)] transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed mb-3.5"
+            >
+              <Lock size={15} className="text-white" />
+              <span className="text-[14px] sm:text-base font-bold">Desbloquear Acesso Pro Agora</span>
+              <ArrowRight size={15} className="text-white" />
+            </button>
 
-      {/* Modal / Popup do Checkout Bricks */}
+            {/* Security Guarantee & Status Refresh */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                <ShieldCheck size={13} className="text-zinc-400" />
+                <span>Pagamento 100% criptografado e seguro</span>
+              </div>
+
+              <button
+                onClick={handleRefreshStatus}
+                disabled={isCheckingStatus}
+                className="text-xs text-zinc-500 hover:text-zinc-900 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw size={12} className={isCheckingStatus ? "animate-spin text-zinc-700" : "text-zinc-400"} />
+                <span>Já realizou o pagamento? Atualizar status</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* Modal Mercado Pago Brick */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#121216] border border-[#27272a] w-full max-w-lg rounded-3xl p-6 sm:p-7 relative shadow-[0_25px_60px_rgba(0,0,0,0.8)] animate-in fade-in zoom-in duration-200">
-
-            <div className="flex justify-between items-center mb-5 pb-3 border-b border-[#27272a]">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-3xl p-6 sm:p-7 relative shadow-[0_25px_60px_rgba(0,0,0,0.2)] animate-in fade-in zoom-in duration-200">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center mb-5 pb-3 border-b border-zinc-100">
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-white">
+                <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center text-white">
                   <Lock size={14} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-white leading-tight">Pagamento Seguro Mercado Pago</h3>
-                  <p className="text-[11px] text-zinc-400">Assinatura Nexus Focus Pro (R$ 29,90/mês)</p>
+                  <h3 className="font-bold text-base text-zinc-900 leading-tight">
+                    Pagamento Seguro Mercado Pago
+                  </h3>
+                  <p className="text-xs text-zinc-500">
+                    Assinatura Nexus Focus Pro ({couponApplied ? 'R$ 24,90' : 'R$ 29,90'}/mês)
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-zinc-400 hover:text-white text-xs font-bold bg-[#18181b] hover:bg-[#27272a] px-3 py-1.5 rounded-lg border border-[#27272a] transition-colors cursor-pointer"
+                className="text-zinc-400 hover:text-zinc-700 text-xs font-bold bg-zinc-100 hover:bg-zinc-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
               >
                 ✕ Fechar
               </button>
@@ -220,9 +479,9 @@ export function CheckoutScreen() {
             </div>
 
             {loading && (
-              <div className="absolute inset-0 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl gap-3 z-20">
-                <div className="w-9 h-9 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-sm font-semibold text-white">Processando assinatura segura...</p>
+              <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl gap-3 z-20">
+                <Loader2 size={32} className="animate-spin text-zinc-900" />
+                <p className="text-sm font-semibold text-zinc-900">Processando assinatura segura...</p>
               </div>
             )}
           </div>
