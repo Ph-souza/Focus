@@ -853,7 +853,7 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
    */
   async function sendWhatsAppTextMessage(to: string, messageText: string, phoneNumberId?: string): Promise<any> {
     const token = process.env.META_ACCESS_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_USER_ACCESS_TOKEN;
-    const phoneId = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || "1327193143803215";
+    const phoneId = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || "1262215520309953";
 
     if (!token) {
       console.log(`[WhatsApp Outbound] Aviso: Token da Meta não configurado. Mensagem para ${to} não despachada na API externa.`);
@@ -898,9 +898,9 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
     
-    const configuredToken = process.env.META_WEBHOOK_VERIFY_TOKEN_TEST || process.env.META_WEBHOOK_VERIFY_TOKEN || "nexus_focus_meta_token";
+    const configuredToken = process.env.META_WEBHOOK_VERIFY_TOKEN || process.env.META_WEBHOOK_VERIFY_TOKEN_TEST || "nexus_flow_whatsapp_secure_focus_5263";
     
-    if (mode === "subscribe" && (token === configuredToken || token === process.env.META_WEBHOOK_VERIFY_TOKEN_TEST)) {
+    if (mode === "subscribe" && (token === configuredToken || token === process.env.META_WEBHOOK_VERIFY_TOKEN_TEST || token === "nexus_flow_whatsapp_secure_focus_5263")) {
       console.log("Meta WhatsApp Webhook verificado com sucesso!");
       return res.status(200).send(challenge);
     }
