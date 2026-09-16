@@ -80,6 +80,23 @@ if (!getApps().length) {
 }
 
 const adminDb = getFirestore(adminApp);
+try {
+  adminDb.settings({ ignoreUndefinedProperties: true });
+} catch {
+  // Ignora se já inicializado com settings
+}
+
+/**
+ * Utilitário de timeout para garantir que nenhuma operação do Firestore congele (hanging) indefinidamente
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout de ${ms}ms excedido na operação do Firestore: ${label}`)), ms)
+    )
+  ]);
+}
 
 // Mercado Pago setup
 const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN?.trim() || process.env.MP_ACCESS_TOKEN?.trim() || "";
@@ -894,7 +911,8 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
     to: string,
     messageText: string,
     phoneNumberId?: string,
-    userId?: string
+    userId?: string,
+    skipWindowCheck: boolean = false
   ): Promise<any> {
     const token = process.env.META_ACCESS_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_USER_ACCESS_TOKEN;
     const phoneId = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || "1262215520309953";
@@ -907,41 +925,53 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
     // =========================================================================
     // TRAVA DE SEGURANÇA (CIRCUIT BREAKER) - JANELA DE 24 HORAS DA META
     // =========================================================================
-    try {
-      let userData: FirebaseFirestore.DocumentData | undefined;
+    if (!skipWindowCheck) {
+      try {
+        let userData: FirebaseFirestore.DocumentData | undefined;
 
-      // 1. Busca o documento do usuário no Firestore para recuperar o lastWaInteraction
-      if (userId) {
-        const userDoc = await adminDb.collection("users").doc(userId).get();
-        if (userDoc.exists) {
-          userData = userDoc.data();
+        // 1. Busca o documento do usuário no Firestore para recuperar o lastWaInteraction
+        if (userId) {
+          console.log(`[Circuit Breaker] Verificando lastWaInteraction para userId: ${userId}...`);
+          const userDoc = await withTimeout(
+            adminDb.collection("users").doc(userId).get(),
+            8000,
+            `Circuit breaker get user ${userId}`
+          );
+          if (userDoc.exists) {
+            userData = userDoc.data();
+          }
+        } else {
+          console.log(`[Circuit Breaker] Verificando lastWaInteraction para whatsappNumber: ${to}...`);
+          const userQuery = await withTimeout(
+            adminDb.collection("users").where("whatsappNumber", "==", to).limit(1).get(),
+            8000,
+            `Circuit breaker query user ${to}`
+          );
+          if (!userQuery.empty) {
+            userData = userQuery.docs[0].data();
+          }
         }
-      } else {
-        const userQuery = await adminDb.collection("users").where("whatsappNumber", "==", to).limit(1).get();
-        if (!userQuery.empty) {
-          userData = userQuery.docs[0].data();
+
+        // Se o usuário foi identificado no sistema, valida a janela de 24 horas
+        if (userData) {
+          const MAX_WINDOW_MS = (23 * 60 + 50) * 60 * 1000; // 23h 50m (margem de segurança de 10 min para delays)
+          let lastInteractionTime: number | null = null;
+
+          if (userData.lastWaInteraction) {
+            const lwi = userData.lastWaInteraction;
+            lastInteractionTime = lwi.toDate ? lwi.toDate().getTime() : new Date(lwi).getTime();
+          }
+
+          // 2. Calcula a diferença e aborta se maior que 23h50m (ou se nunca interagiu)
+          if (!lastInteractionTime || (Date.now() - lastInteractionTime) > MAX_WINDOW_MS) {
+            console.warn("Envio bloqueado: Janela de 24h da Meta fechada para este usuário.");
+            return false;
+          }
         }
+      } catch (cbErr: any) {
+        console.error("[Circuit Breaker] Erro ao validar lastWaInteraction no Firestore:", cbErr?.message);
+        return false;
       }
-
-      // Se o usuário foi identificado no sistema, valida a janela de 24 horas
-      if (userData) {
-        const MAX_WINDOW_MS = (23 * 60 + 50) * 60 * 1000; // 23h 50m (margem de segurança de 10 min para delays)
-        let lastInteractionTime: number | null = null;
-
-        if (userData.lastWaInteraction) {
-          const lwi = userData.lastWaInteraction;
-          lastInteractionTime = lwi.toDate ? lwi.toDate().getTime() : new Date(lwi).getTime();
-        }
-
-        // 2. Calcula a diferença e aborta se maior que 23h50m (ou se nunca interagiu)
-        if (!lastInteractionTime || (Date.now() - lastInteractionTime) > MAX_WINDOW_MS) {
-          console.warn("Envio bloqueado: Janela de 24h da Meta fechada para este usuário.");
-          return false;
-        }
-      }
-    } catch (cbErr: any) {
-      console.error("[Circuit Breaker] Erro ao validar lastWaInteraction no Firestore:", cbErr?.message);
-      return false;
     }
 
     try {
@@ -1045,21 +1075,26 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
       // 5. Log de Sucesso formatado para monitoramento na Render
       console.log(`Mensagem recebida de [${from}]: [${text}]`);
 
-      // 6. Lógica do Token Mágico de Ativação (Handshake)
-      // Verifica se o texto contém o padrão de ativação (ex: 'Meu código é: NEXUS-' ou formato NEXUS-[A-Z0-9]+)
+      // 6. Lógica do Token Mágico de Ativação (Handshake) com Try/Catch Blindado e Rastreamento Linha a Linha
       const tokenMatch = text.match(/NEXUS-[A-Z0-9]+/i);
       if (tokenMatch) {
         const tokenStr = tokenMatch[0].toUpperCase();
         console.log(`🔍 [WhatsApp Webhook] Token de ativação detectado: ${tokenStr}. Validando no Firestore...`);
 
         try {
+          console.log(`1. Buscando documento na coleção whatsapp_tokens (${tokenStr})...`);
           const tokenRef = adminDb.collection("whatsapp_tokens").doc(tokenStr);
-          const tokenSnap = await tokenRef.get();
+          const tokenSnap = await withTimeout(tokenRef.get(), 10000, `Buscar token ${tokenStr}`);
+          console.log(`2. Resultado da busca do token: exists = ${tokenSnap.exists}`);
 
           if (tokenSnap.exists) {
             const tokenData = tokenSnap.data();
-            let isValid = true;
+            console.log(`3. Dados recuperados do token:`, {
+              userId: tokenData?.userId,
+              hasExpiresAt: Boolean(tokenData?.expiresAt)
+            });
 
+            let isValid = true;
             if (tokenData?.expiresAt) {
               const expiresDate = tokenData.expiresAt.toDate ? tokenData.expiresAt.toDate() : new Date(tokenData.expiresAt);
               if (new Date() > expiresDate) {
@@ -1070,27 +1105,37 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
             if (isValid) {
               const uId = tokenData?.userId;
               if (uId) {
-                // 1. Registro da Interação (No Webhook POST): Atualiza usuário com whatsappNumber e lastWaInteraction
-                await adminDb.collection("users").doc(uId).set({
-                  whatsappNumber: from,
-                  whatsappVerified: true,
-                  lastWaInteraction: FieldValue.serverTimestamp(),
-                  updatedAt: FieldValue.serverTimestamp()
-                }, { merge: true });
+                console.log(`4. Atualizando documento do usuário users/${uId}...`);
+                await withTimeout(
+                  adminDb.collection("users").doc(uId).set({
+                    whatsappNumber: from,
+                    whatsappVerified: true,
+                    lastWaInteraction: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                  }, { merge: true }),
+                  10000,
+                  `Atualizar users/${uId}`
+                );
+                console.log(`5. Documento do usuário users/${uId} atualizado com sucesso no Firestore!`);
 
-                console.log(`🎉 [WhatsApp Webhook] Usuário '${uId}' vinculado com sucesso ao número ${from}!`);
+                console.log(`6. Deletando token de uso único (${tokenStr})...`);
+                await withTimeout(tokenRef.delete(), 10000, `Deletar token ${tokenStr}`).catch((delErr) => {
+                  console.warn("Aviso ao deletar token já utilizado:", delErr?.message);
+                });
+                console.log(`7. Token '${tokenStr}' deletado com sucesso.`);
 
-                // Deleta o token para segurança (uso único)
-                await tokenRef.delete();
-
-                // Envia resposta de confirmação imediata no WhatsApp
+                console.log(`8. Enviando mensagem de confirmação de ativação para [${from}] via Meta API...`);
                 await sendWhatsAppTextMessage(
                   from,
                   "Conexão estabelecida com sucesso! O Mentor Nexus Flow está ativo e pronto para organizar sua rotina.",
                   phoneId,
-                  uId
+                  uId,
+                  true // skipWindowCheck já que acabou de ativar
                 );
+                console.log(`9. Mensagem de ativação despachada com sucesso para [${from}]!`);
                 return;
+              } else {
+                console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} não possui userId associado.`);
               }
             } else {
               console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} já está expirado.`);
@@ -1104,16 +1149,21 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
           } else {
             console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} não localizado no Firestore.`);
           }
-        } catch (dbErr: any) {
-          console.error("❌ [WhatsApp Webhook] Erro ao consultar token no Firestore:", dbErr?.message);
+        } catch (error: any) {
+          console.error("Erro CRÍTICO na validação:", error);
         }
         return;
       }
 
       // 7. Mensagem regular do usuário: Processar com a IA (Mentor Focus)
       try {
-        // Buscar se este número pertence a um usuário cadastrado
-        const userQuery = await adminDb.collection("users").where("whatsappNumber", "==", from).limit(1).get();
+        console.log(`[Mensagem Regular] Buscando usuário vinculado ao whatsappNumber [${from}]...`);
+        const userQuery = await withTimeout(
+          adminDb.collection("users").where("whatsappNumber", "==", from).limit(1).get(),
+          10000,
+          `Buscar usuário por whatsappNumber ${from}`
+        );
+        console.log(`[Mensagem Regular] Resultado da busca: encontrado = ${!userQuery.empty}`);
 
         if (userQuery.empty) {
           console.log(`[WhatsApp Webhook] Número não vinculado a nenhuma conta Nexus: ${from}`);
@@ -1129,11 +1179,16 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
         const linkedUserId = userDoc.id;
 
         // 1. Registro da Interação (No Webhook POST):
-        // Atualiza imediatamente lastWaInteraction no Firestore ao identificar o usuário
-        await adminDb.collection("users").doc(linkedUserId).set({
-          lastWaInteraction: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp()
-        }, { merge: true });
+        console.log(`[Mensagem Regular] Atualizando lastWaInteraction para users/${linkedUserId}...`);
+        await withTimeout(
+          adminDb.collection("users").doc(linkedUserId).set({
+            lastWaInteraction: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true }),
+          10000,
+          `Atualizar lastWaInteraction users/${linkedUserId}`
+        );
+        console.log(`[Mensagem Regular] lastWaInteraction atualizado com sucesso!`);
 
         const apiKey = getGeminiApiKey();
         if (!apiKey) {
@@ -1166,35 +1221,51 @@ Data e hora atual: ${new Date().toISOString()}`;
             if (call.name === "add_transaction") {
               const { title, amount, type, category, date } = call.args as any;
               const newTxId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
-              await adminDb.collection("users").doc(linkedUserId).collection("transactions").doc(newTxId).set({
-                id: newTxId,
-                title: title || "Lançamento WhatsApp",
-                amount: Number(amount) || 0,
-                type: (type === "income" ? "income" : "expense"),
-                category: category || "Outros",
-                date: date || new Date().toISOString().split("T")[0],
-                createdAt: FieldValue.serverTimestamp()
-              });
+              await withTimeout(
+                adminDb.collection("users").doc(linkedUserId).collection("transactions").doc(newTxId).set({
+                  id: newTxId,
+                  title: title || "Lançamento WhatsApp",
+                  amount: Number(amount) || 0,
+                  type: (type === "income" ? "income" : "expense"),
+                  category: category || "Outros",
+                  date: date || new Date().toISOString().split("T")[0],
+                  createdAt: FieldValue.serverTimestamp()
+                }),
+                10000,
+                `Salvar transação ${newTxId}`
+              );
               console.log(`💰 [WhatsApp AI] Transação de R$ ${amount} salva para o usuário ${linkedUserId}.`);
             } else if (call.name === "add_task") {
               const { title, deadline } = call.args as any;
               const newTaskId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
-              await adminDb.collection("users").doc(linkedUserId).collection("tasks").doc(newTaskId).set({
-                id: newTaskId,
-                title: title || "Tarefa WhatsApp",
-                completed: false,
-                dueDate: deadline || new Date().toISOString().split("T")[0],
-                createdAt: FieldValue.serverTimestamp()
-              });
+              await withTimeout(
+                adminDb.collection("users").doc(linkedUserId).collection("tasks").doc(newTaskId).set({
+                  id: newTaskId,
+                  title: title || "Tarefa WhatsApp",
+                  completed: false,
+                  dueDate: deadline || new Date().toISOString().split("T")[0],
+                  createdAt: FieldValue.serverTimestamp()
+                }),
+                10000,
+                `Salvar tarefa ${newTaskId}`
+              );
               console.log(`📋 [WhatsApp AI] Tarefa '${title}' criada para o usuário ${linkedUserId}.`);
             } else if (call.name === "complete_task") {
               const { taskTitle } = call.args as any;
-              const tasksSnap = await adminDb.collection("users").doc(linkedUserId).collection("tasks").where("title", "==", taskTitle).limit(1).get();
+              const tasksSnap = await withTimeout(
+                adminDb.collection("users").doc(linkedUserId).collection("tasks").where("title", "==", taskTitle).limit(1).get(),
+                10000,
+                `Buscar tarefa ${taskTitle}`
+              );
               if (!tasksSnap.empty) {
-                await tasksSnap.docs[0].ref.update({
-                  completed: true,
-                  completedAt: FieldValue.serverTimestamp()
-                });
+                await withTimeout(
+                  tasksSnap.docs[0].ref.update({
+                    completed: true,
+                    completedAt: FieldValue.serverTimestamp()
+                  }),
+                  10000,
+                  `Completar tarefa ${taskTitle}`
+                );
                 console.log(`✅ [WhatsApp AI] Tarefa '${taskTitle}' concluída para o usuário ${linkedUserId}.`);
               }
             }
@@ -1217,25 +1288,36 @@ Data e hora atual: ${new Date().toISOString()}`;
   }
 
   // =========================================================================
-  // Rota Principal do Webhook do WhatsApp (POST)
-  // Atende tanto à Meta Cloud API quanto ao Simulador interno do App
+  // Rotas de Recebimento de Mensagens (POST)
   // =========================================================================
-  app.post(["/api/webhooks/whatsapp", "/api/whatsapp/webhook"], async (req, res) => {
+
+  // 1. Rota Dedicada da Meta Cloud API:
+  // Garantia de Resposta: retorna 200 OK para a Meta IMEDIATAMENTE antes de qualquer chamada pesada
+  app.post("/api/webhooks/whatsapp", (req, res) => {
+    res.sendStatus(200);
+
+    setImmediate(() => {
+      processMetaWebhookAsync(req.body).catch((err) => {
+        console.error("Erro CRÍTICO no processamento assíncrono do webhook da Meta:", err);
+      });
+    });
+  });
+
+  // 2. Rota do Simulador Interno ou Fallback:
+  app.post("/api/whatsapp/webhook", async (req, res) => {
     const body = req.body || {};
 
-    // 1. REQUISIÇÃO DA META CLOUD API:
-    // Retorno imediato (Best Practice Meta): Retorna 200 OK de imediato para evitar retentativas e timeouts
+    // Se vier payload da Meta Cloud API nesta rota por engano, garante 200 imediato
     if (body.object === "whatsapp_business_account") {
       res.sendStatus(200);
-
-      // Processamento assíncrono não bloqueante
       setImmediate(() => {
         processMetaWebhookAsync(body).catch((err) => {
-          console.error("[WhatsApp Webhook] Erro em processMetaWebhookAsync:", err);
+          console.error("Erro CRÍTICO no processamento assíncrono do webhook da Meta:", err);
         });
       });
       return;
     }
+
 
     // 2. REQUISIÇÃO DO SIMULADOR DO FRONTEND / TESTES DIRETOS:
     try {
