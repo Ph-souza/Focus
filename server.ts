@@ -848,13 +848,59 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
     }
   });
 
+  /**
+   * Helper para envio de mensagens de saída para o WhatsApp via Meta Cloud API
+   */
+  async function sendWhatsAppTextMessage(to: string, messageText: string, phoneNumberId?: string): Promise<any> {
+    const token = process.env.META_ACCESS_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_USER_ACCESS_TOKEN;
+    const phoneId = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || "1327193143803215";
+
+    if (!token) {
+      console.log(`[WhatsApp Outbound] Aviso: Token da Meta não configurado. Mensagem para ${to} não despachada na API externa.`);
+      return null;
+    }
+
+    try {
+      const url = `https://graph.facebook.com/v25.0/${phoneId}/messages`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to,
+          type: "text",
+          text: { body: messageText }
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        console.warn(`[WhatsApp Outbound] Erro retornado pela Meta ao enviar para ${to}:`, data);
+      } else {
+        console.log(`[WhatsApp Outbound] Resposta enviada com sucesso para [${to}] (ID: ${data.messages?.[0]?.id})`);
+      }
+      return data;
+    } catch (err: any) {
+      console.error(`[WhatsApp Outbound] Falha na requisição para a Meta:`, err?.message);
+      return null;
+    }
+  }
+
+  // =========================================================================
   // WhatsApp Webhook Verification (Meta WhatsApp Cloud API) - Painel Developers
+  // =========================================================================
   app.get(["/api/webhooks/whatsapp", "/api/whatsapp/webhook"], (req, res) => {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
     
-    if (mode === 'subscribe' && token === process.env.META_WEBHOOK_VERIFY_TOKEN_TEST) {
+    const configuredToken = process.env.META_WEBHOOK_VERIFY_TOKEN_TEST || process.env.META_WEBHOOK_VERIFY_TOKEN || "nexus_focus_meta_token";
+    
+    if (mode === "subscribe" && (token === configuredToken || token === process.env.META_WEBHOOK_VERIFY_TOKEN_TEST)) {
       console.log("Meta WhatsApp Webhook verificado com sucesso!");
       return res.status(200).send(challenge);
     }
@@ -862,38 +908,255 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
     return res.sendStatus(403);
   });
 
-  // WhatsApp Webhook Message Handler
-  app.post("/api/whatsapp/webhook", async (req, res) => {
+  // =========================================================================
+  // Processamento Assíncrono do Webhook da Meta (Cloud API)
+  // =========================================================================
+  async function processMetaWebhookAsync(body: any) {
     try {
-      const body = req.body || {};
+      // 1. Parsing do Payload e validação de segurança
+      if (body?.object !== "whatsapp_business_account") {
+        return;
+      }
 
-      // Parse text and sender from various WhatsApp API providers (Meta Cloud API, Evolution, Z-API, Twilio, Direct)
+      const entry = body.entry?.[0];
+      const change = entry?.changes?.[0];
+      const value = change?.value;
+
+      if (!value) {
+        return;
+      }
+
+      // 2. Tratamento seguro de payloads de status (como 'sent', 'delivered', 'read')
+      if (value.statuses && Array.isArray(value.statuses) && value.statuses.length > 0) {
+        // Confirmação de status de entrega/leitura da Meta, ignorar sem erros
+        return;
+      }
+
+      // 3. Validação de mensagens recebidas
+      const messages = value.messages;
+      if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        return;
+      }
+
+      const messageObj = messages[0];
+      const phoneId = value.metadata?.phone_number_id;
+
+      // Ignora mensagens que não sejam do tipo texto (ex: mídias, contatos, localização)
+      if (messageObj.type !== "text") {
+        console.log(`[WhatsApp Webhook] Mensagem de tipo '${messageObj.type}' recebida. Apenas mensagens de texto são processadas no momento.`);
+        return;
+      }
+
+      // 4. Extração de Dados
+      // Capture o número de quem enviou: entry[0].changes[0].value.messages[0].from
+      const from = messageObj.from;
+      // Capture o texto da mensagem: entry[0].changes[0].value.messages[0].text.body
+      const text = messageObj.text?.body || "";
+
+      if (!from || !text) {
+        return;
+      }
+
+      // 5. Log de Sucesso formatado para monitoramento na Render
+      console.log(`Mensagem recebida de [${from}]: [${text}]`);
+
+      // 6. Lógica do Token Mágico de Ativação (Handshake)
+      // Verifica se o texto contém o padrão de ativação (ex: 'Meu código é: NEXUS-' ou formato NEXUS-[A-Z0-9]+)
+      const tokenMatch = text.match(/NEXUS-[A-Z0-9]+/i);
+      if (tokenMatch) {
+        const tokenStr = tokenMatch[0].toUpperCase();
+        console.log(`🔍 [WhatsApp Webhook] Token de ativação detectado: ${tokenStr}. Validando no Firestore...`);
+
+        try {
+          const tokenRef = adminDb.collection("whatsapp_tokens").doc(tokenStr);
+          const tokenSnap = await tokenRef.get();
+
+          if (tokenSnap.exists) {
+            const tokenData = tokenSnap.data();
+            let isValid = true;
+
+            if (tokenData?.expiresAt) {
+              const expiresDate = tokenData.expiresAt.toDate ? tokenData.expiresAt.toDate() : new Date(tokenData.expiresAt);
+              if (new Date() > expiresDate) {
+                isValid = false;
+              }
+            }
+
+            if (isValid) {
+              const uId = tokenData?.userId;
+              if (uId) {
+                // Atualiza o documento do usuário (users/{userId}) adicionando whatsappNumber
+                await adminDb.collection("users").doc(uId).set({
+                  whatsappNumber: from,
+                  whatsappVerified: true,
+                  updatedAt: FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                console.log(`🎉 [WhatsApp Webhook] Usuário '${uId}' vinculado com sucesso ao número ${from}!`);
+
+                // Deleta o token para segurança (uso único)
+                await tokenRef.delete();
+
+                // Envia resposta de confirmação imediata no WhatsApp
+                await sendWhatsAppTextMessage(
+                  from,
+                  "Conexão estabelecida com sucesso! O Mentor Nexus Flow está ativo e pronto para organizar sua rotina.",
+                  phoneId
+                );
+                return;
+              }
+            } else {
+              console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} já está expirado.`);
+              await sendWhatsAppTextMessage(
+                from,
+                "Este código de ativação já expirou. Por favor, gere um novo código no Dashboard do Nexus Focus.",
+                phoneId
+              );
+              return;
+            }
+          } else {
+            console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} não localizado no Firestore.`);
+          }
+        } catch (dbErr: any) {
+          console.error("❌ [WhatsApp Webhook] Erro ao consultar token no Firestore:", dbErr?.message);
+        }
+        return;
+      }
+
+      // 7. Mensagem regular do usuário: Processar com a IA (Mentor Focus)
+      try {
+        // Buscar se este número pertence a um usuário cadastrado
+        const userQuery = await adminDb.collection("users").where("whatsappNumber", "==", from).limit(1).get();
+
+        if (userQuery.empty) {
+          console.log(`[WhatsApp Webhook] Número não vinculado a nenhuma conta Nexus: ${from}`);
+          await sendWhatsAppTextMessage(
+            from,
+            "Olá! Não localizamos uma conta Nexus Focus vinculada a este número de WhatsApp. Acesse seu painel no Nexus Focus e gere o código de ativação na aba WhatsApp.",
+            phoneId
+          );
+          return;
+        }
+
+        const userDoc = userQuery.docs[0];
+        const linkedUserId = userDoc.id;
+
+        const apiKey = getGeminiApiKey();
+        if (!apiKey) {
+          console.error("❌ [WhatsApp Webhook] GEMINI_API_KEY não configurada.");
+          return;
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
+        const systemInstruction = `${GLOBAL_SYSTEM_PROMPT}
+
+Sua missão no WhatsApp é entender o texto enviado pelo usuário (lançamento financeiro, receita, despesa, lembrete ou tarefa) e acionar as ferramentas de criação de dados (add_transaction, add_task, complete_task). Confirme de forma direta, clara e curta o que foi registrado no aplicativo Nexus.
+Data e hora atual: ${new Date().toISOString()}`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: [{ role: 'user', parts: [{ text }] }],
+          config: {
+            systemInstruction,
+            temperature: 0.5,
+            tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool] }]
+          }
+        });
+
+        const replyText = response.text || "Lançamento processado com sucesso.";
+        const functionCalls = response.functionCalls || [];
+
+        // Gravar ações decididas pela IA no Firestore do usuário
+        if (functionCalls.length > 0) {
+          for (const call of functionCalls) {
+            if (call.name === "add_transaction") {
+              const { title, amount, type, category, date } = call.args as any;
+              const newTxId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+              await adminDb.collection("users").doc(linkedUserId).collection("transactions").doc(newTxId).set({
+                id: newTxId,
+                title: title || "Lançamento WhatsApp",
+                amount: Number(amount) || 0,
+                type: (type === "income" ? "income" : "expense"),
+                category: category || "Outros",
+                date: date || new Date().toISOString().split("T")[0],
+                createdAt: FieldValue.serverTimestamp()
+              });
+              console.log(`💰 [WhatsApp AI] Transação de R$ ${amount} salva para o usuário ${linkedUserId}.`);
+            } else if (call.name === "add_task") {
+              const { title, deadline } = call.args as any;
+              const newTaskId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+              await adminDb.collection("users").doc(linkedUserId).collection("tasks").doc(newTaskId).set({
+                id: newTaskId,
+                title: title || "Tarefa WhatsApp",
+                completed: false,
+                dueDate: deadline || new Date().toISOString().split("T")[0],
+                createdAt: FieldValue.serverTimestamp()
+              });
+              console.log(`📋 [WhatsApp AI] Tarefa '${title}' criada para o usuário ${linkedUserId}.`);
+            } else if (call.name === "complete_task") {
+              const { taskTitle } = call.args as any;
+              const tasksSnap = await adminDb.collection("users").doc(linkedUserId).collection("tasks").where("title", "==", taskTitle).limit(1).get();
+              if (!tasksSnap.empty) {
+                await tasksSnap.docs[0].ref.update({
+                  completed: true,
+                  completedAt: FieldValue.serverTimestamp()
+                });
+                console.log(`✅ [WhatsApp AI] Tarefa '${taskTitle}' concluída para o usuário ${linkedUserId}.`);
+              }
+            }
+          }
+        }
+
+        // Envia a resposta final para o usuário no WhatsApp
+        await sendWhatsAppTextMessage(from, replyText, phoneId);
+      } catch (aiError: any) {
+        console.error("❌ [WhatsApp Webhook] Erro no processamento de IA:", aiError?.message || aiError);
+        await sendWhatsAppTextMessage(
+          from,
+          "Ops! Ocorreu uma oscilação momentânea ao processar sua solicitação. Tente enviar novamente.",
+          phoneId
+        );
+      }
+    } catch (globalErr: any) {
+      console.error("❌ [WhatsApp Webhook] Erro crítico no processamento assíncrono:", globalErr);
+    }
+  }
+
+  // =========================================================================
+  // Rota Principal do Webhook do WhatsApp (POST)
+  // Atende tanto à Meta Cloud API quanto ao Simulador interno do App
+  // =========================================================================
+  app.post(["/api/webhooks/whatsapp", "/api/whatsapp/webhook"], async (req, res) => {
+    const body = req.body || {};
+
+    // 1. REQUISIÇÃO DA META CLOUD API:
+    // Retorno imediato (Best Practice Meta): Retorna 200 OK de imediato para evitar retentativas e timeouts
+    if (body.object === "whatsapp_business_account") {
+      res.sendStatus(200);
+
+      // Processamento assíncrono não bloqueante
+      setImmediate(() => {
+        processMetaWebhookAsync(body).catch((err) => {
+          console.error("[WhatsApp Webhook] Erro em processMetaWebhookAsync:", err);
+        });
+      });
+      return;
+    }
+
+    // 2. REQUISIÇÃO DO SIMULADOR DO FRONTEND / TESTES DIRETOS:
+    try {
       let text = "";
       let from = "whatsapp_user";
       let userId = body.userId;
 
-      // Meta Cloud API Format
-      if (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
-        const message = body.entry[0].changes[0].value.messages[0];
-        from = message.from || from;
-        if (message.type === "text") {
-          text = message.text?.body || "";
-        } else if (message.type === "audio") {
-          text = "[Áudio do WhatsApp recebido]";
-        }
-      } 
-      // Evolution API / Z-API / Baileys Format
-      else if (body.data?.message) {
+      // Suporte a formatos de simulador ou provedores secundários
+      if (body.data?.message) {
         from = body.data.key?.remoteJid?.split("@")[0] || body.sender || from;
         text = body.data.message.conversation || body.data.message.extendedTextMessage?.text || "";
-      }
-      // Twilio WhatsApp Format
-      else if (body.Body) {
+      } else if (body.Body) {
         text = body.Body;
         from = body.From || from;
-      }
-      // Direct / Simulator Standard Format
-      else {
+      } else {
         text = body.text || body.message || body.caption || "";
         from = body.from || body.sender || body.phone || from;
       }
@@ -902,34 +1165,29 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
         return res.status(400).json({ error: "Nenhuma mensagem de texto válida encontrada na requisição do WhatsApp" });
       }
 
+      console.log(`Mensagem recebida de [${from}]: [${text}]`);
+
       // Verificação de Handshake (Ativação de Token)
       const tokenMatch = text.match(/NEXUS-[A-Z0-9]+/i);
       if (tokenMatch) {
         const tokenStr = tokenMatch[0].toUpperCase();
-        
-        // Busca token no Firestore
         const tokenRef = adminDb.collection("whatsapp_tokens").doc(tokenStr);
         const tokenSnap = await tokenRef.get();
-        
+
         if (tokenSnap.exists) {
           const tokenData = tokenSnap.data();
           if (tokenData && tokenData.expiresAt) {
-            // Firestore timestamps tem método toDate(), Date nativo não. Lidamos com ambos.
             const expiresDate = tokenData.expiresAt.toDate ? tokenData.expiresAt.toDate() : new Date(tokenData.expiresAt);
-            
             if (new Date() <= expiresDate) {
               const uId = tokenData.userId;
-              
-              // Atualiza o documento do usuário vinculando o número do WhatsApp
               await adminDb.collection("users").doc(uId).set({
                 whatsappNumber: from,
+                whatsappVerified: true,
                 updatedAt: FieldValue.serverTimestamp()
               }, { merge: true });
-              
-              // Deleta o token para segurança (uso único)
+
               await tokenRef.delete();
-              
-              // Retorna a resposta de sucesso para a API do WhatsApp (ou nosso Simulador)
+
               return res.json({
                 success: true,
                 reply: "Conexão estabelecida com sucesso! O Mentor Nexus Flow está ativo e pronto para organizar sua rotina.",
@@ -947,13 +1205,12 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
         }
       }
 
-      const apiKey = process.env.GEMINI_API_KEY?.trim() || process.env.VITE_GEMINI_API_KEY?.trim();
+      const apiKey = getGeminiApiKey();
       if (!apiKey) {
         return res.status(500).json({ error: "GEMINI_API_KEY is not configured" });
       }
 
       const ai = new GoogleGenAI({ apiKey });
-
       const systemInstruction = `${GLOBAL_SYSTEM_PROMPT}
 
 Sua missão no WhatsApp é entender o texto enviado pelo usuário (lançamento financeiro, receita, despesa, lembrete ou tarefa) e acionar as ferramentas de criação de dados (add_transaction, add_task, complete_task). Confirme de forma direta, clara e curta o que foi registrado no aplicativo Nexus.
@@ -971,7 +1228,7 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
 
       const mentorReply = response.text || "Lançamento processado com sucesso.";
 
-      res.json({
+      return res.json({
         success: true,
         reply: mentorReply,
         functionCalls: response.functionCalls || [],
@@ -980,12 +1237,13 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
       });
     } catch (error: any) {
       console.error("WhatsApp Webhook Error:", error);
-      res.status(500).json({
+      return res.status(500).json({
         error: error.message || "Erro ao processar mensagem do WhatsApp",
         reply: "Ops! Não consegui processar essa mensagem agora. Tente novamente em instantes."
       });
     }
   });
+
 
   // Auto-seed Pro Admin Account into Cloud Firestore (only if Admin SDK credentials are provided)
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {

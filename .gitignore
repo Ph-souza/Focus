@@ -11,3 +11,4 @@ coverage/
 dev-dist/
 .vite/
 .firebase/
+.vscode/
