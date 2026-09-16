@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, ArrowDownRight, ArrowUpRight, Lightbulb, Bell, Heart, PiggyBank } from 'lucide-react';
+import { Shield, ArrowDownRight, ArrowUpRight, Lightbulb, Bell, Heart, PiggyBank, Loader2, Check } from 'lucide-react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { Transaction, User } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { TaskProgressWidget } from './TaskProgressWidget';
@@ -35,10 +37,52 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
   const [dailyTip, setDailyTip] = useState('');
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isConnectingWhatsApp, setIsConnectingWhatsApp] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const unsub = onSnapshot(doc(db, 'users', user.id), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setWhatsappNumber(data.whatsappNumber || null);
+      }
+    });
+    return () => unsub();
+  }, [user?.id]);
 
   useEffect(() => {
     setDailyTip(FINANCIAL_TIPS[Math.floor(Math.random() * FINANCIAL_TIPS.length)]);
   }, []);
+
+  const handleConnectWhatsApp = async () => {
+    if (!user) return;
+    setIsConnectingWhatsApp(true);
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || '';
+      const response = await fetch(`${baseUrl}/api/whatsapp/generate-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
+      });
+      const data = await response.json();
+      if (data.success && data.token) {
+        const botNumber = '5511998765432'; // Número do bot (usando o placeholder do projeto)
+        const message = `Quero ativar meu Mentor Nexus. Meu código é: ${data.token}`;
+        const url = `https://wa.me/${botNumber}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
+      } else {
+        console.error("Erro ao gerar token:", data.error);
+        alert("Não foi possível gerar o código de conexão. Tente novamente.");
+      }
+    } catch (error) {
+      console.error("Erro na requisição:", error);
+      alert("Erro de conexão. Verifique sua internet.");
+    } finally {
+      setIsConnectingWhatsApp(false);
+    }
+  };
+
   const totalIncome = transactions
     .filter((t) => t.type === 'income')
     .reduce((acc, curr) => acc + curr.amount, 0);
@@ -253,12 +297,23 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
               </p>
             </div>
           </div>
-          <button
-            onClick={onOpenWhatsApp}
-            className="w-full md:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow transition-colors flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-          >
-            <span>Conectar WhatsApp</span>
-          </button>
+          {whatsappNumber ? (
+            <div className="flex items-center gap-2 px-4 py-2 bg-zinc-900/5 dark:bg-zinc-800/30 border border-emerald-500/50 rounded-xl text-emerald-600 dark:text-emerald-400 font-semibold text-xs shrink-0 shadow-sm cursor-default transition-all duration-300">
+              <Check size={16} />
+              <span>Conectado (..{whatsappNumber.slice(-4)})</span>
+            </div>
+          ) : (
+            <button
+              onClick={handleConnectWhatsApp}
+              disabled={isConnectingWhatsApp}
+              className="w-full md:w-auto px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-semibold text-xs rounded-xl shadow transition-colors flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-70"
+            >
+              {isConnectingWhatsApp ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : null}
+              <span>{isConnectingWhatsApp ? 'Conectando...' : 'Conectar WhatsApp'}</span>
+            </button>
+          )}
         </div>
       </div>
 

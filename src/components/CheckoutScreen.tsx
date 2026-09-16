@@ -1,21 +1,21 @@
 import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
-import { 
-  Shield, 
-  ShieldCheck, 
-  Lock, 
-  Check, 
-  ArrowRight, 
-  RefreshCw, 
-  User, 
-  Users, 
-  Star, 
-  Tag, 
-  CheckCircle2, 
-  AlertCircle, 
+import {
+  Shield,
+  ShieldCheck,
+  Lock,
+  Check,
+  ArrowRight,
+  RefreshCw,
+  User,
+  Users,
+  Star,
+  Tag,
+  CheckCircle2,
+  AlertCircle,
   X,
-  Loader2 
+  Loader2
 } from 'lucide-react';
 import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { NexusFocusLogo } from './AuraLogo';
@@ -28,7 +28,7 @@ initMercadoPago(import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || '', {
 
 export function CheckoutScreen() {
   const { currentUser, isPremium, logout } = useAuth();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
@@ -166,7 +166,7 @@ export function CheckoutScreen() {
 
       {/* Dual Card Main Container */}
       <main className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 relative z-10 my-auto items-stretch">
-        
+
         {/* ================= LEFT CARD: Feature & Value Showcase ================= */}
         <section className="lg:col-span-7 bg-white/80 backdrop-blur-xl border border-white/90 rounded-[32px] p-6 sm:p-8 lg:p-9 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between">
           <div>
@@ -187,14 +187,14 @@ export function CheckoutScreen() {
 
             {/* Split Content: Text & Checklist on Left | Pedestal on Right */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-              
+
               {/* Text & Checklist */}
               <div className="md:col-span-7 flex flex-col justify-center">
                 <h1 className="text-2xl sm:text-3xl lg:text-[34px] font-extrabold text-zinc-950 tracking-tight leading-[1.15] mb-3">
                   Eleve seu Foco<br />e Gestão
                 </h1>
                 <p className="text-zinc-600 text-xs sm:text-[13px] leading-relaxed mb-6">
-                  Assinatura corporativa com acesso irrestrito ao ecossistema de alta performance. Organize sua vida, cumpra seus objetivos e conquiste mais com a ajuda da inteligência artificial.
+                  Organize sua vida, cumpra seus objetivos e conquiste mais com a ajuda da inteligência artificial.
                 </p>
 
                 {/* 5 Bullet Features */}
@@ -270,223 +270,231 @@ export function CheckoutScreen() {
           </div>
         </section>
 
-        {/* ================= RIGHT CARD: Checkout & Plan Selection ================= */}
-        <section className="lg:col-span-5 bg-white/85 backdrop-blur-xl border border-white/90 rounded-[32px] p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between">
-          <div>
-            {/* Top User Session Bar */}
-            <div className="flex items-center justify-between pb-4 border-b border-zinc-200/80 mb-5">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-600 shrink-0">
-                  <User size={15} />
-                </div>
-                <div className="min-w-0">
-                  <span className="text-[10px] sm:text-[11px] text-zinc-400 block leading-tight">
-                    Conectado como
-                  </span>
-                  <span className="text-xs font-semibold text-zinc-900 truncate block leading-tight">
-                    {currentUser?.email || 'Usuário Nexus'}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                onClick={logout}
-                className="text-xs font-bold text-rose-500 hover:text-rose-600 transition-colors px-2 py-1 rounded-md cursor-pointer shrink-0"
-              >
-                Sair
-              </button>
-            </div>
-
-            {/* Plan Header */}
-            <div className="flex items-center gap-3.5 mb-4">
-              <div className="w-12 h-12 bg-white/95 rounded-2xl border border-zinc-200/80 shadow-sm flex items-center justify-center shrink-0">
-                <NexusFocusLogo className="w-7 h-7" variant="dark" />
-              </div>
-              <div>
-                <h2 className="text-xs sm:text-sm font-black tracking-wider text-zinc-950 uppercase">
-                  NEXUS FOCUS
-                </h2>
-                <span className="text-[11px] text-zinc-400 font-medium block">
-                  powered by Nexus Flow
-                </span>
-              </div>
-            </div>
-
-            {/* Pricing Highlight Card */}
-            <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 sm:p-4.5 flex justify-between items-center mb-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-              <div>
-                <span className="text-[11px] font-black text-zinc-900 tracking-wider uppercase block mb-0.5">
-                  PLANO MENSAL
-                </span>
-                <span className="text-[11px] text-zinc-500">
-                  Renovação corporativa flexível
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-2xl sm:text-[26px] font-black text-zinc-950 tracking-tight">
-                  {couponApplied ? 'R$ 24,90' : 'R$ 29,90'}
-                </span>
-                <span className="text-xs text-zinc-500 font-medium">/mês</span>
-              </div>
-            </div>
-
-            {/* Plan Guarantees Checklist */}
-            <div className="space-y-3 mb-6">
-              {planGuarantees.map((item, idx) => (
-                <div key={idx} className="flex items-center gap-2.5 text-xs sm:text-[13px] text-zinc-700 font-medium">
-                  <CheckCircle2 size={16} className="text-zinc-800 shrink-0" strokeWidth={2} />
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Coupon Section */}
-            <div className="mb-5">
-              {!showCouponInput ? (
-                <button
-                  onClick={() => setShowCouponInput(true)}
-                  className="w-full flex items-center justify-between text-xs text-zinc-600 hover:text-zinc-900 font-medium py-1 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Tag size={14} className="text-zinc-400" />
-                    <span>Tem um cupom de desconto?</span>
-                  </div>
-                  <span className="text-zinc-500 hover:underline">Adicionar &gt;</span>
-                </button>
-              ) : (
-                <form onSubmit={handleApplyCoupon} className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Código do cupom"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value)}
-                      className="flex-1 px-3 py-2 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 uppercase font-semibold text-zinc-800"
-                    />
-                    <button
-                      type="submit"
-                      className="px-4 py-2 text-xs font-bold bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 cursor-pointer"
-                    >
-                      Aplicar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShowCouponInput(false); setCouponError(''); }}
-                      className="p-2 text-zinc-400 hover:text-zinc-600 cursor-pointer"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                  {couponError && <p className="text-[11px] text-rose-500">{couponError}</p>}
-                  {couponApplied && <p className="text-[11px] text-emerald-600 font-semibold">✓ Cupom aplicado com sucesso!</p>}
-                </form>
-              )}
-            </div>
-
-            {/* Error Message */}
-            {errorMessage && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs flex items-start gap-2">
-                <AlertCircle size={15} className="shrink-0 mt-0.5" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
-
-            {/* Status Feedback */}
-            {statusFeedback && (
-              <div className="mb-4 p-3 rounded-xl bg-zinc-100 border border-zinc-200 text-zinc-700 text-xs flex items-start justify-between gap-2">
-                <span>{statusFeedback}</span>
-                <button onClick={() => setStatusFeedback(null)} className="text-zinc-400 hover:text-zinc-600">
-                  <X size={12} />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Bottom Actions of Right Card */}
-          <div>
-            {/* Primary Action Button */}
-            <button
-              onClick={() => setIsModalOpen(true)}
-              disabled={loading}
-              className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold py-3.5 sm:py-4 px-5 rounded-2xl shadow-[0_6px_20px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.18)] transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed mb-3.5"
-            >
-              <Lock size={15} className="text-white" />
-              <span className="text-[14px] sm:text-base font-bold">Desbloquear Acesso Agora</span>
-              <ArrowRight size={15} className="text-white" />
-            </button>
-
-            {/* Security Guarantee & Status Refresh */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                <ShieldCheck size={13} className="text-zinc-400" />
-                <span>Pagamento 100% criptografado e seguro</span>
-              </div>
-
-              <button
-                onClick={handleRefreshStatus}
-                disabled={isCheckingStatus}
-                className="text-xs text-zinc-500 hover:text-zinc-900 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                <RefreshCw size={12} className={isCheckingStatus ? "animate-spin text-zinc-700" : "text-zinc-400"} />
-                <span>Já realizou o pagamento? Atualizar status</span>
-              </button>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* Modal Mercado Pago Brick */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-3xl p-6 sm:p-7 relative shadow-[0_25px_60px_rgba(0,0,0,0.2)] animate-in fade-in zoom-in duration-200">
+        {/* ================= RIGHT CARD: Checkout & Plan Selection (3D FLIP) ================= */}
+        <div className="lg:col-span-5 perspective-[1000px] relative w-full h-full flex flex-col">
+          <div className={`w-full h-full transition-transform duration-700 [transform-style:preserve-3d] relative ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}>
             
-            {/* Modal Header */}
-            <div className="flex justify-between items-center mb-5 pb-3 border-b border-zinc-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center text-white">
-                  <Lock size={14} />
+            {/* ================= FRONT FACE ================= */}
+            <section className="[backface-visibility:hidden] bg-white/85 backdrop-blur-xl border border-white/90 rounded-[32px] p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between h-full relative z-10 min-h-[580px]">
+              <div>
+                {/* Top User Session Bar */}
+                <div className="flex items-center justify-between pb-4 border-b border-zinc-200/80 mb-5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-600 shrink-0">
+                      <User size={15} />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] sm:text-[11px] text-zinc-400 block leading-tight">
+                        Conectado como
+                      </span>
+                      <span className="text-xs font-semibold text-zinc-900 truncate block leading-tight">
+                        {currentUser?.email || 'Usuário Nexus'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={logout}
+                    className="text-xs font-bold text-rose-500 hover:text-rose-600 transition-colors px-2 py-1 rounded-md cursor-pointer shrink-0"
+                  >
+                    Sair
+                  </button>
                 </div>
-                <div>
-                  <h3 className="font-bold text-base text-zinc-900 leading-tight">
-                    Pagamento Seguro Mercado Pago
-                  </h3>
-                  <p className="text-xs text-zinc-500">
-                    Assinatura Nexus Focus ({couponApplied ? 'R$ 24,90' : 'R$ 29,90'}/mês)
+
+                {/* Plan Header */}
+                <div className="flex items-center gap-3.5 mb-4">
+                  <div className="w-12 h-12 bg-white/95 rounded-2xl border border-zinc-200/80 shadow-sm flex items-center justify-center shrink-0">
+                    <NexusFocusLogo className="w-7 h-7" variant="dark" />
+                  </div>
+                  <div>
+                    <h2 className="text-xs sm:text-sm font-black tracking-wider text-zinc-950 uppercase">
+                      NEXUS FOCUS
+                    </h2>
+                    <span className="text-[11px] text-zinc-400 font-medium block">
+                      powered by Nexus Flow
+                    </span>
+                  </div>
+                </div>
+
+                {/* Pricing Highlight Card */}
+                <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 sm:p-4.5 flex justify-between items-center mb-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                  <div>
+                    <span className="text-[11px] font-black text-zinc-900 tracking-wider uppercase block mb-0.5">
+                      PLANO MENSAL
+                    </span>
+                    <span className="text-[11px] text-zinc-500">
+                      Renovação corporativa flexível
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl sm:text-[26px] font-black text-zinc-950 tracking-tight">
+                      {couponApplied ? 'R$ 24,90' : 'R$ 29,90'}
+                    </span>
+                    <span className="text-xs text-zinc-500 font-medium">/mês</span>
+                  </div>
+                </div>
+
+                {/* Plan Guarantees Checklist */}
+                <div className="space-y-3 mb-6">
+                  {planGuarantees.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2.5 text-xs sm:text-[13px] text-zinc-700 font-medium">
+                      <CheckCircle2 size={16} className="text-zinc-800 shrink-0" strokeWidth={2} />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Coupon Section */}
+                <div className="mb-5">
+                  {!showCouponInput ? (
+                    <button
+                      onClick={() => setShowCouponInput(true)}
+                      className="w-full flex items-center justify-between text-xs text-zinc-600 hover:text-zinc-900 font-medium py-1 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Tag size={14} className="text-zinc-400" />
+                        <span>Tem um cupom de desconto?</span>
+                      </div>
+                      <span className="text-zinc-500 hover:underline">Adicionar &gt;</span>
+                    </button>
+                  ) : (
+                    <form onSubmit={handleApplyCoupon} className="space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Código do cupom"
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value)}
+                          className="flex-1 px-3 py-2 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 uppercase font-semibold text-zinc-800"
+                        />
+                        <button
+                          type="submit"
+                          className="px-4 py-2 text-xs font-bold bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 cursor-pointer"
+                        >
+                          Aplicar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowCouponInput(false); setCouponError(''); }}
+                          className="p-2 text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                      {couponError && <p className="text-[11px] text-rose-500">{couponError}</p>}
+                      {couponApplied && <p className="text-[11px] text-emerald-600 font-semibold">✓ Cupom aplicado com sucesso!</p>}
+                    </form>
+                  )}
+                </div>
+
+                {/* Error Message */}
+                {errorMessage && (
+                  <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs flex items-start gap-2">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+
+                {/* Status Feedback */}
+                {statusFeedback && (
+                  <div className="mb-4 p-3 rounded-xl bg-zinc-100 border border-zinc-200 text-zinc-700 text-xs flex items-start justify-between gap-2">
+                    <span>{statusFeedback}</span>
+                    <button onClick={() => setStatusFeedback(null)} className="text-zinc-400 hover:text-zinc-600">
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Actions of Right Card */}
+              <div className="mt-auto pt-4">
+                {/* Primary Action Button */}
+                <button
+                  onClick={() => setIsFlipped(true)}
+                  disabled={loading}
+                  className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold py-3.5 sm:py-4 px-5 rounded-2xl shadow-[0_6px_20px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.18)] transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed mb-3.5"
+                >
+                  <Lock size={15} className="text-white" />
+                  <span className="text-[14px] sm:text-base font-bold">Desbloquear Acesso Agora</span>
+                  <ArrowRight size={15} className="text-white" />
+                </button>
+
+                {/* Security Guarantee & Status Refresh */}
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                    <ShieldCheck size={13} className="text-zinc-400" />
+                    <span>Pagamento 100% criptografado e seguro</span>
+                  </div>
+                  
+                  <p className="text-[10px] text-zinc-400 text-center max-w-[250px] mb-1">
+                    Ao prosseguir, você concorda com nossa{' '}
+                    <Link to="/privacidade" target="_blank" className="underline hover:text-zinc-600 transition-colors">Política de Privacidade</Link>
                   </p>
+
+                  <button
+                    onClick={handleRefreshStatus}
+                    disabled={isCheckingStatus}
+                    className="text-xs text-zinc-500 hover:text-zinc-900 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={isCheckingStatus ? "animate-spin text-zinc-700" : "text-zinc-400"} />
+                    <span>Já realizou o pagamento? Atualizar status</span>
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-zinc-400 hover:text-zinc-700 text-xs font-bold bg-zinc-100 hover:bg-zinc-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
-              >
-                ✕ Fechar
-              </button>
-            </div>
+            </section>
 
-            {/* Brick do Cartão */}
-            <div className="mercado-pago-brick-container">
-              <CardPayment
-                initialization={initialization}
-                customization={customization}
-                onSubmit={onSubmit}
-                onReady={() => {
-                  console.log("Brick de Cartão carregado com sucesso no modal.");
-                }}
-                onError={(error: any) => {
-                  console.error("Erro no Brick:", error);
-                }}
-              />
-            </div>
-
-            {loading && (
-              <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl gap-3 z-20">
-                <Loader2 size={32} className="animate-spin text-zinc-900" />
-                <p className="text-sm font-semibold text-zinc-900">Processando assinatura segura...</p>
+            {/* ================= BACK FACE ================= */}
+            <section className="[backface-visibility:hidden] [transform:rotateY(180deg)] absolute inset-0 bg-white border border-zinc-200/80 rounded-[32px] p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col h-full z-20">
+              
+              {/* Header with Back Button */}
+              <div className="flex justify-between items-center mb-5 pb-3 border-b border-zinc-100 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center text-white shrink-0">
+                    <Lock size={14} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm sm:text-base text-zinc-900 leading-tight">
+                      Pagamento Seguro
+                    </h3>
+                    <p className="text-[11px] sm:text-xs text-zinc-500">
+                      Assinatura Nexus Focus ({couponApplied ? 'R$ 24,90' : 'R$ 29,90'}/mês)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsFlipped(false)}
+                  className="text-zinc-500 hover:text-zinc-900 text-xs font-bold bg-zinc-100 hover:bg-zinc-200 px-3 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                >
+                  <ArrowRight size={14} className="rotate-180" />
+                  <span>Voltar</span>
+                </button>
               </div>
-            )}
+
+              {/* Brick do Cartão */}
+              <div className="mercado-pago-brick-container flex-1 overflow-y-auto px-1 -mx-1 pb-4">
+                <CardPayment
+                  initialization={initialization}
+                  customization={customization}
+                  onSubmit={onSubmit}
+                  onReady={() => {
+                    console.log("Brick de Cartão carregado com sucesso na face de trás.");
+                  }}
+                  onError={(error: any) => {
+                    console.error("Erro no Brick:", error);
+                  }}
+                />
+              </div>
+
+              {loading && (
+                <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-[32px] gap-3 z-30">
+                  <Loader2 size={32} className="animate-spin text-zinc-900" />
+                  <p className="text-sm font-semibold text-zinc-900">Processando assinatura segura...</p>
+                </div>
+              )}
+            </section>
           </div>
         </div>
-      )}
+      </main>
     </div>
   );
 }

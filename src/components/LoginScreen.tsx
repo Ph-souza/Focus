@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Shield, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
@@ -136,9 +136,9 @@ export function LoginScreen() {
       <footer className="w-full relative z-10 pb-2 sm:pb-3 text-center shrink-0">
         <p className="text-zinc-500 text-xs text-center max-w-md mx-auto leading-relaxed">
           Ao continuar, você concorda com nossos{' '}
-          <span className="font-semibold text-zinc-800 hover:underline cursor-pointer">Termos de Uso</span>{' '}
+          <a href="https://nexusfocus.web.app/termos" target="_blank" rel="noopener noreferrer" className="font-semibold text-zinc-800 hover:underline cursor-pointer">Termos de Uso</a>{' '}
           e{' '}
-          <span className="font-semibold text-zinc-800 hover:underline cursor-pointer">Política de Privacidade</span>.
+          <a href="https://nexusfocus.web.app/privacidade" target="_blank" rel="noopener noreferrer" className="font-semibold text-zinc-800 hover:underline cursor-pointer">Política de Privacidade</a>.
         </p>
       </footer>
     </div>

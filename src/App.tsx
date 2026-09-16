@@ -22,6 +22,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginScreen } from './components/LoginScreen';
 import { CheckoutScreen } from './components/CheckoutScreen';
+import { PrivacyPolicy } from './components/PrivacyPolicy';
+import { TermsOfUse } from './components/TermsOfUse';
 
 function Dashboard() {
   const { currentUser, logout } = useAuth();
@@ -345,6 +347,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginScreen />} />
           <Route path="/checkout" element={<CheckoutScreen />} />
+          <Route path="/privacidade" element={<PrivacyPolicy />} />
+          <Route path="/termos" element={<TermsOfUse />} />
           <Route
             path="/dashboard/*"
             element={
