@@ -848,24 +848,18 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
     }
   });
 
-  // WhatsApp Webhook Verification (Meta WhatsApp Cloud API)
-  app.get("/api/whatsapp/webhook", (req, res) => {
+  // WhatsApp Webhook Verification (Meta WhatsApp Cloud API) - Painel Developers
+  app.get(["/api/webhooks/whatsapp", "/api/whatsapp/webhook"], (req, res) => {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
-
-    if (mode === "subscribe" && token === "mentor_whatsapp_token") {
-      console.log("WhatsApp Webhook verified successfully!");
+    
+    if (mode === 'subscribe' && token === process.env.META_WEBHOOK_VERIFY_TOKEN_TEST) {
+      console.log("Meta WhatsApp Webhook verificado com sucesso!");
       return res.status(200).send(challenge);
     }
     
-    // Default GET status response
-    return res.json({
-      status: "active",
-      service: "Mentor Focus WhatsApp Webhook Gateway",
-      verifyToken: "mentor_whatsapp_token",
-      documentation: "Envie mensagens POST em JSON com os campos { from, text, userId }"
-    });
+    return res.sendStatus(403);
   });
 
   // WhatsApp Webhook Message Handler
@@ -906,6 +900,51 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
 
       if (!text || typeof text !== "string") {
         return res.status(400).json({ error: "Nenhuma mensagem de texto válida encontrada na requisição do WhatsApp" });
+      }
+
+      // Verificação de Handshake (Ativação de Token)
+      const tokenMatch = text.match(/NEXUS-[A-Z0-9]+/i);
+      if (tokenMatch) {
+        const tokenStr = tokenMatch[0].toUpperCase();
+        
+        // Busca token no Firestore
+        const tokenRef = adminDb.collection("whatsapp_tokens").doc(tokenStr);
+        const tokenSnap = await tokenRef.get();
+        
+        if (tokenSnap.exists) {
+          const tokenData = tokenSnap.data();
+          if (tokenData && tokenData.expiresAt) {
+            // Firestore timestamps tem método toDate(), Date nativo não. Lidamos com ambos.
+            const expiresDate = tokenData.expiresAt.toDate ? tokenData.expiresAt.toDate() : new Date(tokenData.expiresAt);
+            
+            if (new Date() <= expiresDate) {
+              const uId = tokenData.userId;
+              
+              // Atualiza o documento do usuário vinculando o número do WhatsApp
+              await adminDb.collection("users").doc(uId).set({
+                whatsappNumber: from,
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+              
+              // Deleta o token para segurança (uso único)
+              await tokenRef.delete();
+              
+              // Retorna a resposta de sucesso para a API do WhatsApp (ou nosso Simulador)
+              return res.json({
+                success: true,
+                reply: "Conexão estabelecida com sucesso! O Mentor Nexus Flow está ativo e pronto para organizar sua rotina.",
+                sender: from,
+                timestamp: new Date().toISOString()
+              });
+            } else {
+              return res.json({
+                success: false,
+                reply: "Este código de ativação já expirou. Por favor, gere um novo código no Dashboard.",
+                sender: from
+              });
+            }
+          }
+        }
       }
 
       const apiKey = process.env.GEMINI_API_KEY?.trim() || process.env.VITE_GEMINI_API_KEY?.trim();
@@ -979,6 +1018,32 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
   } else {
     console.log("[Auto-Seed Pro] Ambiente sem FIREBASE_SERVICE_ACCOUNT_KEY. Seed ignorado localmente.");
   }
+
+  // WhatsApp - Handshake Token Generation
+  app.post('/api/whatsapp/generate-token', async (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ success: false, error: "userId é obrigatório" });
+      }
+
+      const randomPart = crypto.randomBytes(2).toString('hex').toUpperCase();
+      const token = `NEXUS-${randomPart}`;
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+      await adminDb.collection("whatsapp_tokens").doc(token).set({
+        userId,
+        token,
+        expiresAt,
+        createdAt: FieldValue.serverTimestamp()
+      });
+
+      return res.json({ success: true, token, expiresAt });
+    } catch (error: any) {
+      console.error("[WhatsApp] Erro ao gerar token:", error);
+      return res.status(500).json({ success: false, error: "Erro interno ao gerar token" });
+    }
+  });
 
   // Admin Route to ensure Pro status on demand
   app.post('/api/admin/activate-pro', async (req, res) => {
