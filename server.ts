@@ -849,15 +849,61 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
   });
 
   /**
-   * Helper para envio de mensagens de saída para o WhatsApp via Meta Cloud API
+   * Helper para envio de mensagens de saída para o WhatsApp via Meta Cloud API.
+   * Implementa a Trava de Segurança (Circuit Breaker) para respeitar a Janela de 24h da Meta.
    */
-  async function sendWhatsAppTextMessage(to: string, messageText: string, phoneNumberId?: string): Promise<any> {
+  async function sendWhatsAppTextMessage(
+    to: string,
+    messageText: string,
+    phoneNumberId?: string,
+    userId?: string
+  ): Promise<any> {
     const token = process.env.META_ACCESS_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_USER_ACCESS_TOKEN;
     const phoneId = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || "1262215520309953";
 
     if (!token) {
       console.log(`[WhatsApp Outbound] Aviso: Token da Meta não configurado. Mensagem para ${to} não despachada na API externa.`);
-      return null;
+      return false;
+    }
+
+    // =========================================================================
+    // TRAVA DE SEGURANÇA (CIRCUIT BREAKER) - JANELA DE 24 HORAS DA META
+    // =========================================================================
+    try {
+      let userData: FirebaseFirestore.DocumentData | undefined;
+
+      // 1. Busca o documento do usuário no Firestore para recuperar o lastWaInteraction
+      if (userId) {
+        const userDoc = await adminDb.collection("users").doc(userId).get();
+        if (userDoc.exists) {
+          userData = userDoc.data();
+        }
+      } else {
+        const userQuery = await adminDb.collection("users").where("whatsappNumber", "==", to).limit(1).get();
+        if (!userQuery.empty) {
+          userData = userQuery.docs[0].data();
+        }
+      }
+
+      // Se o usuário foi identificado no sistema, valida a janela de 24 horas
+      if (userData) {
+        const MAX_WINDOW_MS = (23 * 60 + 50) * 60 * 1000; // 23h 50m (margem de segurança de 10 min para delays)
+        let lastInteractionTime: number | null = null;
+
+        if (userData.lastWaInteraction) {
+          const lwi = userData.lastWaInteraction;
+          lastInteractionTime = lwi.toDate ? lwi.toDate().getTime() : new Date(lwi).getTime();
+        }
+
+        // 2. Calcula a diferença e aborta se maior que 23h50m (ou se nunca interagiu)
+        if (!lastInteractionTime || (Date.now() - lastInteractionTime) > MAX_WINDOW_MS) {
+          console.warn("Envio bloqueado: Janela de 24h da Meta fechada para este usuário.");
+          return false;
+        }
+      }
+    } catch (cbErr: any) {
+      console.error("[Circuit Breaker] Erro ao validar lastWaInteraction no Firestore:", cbErr?.message);
+      return false;
     }
 
     try {
@@ -880,13 +926,14 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
       const data = await res.json();
       if (!res.ok) {
         console.warn(`[WhatsApp Outbound] Erro retornado pela Meta ao enviar para ${to}:`, data);
+        return false;
       } else {
         console.log(`[WhatsApp Outbound] Resposta enviada com sucesso para [${to}] (ID: ${data.messages?.[0]?.id})`);
+        return data;
       }
-      return data;
     } catch (err: any) {
       console.error(`[WhatsApp Outbound] Falha na requisição para a Meta:`, err?.message);
-      return null;
+      return false;
     }
   }
 
@@ -985,10 +1032,11 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
             if (isValid) {
               const uId = tokenData?.userId;
               if (uId) {
-                // Atualiza o documento do usuário (users/{userId}) adicionando whatsappNumber
+                // 1. Registro da Interação (No Webhook POST): Atualiza usuário com whatsappNumber e lastWaInteraction
                 await adminDb.collection("users").doc(uId).set({
                   whatsappNumber: from,
                   whatsappVerified: true,
+                  lastWaInteraction: FieldValue.serverTimestamp(),
                   updatedAt: FieldValue.serverTimestamp()
                 }, { merge: true });
 
@@ -1001,7 +1049,8 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
                 await sendWhatsAppTextMessage(
                   from,
                   "Conexão estabelecida com sucesso! O Mentor Nexus Flow está ativo e pronto para organizar sua rotina.",
-                  phoneId
+                  phoneId,
+                  uId
                 );
                 return;
               }
@@ -1040,6 +1089,13 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
 
         const userDoc = userQuery.docs[0];
         const linkedUserId = userDoc.id;
+
+        // 1. Registro da Interação (No Webhook POST):
+        // Atualiza imediatamente lastWaInteraction no Firestore ao identificar o usuário
+        await adminDb.collection("users").doc(linkedUserId).set({
+          lastWaInteraction: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
 
         const apiKey = getGeminiApiKey();
         if (!apiKey) {
@@ -1107,8 +1163,8 @@ Data e hora atual: ${new Date().toISOString()}`;
           }
         }
 
-        // Envia a resposta final para o usuário no WhatsApp
-        await sendWhatsAppTextMessage(from, replyText, phoneId);
+        // Envia a resposta final para o usuário no WhatsApp validando a janela de 24h
+        await sendWhatsAppTextMessage(from, replyText, phoneId, linkedUserId);
       } catch (aiError: any) {
         console.error("❌ [WhatsApp Webhook] Erro no processamento de IA:", aiError?.message || aiError);
         await sendWhatsAppTextMessage(
@@ -1183,6 +1239,7 @@ Data e hora atual: ${new Date().toISOString()}`;
               await adminDb.collection("users").doc(uId).set({
                 whatsappNumber: from,
                 whatsappVerified: true,
+                lastWaInteraction: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp()
               }, { merge: true });
 
