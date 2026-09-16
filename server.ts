@@ -15,27 +15,65 @@ import webpush from "web-push";
 
 // Firebase Admin SDK initialization (Singleton)
 let adminApp: App;
-if (!getApps().length) {
-  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "planner-com-ia-assistant";
 
-  if (serviceAccountKey) {
+if (!getApps().length) {
+  let serviceAccount: any = null;
+  const rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
+  // 1. Verifique se process.env.FIREBASE_SERVICE_ACCOUNT_KEY existe
+  if (rawKey) {
     try {
-      const parsed = typeof serviceAccountKey === "string" && serviceAccountKey.trim().startsWith("{")
-        ? JSON.parse(serviceAccountKey)
-        : JSON.parse(Buffer.from(serviceAccountKey, "base64").toString("utf-8"));
+      let trimmed = rawKey.trim();
+      // Remove aspas externas adicionadas por variáveis de ambiente
+      if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+        trimmed = trimmed.slice(1, -1).trim();
+      }
+
+      // 2. Faça o JSON.parse() dessa variável com suporte a JSON direto ou Base64
+      if (trimmed.startsWith("{")) {
+        serviceAccount = JSON.parse(trimmed);
+      } else {
+        try {
+          const decoded = Buffer.from(trimmed, "base64").toString("utf-8");
+          if (decoded.trim().startsWith("{")) {
+            serviceAccount = JSON.parse(decoded);
+          }
+        } catch {
+          // Não é base64, tenta parsing direto
+        }
+        if (!serviceAccount) {
+          serviceAccount = JSON.parse(trimmed);
+        }
+      }
+
+      // Garante que eventuais quebras de linha escapadas (\n) na private_key sejam restauradas
+      if (serviceAccount && typeof serviceAccount.private_key === "string") {
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+      }
+    } catch (parseError: any) {
+      console.error("❌ [Firebase Admin] Erro ao fazer JSON.parse da variável FIREBASE_SERVICE_ACCOUNT_KEY. Verifique se o JSON da service account foi colado corretamente na Render:", parseError?.message);
+    }
+  } else {
+    console.warn("⚠️ [Firebase Admin] Variável FIREBASE_SERVICE_ACCOUNT_KEY não encontrada nas variáveis de ambiente da Render.");
+  }
+
+  // 3. Inicialize o app passando credential.cert
+  if (serviceAccount) {
+    try {
       adminApp = initializeApp({
-        credential: cert(parsed),
-        projectId: parsed.project_id || projectId
+        credential: cert(serviceAccount),
+        projectId: serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID || "planner-com-ia-assistant"
       });
-      console.log("[Firebase Admin] Inicializado com sucesso via Service Account Key.");
-    } catch (e: any) {
-      console.warn("[Firebase Admin] Falha ao processar FIREBASE_SERVICE_ACCOUNT_KEY, inicializando com projectId:", e?.message);
+      console.log("✅ [Firebase Admin] Inicializado com sucesso via Service Account Key (credential.cert).");
+    } catch (initError: any) {
+      console.error("❌ [Firebase Admin] Erro ao inicializar com credential.cert:", initError?.message);
+      const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "planner-com-ia-assistant";
       adminApp = initializeApp({ projectId });
     }
   } else {
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "planner-com-ia-assistant";
+    console.warn(`⚠️ [Firebase Admin] Inicializando apenas com projectId (${projectId}). Atenção: Sem Service Account, o Firestore falhará no ambiente externo da Render com NO_ADC_FOUND.`);
     adminApp = initializeApp({ projectId });
-    console.log(`[Firebase Admin] Inicializado com projectId: ${projectId}`);
   }
 } else {
   adminApp = getApps()[0];
