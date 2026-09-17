@@ -210,7 +210,6 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
   const [newSubtitle, setNewSubtitle] = useState('');
   const [newTime, setNewTime] = useState('09:00');
   const [newCategory, setNewCategory] = useState<'Trabalho' | 'Pessoal' | 'Estudos'>('Trabalho');
-  const [localCreatedActivities, setLocalCreatedActivities] = useState<ActivityItem[]>([]);
 
   // Format date to YYYY-MM-DD
   const formatDateStr = (d: Date) => {
@@ -248,13 +247,13 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
     { id: 'mock-5', time: '18:30', title: 'Leitura', subtitle: 'Ler 30 minutos', category: 'Pessoal', completed: false },
   ], []);
 
-  // Merge Firestore rotinas for selected date with newly added local activities, excluding deleted ones
+  // 1. Fonte Única da Verdade: Firestore Listener via rotinas prop
   const dayActivities: ActivityItem[] = useMemo(() => {
     const firestoreItems = rotinas
       .filter(r => r.date === selectedDateStr && !deletedIds.includes(r.id))
       .map(r => ({
         id: r.id,
-        time: r.time || '09:00',
+        time: (typeof r.time === 'string' && r.time.trim()) ? r.time.trim() : '09:00',
         title: r.title,
         subtitle: (r as any).subtitle || '',
         category: ((r as any).category || 'Trabalho') as 'Trabalho' | 'Pessoal' | 'Estudos',
@@ -262,23 +261,25 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
         date: r.date
       }));
 
-    const addedLocalItems = localCreatedActivities
-      .filter(a => a.date === selectedDateStr && !deletedIds.includes(a.id));
-
-    const combined = [...firestoreItems, ...addedLocalItems];
-
-    if (combined.length === 0) {
-      // Return non-deleted default activities with local toggle overrides
-      return defaultMockActivities
-        .filter(item => !deletedIds.includes(item.id))
-        .map(item => ({
-          ...item,
-          completed: localStatuses[item.id] !== undefined ? localStatuses[item.id] : item.completed
-        }));
+    // Se houver rotinas cadastradas para o dia no Firestore, retorna ordenado
+    if (firestoreItems.length > 0) {
+      return firestoreItems.sort((a, b) => a.time.localeCompare(b.time));
     }
 
-    return combined.sort((a, b) => a.time.localeCompare(b.time));
-  }, [rotinas, selectedDateStr, localCreatedActivities, localStatuses, defaultMockActivities, deletedIds]);
+    // Se o usuário possui rotinas no Firestore (mas nenhuma para a data selecionada), exibe vazio
+    if (rotinas.length > 0) {
+      return [];
+    }
+
+    // Apenas para onboarding/usuário novo sem nenhuma rotina no Firestore, exibe atividades de exemplo
+    return defaultMockActivities
+      .filter(item => !deletedIds.includes(item.id))
+      .map(item => ({
+        ...item,
+        completed: localStatuses[item.id] !== undefined ? localStatuses[item.id] : item.completed
+      }))
+      .sort((a, b) => a.time.localeCompare(b.time));
+  }, [rotinas, selectedDateStr, localStatuses, defaultMockActivities, deletedIds]);
 
   // Filter activities by active category pill
   const filteredActivities = useMemo(() => {
@@ -293,7 +294,7 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
   const strokeCircumference = 125.6; // 2 * pi * 20
   const strokeDashoffset = strokeCircumference - (strokeCircumference * progressPercent) / 100;
 
-  // Toggle routine completion status
+  // 3. Preservação de Status por Document ID
   const handleToggleComplete = async (id: string, currentVal: boolean) => {
     const newVal = !currentVal;
     setLocalStatuses(prev => ({ ...prev, [id]: newVal }));
@@ -322,30 +323,24 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
     }
   };
 
-  // Add new activity
+  // 1 & 2. Add new activity - Fonte única Firestore & String literal de horário
   const handleCreateActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    const newActivity: ActivityItem = {
-      id: `act-${Date.now()}`,
-      title: newTitle.trim(),
-      subtitle: newSubtitle.trim() || undefined,
-      time: newTime || '09:00',
-      category: newCategory,
-      completed: false,
-      date: selectedDateStr
-    };
-
-    setLocalCreatedActivities(prev => [newActivity, ...prev]);
+    // Trata o valor capturado do input type="time" estritamente como string literal absoluta (ex: '23:45')
+    // evitando qualquer distorção causada por fuso horário nativo ou conversão Date local
+    const rawTime = String(newTime || '').trim();
+    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    const literalTime = timeRegex.test(rawTime) ? rawTime : (rawTime || '09:00');
 
     if (user?.id) {
       try {
         await addDoc(collection(db, 'users', user.id, 'rotinas'), {
-          title: newActivity.title,
-          subtitle: newActivity.subtitle || '',
-          time: newActivity.time,
-          category: newActivity.category,
+          title: newTitle.trim(),
+          subtitle: newSubtitle.trim() || '',
+          time: literalTime,
+          category: newCategory,
           date: selectedDateStr,
           completed: false,
           createdAt: new Date()
@@ -355,8 +350,10 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
       }
     }
 
+    // Reset do formulário sem duplicar estado local (o listener do Firestore atualizará a UI)
     setNewTitle('');
     setNewSubtitle('');
+    setNewTime('09:00');
     setIsCreateModalOpen(false);
   };
 
