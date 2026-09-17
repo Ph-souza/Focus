@@ -1,334 +1,117 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
-  LayoutDashboard, 
-  ArrowLeftRight, 
-  PiggyBank, 
-  CheckSquare, 
-  Moon, 
-  Sun, 
-  ChevronLeft, 
-  ChevronRight, 
-  PieChart, 
   Home, 
-  BarChart3, 
-  Package, 
-  Sparkles, 
-  Target,
   Calendar,
-  MoreHorizontal
+  Target,
+  BarChart3,
+  LayoutGrid,
+  Bot
 } from 'lucide-react';
-import { TabType, User, Appointment, Task } from '../types';
+import { TabType, User } from '../types';
 import { AuraLogo } from './AuraLogo';
-import { CalendarModal } from './CalendarModal';
 
 interface NavigationProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
   user: User | null;
   isDarkMode: boolean;
-  onToggleDarkMode: () => void;
   onOpenProfile: () => void;
-  appointments?: Appointment[];
-  tasks?: Task[];
-  onOpenFocusMode?: () => void;
-  onOpenSmartCapture?: () => void;
 }
 
 export function Navigation({ 
   activeTab, 
   onTabChange, 
   user, 
-  isDarkMode, 
-  onToggleDarkMode, 
-  onOpenProfile, 
-  appointments = [], 
-  tasks = [],
-  onOpenFocusMode,
-  onOpenSmartCapture 
+  onOpenProfile,
 }: NavigationProps) {
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
-
-  const today = new Date();
-  const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
   
   const navItems: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'home', label: 'Início', icon: <Home size={20} /> },
-    { id: 'agenda', label: 'Agenda', icon: <Calendar size={20} /> },
+    { id: 'calendar', label: 'Agenda', icon: <Calendar size={20} /> },
     { id: 'focus', label: 'Foco', icon: <Target size={20} /> },
-    { id: 'finance', label: 'Finanças', icon: <BarChart3 size={20} /> },
-    { id: 'more', label: 'Mais', icon: <MoreHorizontal size={20} /> },
+    { id: 'finances', label: 'Finanças', icon: <BarChart3 size={20} /> },
+    { id: 'more', label: 'Mais', icon: <LayoutGrid size={20} /> },
   ];
 
-  const meetings = appointments.reduce((acc, apt) => {
-    if (!acc[apt.day]) {
-      acc[apt.day] = [];
-    }
-    acc[apt.day].push({ title: apt.title, time: apt.time, type: apt.type });
-    return acc;
-  }, {} as Record<number, { title: string; time: string; type: string }[]>);
-
-  // Dias com tarefas no mês atual para o mini-calendário
-  const taskDaysThisMonth = tasks.reduce((acc, t) => {
-    const d = (t.deadline || t.date || '').split('T')[0];
-    if (d) {
-      const parts = d.split('-');
-      if (parts.length === 3) {
-        const y = parseInt(parts[0], 10);
-        const m = parseInt(parts[1], 10) - 1;
-        const day = parseInt(parts[2], 10);
-        if (y === today.getFullYear() && m === today.getMonth()) {
-          acc[day] = true;
-        }
-      }
-    }
-    return acc;
-  }, {} as Record<number, boolean>);
-
-  // Simple hardcoded calendar for desktop sidebar
-  const renderCalendar = () => {
-    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-    return (
-      <div className="mt-6 px-4 hidden lg:block relative">
-        <h3 className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">Agenda Mensal</h3>
-        <div 
-          onClick={() => setIsCalendarModalOpen(true)}
-          className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 border border-slate-100 dark:border-slate-700 cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors"
-        >
-          <div className="flex items-center justify-between mb-3 text-slate-800 dark:text-slate-200">
-            <button className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors invisible"><ChevronLeft size={16} /></button>
-            <span className="text-xs font-bold">{monthNames[today.getMonth()]} {today.getFullYear()}</span>
-            <button className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors invisible"><ChevronRight size={16} /></button>
-          </div>
-          <div className="grid grid-cols-7 gap-1 text-center mb-2">
-            {['D','S','T','Q','Q','S','S'].map((d, i) => (
-              <span key={i} className="text-[10px] font-medium text-slate-400">{d}</span>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1 text-center font-medium text-xs pointer-events-none">
-            {Array.from({ length: Math.min(31, daysInMonth) }).map((_, i) => {
-              const day = i + 1;
-              const isToday = day === today.getDate();
-              const hasMeeting = !!meetings[day] || !!taskDaysThisMonth[day];
-              const isSelected = selectedDay === day;
-              
-              return (
-                <div 
-                  key={i} 
-                  className={`w-6 h-6 flex items-center justify-center rounded-full transition-colors relative ${
-                    isSelected ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400' :
-                    isToday ? 'bg-indigo-600 text-white shadow-sm font-bold' : 'text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  {day}
-                  {hasMeeting && !isToday && !isSelected && (
-                    <span className="absolute bottom-0 w-1 h-1 bg-indigo-500 rounded-full"></span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-3 text-center text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-            Ver Calendário Completo
-          </div>
+  return (
+    <aside className="hidden md:flex flex-col w-64 bg-slate-50 dark:bg-[#070b14] border-r border-slate-200 dark:border-white/5 h-screen sticky top-0 overflow-y-auto">
+      
+      {/* Brand Header */}
+      <div className="flex items-center gap-3 p-6 mb-4">
+        <div className="h-10 w-10 flex items-center justify-center text-[#6366f1]">
+          <AuraLogo className="w-8 h-8" />
+        </div>
+        <div>
+          <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white leading-none">NEXUS</h1>
+          <h1 className="text-lg font-black tracking-tight text-[#6366f1] leading-none">FOCUS</h1>
         </div>
       </div>
-    );
-  };
-
-  return (
-    <>
-      <CalendarModal 
-        isOpen={isCalendarModalOpen} 
-        onClose={() => setIsCalendarModalOpen(false)} 
-        appointments={appointments}
-        tasks={tasks}
-        user={user || undefined}
-      />
-
-      {/* ========================================================================= */}
-      {/* Mobile Bottom Navigation (Responsive PWA Bottom Bar)                      */}
-      {/* ========================================================================= */}
-      <nav 
-        aria-label="Navegação Inferior"
-        className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-xl text-slate-800 dark:text-white border-t border-slate-200/80 dark:border-[#27272a]/80 px-2 py-1.5 flex justify-between items-center z-50 shadow-[0_-4px_25px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_30px_rgba(0,0,0,0.7)] pb-[max(0.375rem,env(safe-area-inset-bottom))]"
-      >
-        <div className="flex w-full justify-around items-center relative">
-          {/* 1. Início */}
-          <button 
-            type="button"
-            onClick={() => onTabChange('home')} 
-            className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
-              activeTab === 'home' 
-                ? 'text-[#6366f1] dark:text-white font-bold scale-105' 
-                : 'text-zinc-400 hover:text-[#6366f1] dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
-            }`}
-          >
-            <div className="mb-0.5 relative">
-              <Home size={21} className={activeTab === 'home' ? 'text-[#6366f1] dark:text-white' : ''} />
-            </div>
-            <span>Início</span>
-          </button>
-          
-          {/* 2. Agenda */}
-          <button 
-            type="button"
-            onClick={() => setIsCalendarModalOpen(true)} 
-            className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
-              isCalendarModalOpen 
-                ? 'text-[#6366f1] dark:text-white font-bold scale-105' 
-                : 'text-zinc-400 hover:text-[#6366f1] dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
-            }`}
-          >
-            <div className="mb-0.5 relative">
-              <Calendar size={21} className={isCalendarModalOpen ? 'text-[#6366f1] dark:text-white' : ''} />
-            </div>
-            <span>Agenda</span>
-          </button>
-
-          {/* Spacer reserved for center floating action button */}
-          <div className="w-14 shrink-0 pointer-events-none" aria-hidden="true"></div>
-
-          {/* 3. Central Floating Action Button (FAB) -> Foco */}
-          <div className="absolute left-1/2 -top-5 -translate-x-1/2 flex flex-col justify-center items-center z-20">
-            <button 
-              type="button"
-              onClick={() => {
-                if (onOpenFocusMode) {
-                  onOpenFocusMode();
-                } else {
-                  onTabChange('tasks');
-                }
-              }}
-              title="Abrir Modo Foco"
-              aria-label="Abrir Modo Foco"
-              className="w-13 h-13 sm:w-14 sm:h-14 bg-[#6366f1] text-white rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(99,102,241,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer border-[3.5px] border-slate-50 dark:border-[#09090b] relative group"
-            >
-              <Target size={26} className="group-hover:rotate-12 transition-transform duration-300" />
-            </button>
-            <span className="text-[9px] font-bold text-slate-800 dark:text-white uppercase tracking-tight mt-0.5 pointer-events-none">
-              Foco
-            </span>
-          </div>
-
-          {/* 4. Finanças Button */}
-          <button 
-            type="button"
-            onClick={() => onTabChange('transactions')} 
-            className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
-              activeTab === 'transactions' || activeTab === 'reports' || activeTab === 'goals'
-                ? 'text-[#6366f1] dark:text-white font-bold scale-105' 
-                : 'text-zinc-400 hover:text-[#6366f1] dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
-            }`}
-          >
-            <div className="mb-0.5 relative">
-              <BarChart3 size={21} className={activeTab === 'transactions' || activeTab === 'reports' || activeTab === 'goals' ? 'text-[#6366f1] dark:text-white' : ''} />
-            </div>
-            <span>Finanças</span>
-          </button>
-
-          {/* 5. Mais Button */}
-          <button 
-            type="button"
-            onClick={() => onTabChange('more')} 
-            className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
-              activeTab === 'more' 
-                ? 'text-[#6366f1] dark:text-white font-bold scale-105' 
-                : 'text-zinc-400 hover:text-[#6366f1] dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
-            }`}
-          >
-            <div className="mb-0.5 relative">
-              <MoreHorizontal size={21} className={activeTab === 'more' ? 'text-[#6366f1] dark:text-white' : ''} />
-            </div>
-            <span>Mais</span>
-          </button>
-        </div>
-      </nav>
-
-      {/* ========================================================================= */}
-      {/* Desktop Sidebar Navigation                                                */}
-      {/* ========================================================================= */}
-      <aside className="hidden md:flex flex-col w-64 lg:w-72 bg-white dark:bg-gradient-to-br dark:from-[#09090b] dark:to-[#18181b]/50 border-r border-slate-200 dark:border-[#27272a]/80 h-screen sticky top-0 custom-scrollbar overflow-y-auto relative z-20">
-        <div className="absolute top-0 right-0 w-[1px] h-full bg-gradient-to-b from-transparent via-white/5 to-transparent pointer-events-none"></div>
-        
-        {/* Brand Header */}
-        <div className="flex items-center justify-between p-6 mb-2 relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="h-11 w-11 bg-zinc-900 dark:bg-gradient-to-br dark:from-[#1c1c20] dark:to-[#09090b] border border-zinc-800 dark:border-white/20 rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden flex-shrink-0">
-              <AuraLogo className="w-7 h-7 relative z-10" />
-            </div>
-            <div>
-              <h1 className="text-lg font-black tracking-tight text-zinc-900 dark:text-white leading-tight drop-shadow-sm">NEXUS FOCUS</h1>
-              <p className="text-[10px] font-medium tracking-wide text-zinc-500 dark:text-zinc-400 leading-none mt-1">powered by Nexus Flow</p>
-            </div>
-          </div>
-          <button 
-            type="button"
-            onClick={onToggleDarkMode} 
-            className="p-2 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white bg-zinc-100 hover:bg-zinc-200 dark:bg-[#121214] dark:hover:bg-zinc-800 rounded-lg transition-colors border border-zinc-200 dark:border-[#27272a] cursor-pointer"
-            title={isDarkMode ? "Modo Claro" : "Modo Escuro"}
-          >
-            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-        </div>
-
-        {/* Quick Action: Modo Foco (Pomodoro) - Removido pois Foco agora é uma aba inteira */}
-        
-        {/* Navigation Items */}
-        <nav className="px-4 space-y-1 relative z-10">
-          {navItems.map((item) => (
+      
+      {/* Navigation Links */}
+      <nav className="flex-1 px-4 space-y-2">
+        <div className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase px-4 mb-4">Menu</div>
+        {navItems.map((item) => {
+          const isActive = activeTab === item.id;
+          return (
             <button
               key={item.id}
-              type="button"
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all duration-200 cursor-pointer ${
-                activeTab === item.id 
-                  ? 'bg-blue-600 text-white font-bold shadow-[0_4px_15px_rgba(37,99,235,0.3)]' 
-                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white font-medium'
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 relative group ${
+                isActive 
+                  ? 'bg-blue-50 text-[#6366f1] dark:bg-[#6366f1]/10 dark:text-[#6366f1] shadow-[0_4px_20px_rgba(99,102,241,0.05)]' 
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5'
               }`}
             >
-              <div className="flex items-center justify-center">
+              {/* Active neon border glow for dark mode */}
+              {isActive && (
+                <div className="hidden dark:block absolute inset-0 rounded-xl border border-[#6366f1]/30 shadow-[0_0_15px_rgba(99,102,241,0.2)] pointer-events-none"></div>
+              )}
+              {/* Left active indicator */}
+              {isActive && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#6366f1] rounded-r-full"></div>
+              )}
+              <div className={`transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
                 {item.icon}
               </div>
-              <span>{item.label}</span>
+              <span className={`font-semibold text-sm ${isActive ? 'tracking-wide' : ''}`}>{item.label}</span>
             </button>
-          ))}
-        </nav>
+          );
+        })}
+      </nav>
 
-        {renderCalendar()}
+      {/* Footer Area */}
+      <div className="p-4 mt-auto flex flex-col gap-3">
+        {/* Mentor CTA */}
+        <button onClick={() => onTabChange('chat')} className="w-full flex items-center gap-3 p-3 rounded-xl border border-[#6366f1]/20 bg-[#6366f1]/5 hover:bg-[#6366f1]/10 transition-colors text-left group relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-[#6366f1]/0 via-[#6366f1]/10 to-[#6366f1]/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+          <div className="w-8 h-8 rounded-full bg-[#6366f1]/10 flex items-center justify-center text-[#6366f1]">
+            <Bot size={18} />
+          </div>
+          <div>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-tight">Seu mentor sempre</p>
+            <p className="text-xs font-bold text-slate-800 dark:text-white leading-tight mt-0.5">com você.</p>
+          </div>
+        </button>
 
         {/* User Profile Card */}
-        <div className="mt-auto p-6 cursor-pointer relative z-10" onClick={onOpenProfile}>
-          {user?.isDemo && (
-            <div className="mb-3 p-2.5 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-xl text-center shadow-sm">
-              <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200 tracking-wider uppercase block">
-                ⚡ Modo Demo Ativo
-              </span>
-              <span className="text-[10px] text-zinc-900 dark:text-white font-bold block mt-0.5 hover:underline">
-                Alternar para Conta Real →
-              </span>
-            </div>
-          )}
-          <div className="p-4 bg-slate-50 dark:bg-[#121214] rounded-[16px] border border-slate-200 dark:border-zinc-800/80 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all hover:-translate-y-1 group overflow-hidden relative">
-            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-zinc-200 dark:via-white/10 to-transparent"></div>
-            <div className="flex items-center gap-3 mb-3 relative z-10">
-              <div className="w-8 h-8 rounded-[10px] bg-zinc-900 text-white dark:bg-white dark:text-black flex items-center justify-center font-bold text-xs uppercase border border-zinc-700 dark:border-zinc-300 overflow-hidden shadow-sm">
-                {user?.photoURL ? (
-                  <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                ) : (
-                  user?.name?.charAt(0) || 'U'
-                )}
-              </div>
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{user?.name || 'User'}</p>
-            </div>
-            <div className="h-1 bg-slate-200 dark:bg-[#27272a] rounded-full w-full relative z-10 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-zinc-500 to-zinc-900 dark:from-zinc-500 dark:to-white w-full rounded-full shadow-[0_0_8px_rgba(0,0,0,0.1)] dark:shadow-[0_0_8px_rgba(255,255,255,0.35)]"></div>
-            </div>
-            <p className="text-[9px] tracking-widest uppercase font-extrabold text-zinc-700 dark:text-white mt-2 relative z-10 text-right">Acesso Ativo</p>
+        <button 
+          onClick={onOpenProfile}
+          className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border border-transparent dark:hover:border-white/5 text-left"
+        >
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 dark:bg-zinc-800 flex items-center justify-center border border-slate-300 dark:border-zinc-700">
+            {user?.photoURL ? (
+              <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="font-bold text-slate-500">{user?.name?.charAt(0) || 'U'}</span>
+            )}
           </div>
-        </div>
-      </aside>
-    </>
+          <div className="flex-1 overflow-hidden">
+            <p className="text-sm font-bold text-slate-800 dark:text-white truncate">Olá, {user?.name?.split(' ')[0] || 'Usuário'}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-[#6366f1] transition-colors">Ver perfil</p>
+          </div>
+        </button>
+      </div>
+
+    </aside>
   );
 }
-

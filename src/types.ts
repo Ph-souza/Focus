@@ -54,7 +54,7 @@ export interface ChatMessage {
   timestamp: string;
 }
 
-export type TabType = 'home' | 'agenda' | 'focus' | 'finance' | 'transactions' | 'reports' | 'goals' | 'tasks' | 'chat' | 'more';
+export type TabType = 'home' | 'calendar' | 'focus' | 'finances' | 'transactions' | 'reports' | 'goals' | 'tasks' | 'chat' | 'more';
 
 export interface AppNotification {
   id: string;

@@ -9,9 +9,9 @@ import { TabGoals } from './components/TabGoals';
 import { TabTasks } from './components/TabTasks';
 import { TabChat } from './components/TabChat';
 import { TabMore } from './components/TabMore';
-import { TabAgenda } from './components/TabAgenda';
+import { TabCalendar } from './components/TabCalendar';
 import { TabFocus } from './components/TabFocus';
-import { TabFinance } from './components/TabFinance';
+import { TabFinances } from './components/TabFinances';
 import { ToastNotifications } from './components/ToastNotifications';
 import { ProfileModal } from './components/ProfileModal';
 import { FocusModeModal } from './components/FocusModeModal';
@@ -300,15 +300,17 @@ function Dashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
-        return <TabHome transactions={transactions} tasks={tasks} rotinas={rotinas} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
-      case 'agenda':
-        return <TabAgenda appointments={appointments} tasks={tasks} rotinas={rotinas} setTasks={setTasks} user={user} />;
+        return <TabHome transactions={transactions} goals={goals} tasks={tasks} rotinas={rotinas} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
+      case 'calendar':
+        return <TabCalendar />;
       case 'focus':
-        return <TabFocus tasks={tasks} setTasks={setTasks} user={user} onTabChange={setActiveTab} />;
-      case 'finance':
+        return <TabFocus />;
+      case 'finances':
+        return <TabFinances />;
       case 'transactions':
+        return <TabTransactions transactions={transactions} setTransactions={setTransactions} user={user} />;
       case 'reports':
-        return <TabFinance transactions={transactions} setTransactions={setTransactions} goals={goals} user={user} onTabChange={setActiveTab} />;
+        return <TabReports transactions={transactions} />;
       case 'goals':
         return <TabGoals goals={goals} user={user} />;
       case 'tasks':
