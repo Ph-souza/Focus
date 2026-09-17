@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Rotina, User } from '../types';
 import { db } from '../lib/firebase';
@@ -34,7 +34,8 @@ interface ActivityItem {
 
 /**
  * Swipeable Activity Card for Mobile
- * Implements fluid Drag-to-Delete with visual red background feedback and resilient snapping.
+ * Implements fluid Drag-to-Delete with red background restricted behind the right edge,
+ * visible ONLY during swipe to preserve 100% pure glassmorphism at rest.
  */
 function SwipeableActivityCard({
   activity,
@@ -47,51 +48,112 @@ function SwipeableActivityCard({
   onToggleComplete: (id: string, currentVal: boolean) => void;
   onDelete: (id: string) => void;
 }) {
+  const [translateX, setTranslateX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const startXRef = useRef(0);
+  const currentXRef = useRef(0);
 
   const triggerDelete = () => {
     if (isDeleting) return;
     setIsDeleting(true);
+    setTranslateX(-300);
     setTimeout(() => {
       onDelete(activity.id);
     }, 220);
   };
 
+  // Touch gesture handlers for mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startXRef.current = e.touches[0].clientX;
+    currentXRef.current = 0;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const deltaX = e.touches[0].clientX - startXRef.current;
+    if (deltaX <= 0) {
+      const clamped = Math.max(deltaX, -90);
+      currentXRef.current = clamped;
+      setTranslateX(clamped);
+    } else {
+      currentXRef.current = 0;
+      setTranslateX(0);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    if (currentXRef.current < -65) {
+      triggerDelete();
+    } else {
+      setTranslateX(0);
+      currentXRef.current = 0;
+    }
+  };
+
+  // Mouse gesture handlers for desktop testing
+  const handleMouseDown = (e: React.MouseEvent) => {
+    startXRef.current = e.clientX;
+    currentXRef.current = 0;
+    setIsDragging(true);
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startXRef.current;
+      if (deltaX <= 0) {
+        const clamped = Math.max(deltaX, -90);
+        currentXRef.current = clamped;
+        setTranslateX(clamped);
+      } else {
+        currentXRef.current = 0;
+        setTranslateX(0);
+      }
+    };
+
+    const onMouseUp = () => {
+      setIsDragging(false);
+      if (currentXRef.current < -65) {
+        triggerDelete();
+      } else {
+        setTranslateX(0);
+        currentXRef.current = 0;
+      }
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
   return (
     <motion.div
       layout
-      initial={{ opacity: 1, scale: 1 }}
-      animate={isDeleting ? { opacity: 0, x: -250, height: 0, marginBottom: 0, transition: { duration: 0.22, ease: 'easeInOut' } } : { opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, x: -250, height: 0, marginBottom: 0, transition: { duration: 0.22, ease: 'easeInOut' } }}
-      className="flex-1 relative overflow-hidden rounded-2xl"
+      initial={{ opacity: 1, height: 'auto' }}
+      animate={isDeleting ? { opacity: 0, height: 0, marginBottom: 0, transition: { duration: 0.22, ease: 'easeInOut' } } : { opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0, marginBottom: 0, transition: { duration: 0.22 } }}
+      className="relative overflow-hidden rounded-2xl flex-1 w-full select-none"
     >
-      {/* Background Revealed Action: Red area with Trash icon */}
+      {/* 1. Camada de fundo (Aparece SOMENTE quando desliza) */}
       <div 
         onClick={triggerDelete}
-        className="absolute inset-0 bg-rose-500/95 dark:bg-rose-600/95 rounded-2xl flex items-center justify-end pr-4 text-white cursor-pointer active:bg-rose-700 transition-colors shadow-inner"
-        aria-label="Apagar atividade"
+        className={`absolute inset-y-0 right-0 w-20 bg-red-500 flex items-center justify-center text-white z-0 rounded-r-2xl cursor-pointer transition-opacity duration-200 ${
+          translateX < -5 ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
       >
-        <div className="flex items-center gap-1.5 font-bold text-xs text-white">
-          <Trash2 size={16} />
-          <span>Apagar</span>
-        </div>
+        <Trash2 className="w-5 h-5" />
       </div>
 
-      {/* Foreground Draggable Glass Card */}
-      <motion.div
-        drag="x"
-        dragDirectionLock
-        dragConstraints={{ left: -100, right: 0 }}
-        dragElastic={0.12}
-        dragTransition={{ bounceStiffness: 600, bounceDamping: 25 }}
-        onDragEnd={(_, info) => {
-          // If swiped left beyond 70px or flicked with negative velocity, trigger deletion!
-          if (info.offset.x < -70 || info.velocity.x < -300) {
-            triggerDelete();
-          }
-        }}
-        className="glass-card p-3 flex items-center justify-between gap-2.5 shadow-sm relative z-10 select-none touch-pan-y cursor-grab active:cursor-grabbing bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl"
-        whileDrag={{ scale: 0.99 }}
+      {/* 2. O Card Principal (Vidro translúcido que fica por cima cobrindo o vermelho) */}
+      <div 
+        className={`relative z-10 glass-card p-3 flex items-center justify-between gap-2.5 shadow-sm touch-pan-y cursor-grab active:cursor-grabbing ${
+          isDragging ? '' : 'transition-transform duration-200 ease-out'
+        }`}
+        style={{ transform: `translateX(${translateX}px)` }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
       >
         <div className="flex-1 min-w-0 pr-1 pointer-events-none">
           <h3 className={`text-xs font-bold truncate transition-colors ${
@@ -132,7 +194,7 @@ function SwipeableActivityCard({
             {activity.completed && <Check size={12} strokeWidth={3} />}
           </button>
         </div>
-      </motion.div>
+      </div>
     </motion.div>
   );
 }
