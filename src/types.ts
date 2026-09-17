@@ -38,6 +38,15 @@ export interface Appointment {
   date?: string;
 }
 
+export interface Rotina {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  completed: boolean;
+  createdAt?: any;
+}
+
 export interface ChatMessage {
   id: string;
   text: string;
@@ -45,7 +54,7 @@ export interface ChatMessage {
   timestamp: string;
 }
 
-export type TabType = 'home' | 'transactions' | 'reports' | 'goals' | 'tasks' | 'chat';
+export type TabType = 'home' | 'agenda' | 'focus' | 'finance' | 'transactions' | 'reports' | 'goals' | 'tasks' | 'chat' | 'more';
 
 export interface AppNotification {
   id: string;

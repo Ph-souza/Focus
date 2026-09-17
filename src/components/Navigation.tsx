@@ -13,7 +13,9 @@ import {
   BarChart3, 
   Package, 
   Sparkles, 
-  Target 
+  Target,
+  Calendar,
+  MoreHorizontal
 } from 'lucide-react';
 import { TabType, User, Appointment, Task } from '../types';
 import { AuraLogo } from './AuraLogo';
@@ -51,12 +53,11 @@ export function Navigation({
   const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
   
   const navItems: { id: TabType; label: string; icon: React.ReactNode }[] = [
-    { id: 'home', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-    { id: 'transactions', label: 'Transações', icon: <ArrowLeftRight size={20} /> },
-    { id: 'reports', label: 'Relatórios', icon: <PieChart size={20} /> },
-    { id: 'goals', label: 'Caixinhas', icon: <PiggyBank size={20} /> },
-    { id: 'tasks', label: 'Tarefas', icon: <CheckSquare size={20} /> },
-    { id: 'chat', label: 'Mentor (IA)', icon: <Sparkles size={20} /> },
+    { id: 'home', label: 'Início', icon: <Home size={20} /> },
+    { id: 'agenda', label: 'Agenda', icon: <Calendar size={20} /> },
+    { id: 'focus', label: 'Foco', icon: <Target size={20} /> },
+    { id: 'finance', label: 'Finanças', icon: <BarChart3 size={20} /> },
+    { id: 'more', label: 'Mais', icon: <MoreHorizontal size={20} /> },
   ];
 
   const meetings = appointments.reduce((acc, apt) => {
@@ -153,48 +154,42 @@ export function Navigation({
         className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-[#09090b]/95 backdrop-blur-xl text-slate-800 dark:text-white border-t border-slate-200/80 dark:border-[#27272a]/80 px-2 py-1.5 flex justify-between items-center z-50 shadow-[0_-4px_25px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_30px_rgba(0,0,0,0.7)] pb-[max(0.375rem,env(safe-area-inset-bottom))]"
       >
         <div className="flex w-full justify-around items-center relative">
-          {/* 1. Home Button */}
+          {/* 1. Início */}
           <button 
             type="button"
             onClick={() => onTabChange('home')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
               activeTab === 'home' 
-                ? 'text-zinc-950 dark:text-white font-bold scale-105' 
-                : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
+                ? 'text-[#6366f1] dark:text-white font-bold scale-105' 
+                : 'text-zinc-400 hover:text-[#6366f1] dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <Home size={21} className={activeTab === 'home' ? 'text-zinc-950 dark:text-white' : ''} />
-              {activeTab === 'home' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-zinc-950 dark:bg-white rounded-full"></span>
-              )}
+              <Home size={21} className={activeTab === 'home' ? 'text-[#6366f1] dark:text-white' : ''} />
             </div>
-            <span>Home</span>
+            <span>Início</span>
           </button>
           
-          {/* 2. Finanças Button */}
+          {/* 2. Agenda */}
           <button 
             type="button"
-            onClick={() => onTabChange('transactions')} 
+            onClick={() => setIsCalendarModalOpen(true)} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
-              activeTab === 'transactions' || activeTab === 'reports' 
-                ? 'text-zinc-950 dark:text-white font-bold scale-105' 
-                : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
+              isCalendarModalOpen 
+                ? 'text-[#6366f1] dark:text-white font-bold scale-105' 
+                : 'text-zinc-400 hover:text-[#6366f1] dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <BarChart3 size={21} className={activeTab === 'transactions' || activeTab === 'reports' ? 'text-zinc-950 dark:text-white' : ''} />
-              {(activeTab === 'transactions' || activeTab === 'reports') && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-zinc-950 dark:bg-white rounded-full"></span>
-              )}
+              <Calendar size={21} className={isCalendarModalOpen ? 'text-[#6366f1] dark:text-white' : ''} />
             </div>
-            <span>Finanças</span>
+            <span>Agenda</span>
           </button>
 
           {/* Spacer reserved for center floating action button */}
           <div className="w-14 shrink-0 pointer-events-none" aria-hidden="true"></div>
 
-          {/* 3. Central Floating Action Button (FAB) -> Target / Modo Foco */}
+          {/* 3. Central Floating Action Button (FAB) -> Foco */}
           <div className="absolute left-1/2 -top-5 -translate-x-1/2 flex flex-col justify-center items-center z-20">
             <button 
               type="button"
@@ -207,51 +202,45 @@ export function Navigation({
               }}
               title="Abrir Modo Foco"
               aria-label="Abrir Modo Foco"
-              className="w-13 h-13 sm:w-14 sm:h-14 bg-zinc-900 text-white dark:bg-white dark:text-black rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer border-[3.5px] border-slate-50 dark:border-[#09090b] relative group"
+              className="w-13 h-13 sm:w-14 sm:h-14 bg-[#6366f1] text-white rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(99,102,241,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer border-[3.5px] border-slate-50 dark:border-[#09090b] relative group"
             >
               <Target size={26} className="group-hover:rotate-12 transition-transform duration-300" />
             </button>
-            <span className="text-[9px] font-bold text-zinc-900 dark:text-white uppercase tracking-tight mt-0.5 pointer-events-none">
+            <span className="text-[9px] font-bold text-slate-800 dark:text-white uppercase tracking-tight mt-0.5 pointer-events-none">
               Foco
             </span>
           </div>
 
-          {/* 4. Caixinhas Button */}
+          {/* 4. Finanças Button */}
           <button 
             type="button"
-            onClick={() => onTabChange('goals')} 
+            onClick={() => onTabChange('transactions')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
-              activeTab === 'goals' 
-                ? 'text-zinc-950 dark:text-white font-bold scale-105' 
-                : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
+              activeTab === 'transactions' || activeTab === 'reports' || activeTab === 'goals'
+                ? 'text-[#6366f1] dark:text-white font-bold scale-105' 
+                : 'text-zinc-400 hover:text-[#6366f1] dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <Package size={21} className={activeTab === 'goals' ? 'text-zinc-950 dark:text-white' : ''} />
-              {activeTab === 'goals' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-zinc-950 dark:bg-white rounded-full"></span>
-              )}
+              <BarChart3 size={21} className={activeTab === 'transactions' || activeTab === 'reports' || activeTab === 'goals' ? 'text-[#6366f1] dark:text-white' : ''} />
             </div>
-            <span>Caixinhas</span>
+            <span>Finanças</span>
           </button>
 
-          {/* 5. Tarefas Button */}
+          {/* 5. Mais Button */}
           <button 
             type="button"
-            onClick={() => onTabChange('tasks')} 
+            onClick={() => onTabChange('more')} 
             className={`flex flex-col items-center p-1.5 text-[10px] transition-all rounded-xl relative z-10 w-16 cursor-pointer ${
-              activeTab === 'tasks' 
-                ? 'text-zinc-950 dark:text-white font-bold scale-105' 
-                : 'text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
+              activeTab === 'more' 
+                ? 'text-[#6366f1] dark:text-white font-bold scale-105' 
+                : 'text-zinc-400 hover:text-[#6366f1] dark:text-zinc-500 dark:hover:text-zinc-300 font-medium'
             }`}
           >
             <div className="mb-0.5 relative">
-              <CheckSquare size={21} className={activeTab === 'tasks' ? 'text-zinc-950 dark:text-white' : ''} />
-              {activeTab === 'tasks' && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-zinc-950 dark:bg-white rounded-full"></span>
-              )}
+              <MoreHorizontal size={21} className={activeTab === 'more' ? 'text-[#6366f1] dark:text-white' : ''} />
             </div>
-            <span>Tarefas</span>
+            <span>Mais</span>
           </button>
         </div>
       </nav>
@@ -283,28 +272,7 @@ export function Navigation({
           </button>
         </div>
 
-        {/* Quick Action: Modo Foco (Pomodoro) */}
-        <div className="px-4 mb-3 relative z-10">
-          <button
-            type="button"
-            onClick={() => {
-              if (onOpenFocusMode) {
-                onOpenFocusMode();
-              } else {
-                onTabChange('tasks');
-              }
-            }}
-            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300 dark:bg-zinc-900/90 dark:text-white dark:border-zinc-800 dark:hover:bg-zinc-800 font-semibold text-xs transition-all cursor-pointer shadow-sm group"
-          >
-            <div className="flex items-center gap-2.5">
-              <Target size={18} className="text-zinc-800 dark:text-zinc-200 group-hover:rotate-45 transition-transform duration-300" />
-              <span className="font-bold text-zinc-900 dark:text-white">Modo Foco</span>
-            </div>
-            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-zinc-900 text-white dark:bg-white dark:text-black font-extrabold tracking-wider uppercase shadow-sm">
-              Iniciar
-            </span>
-          </button>
-        </div>
+        {/* Quick Action: Modo Foco (Pomodoro) - Removido pois Foco agora é uma aba inteira */}
         
         {/* Navigation Items */}
         <nav className="px-4 space-y-1 relative z-10">
@@ -313,10 +281,10 @@ export function Navigation({
               key={item.id}
               type="button"
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 cursor-pointer ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all duration-200 cursor-pointer ${
                 activeTab === item.id 
-                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black font-bold shadow-sm dark:shadow-[0_2px_12px_rgba(255,255,255,0.12)]' 
-                  : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white font-medium'
+                  ? 'bg-blue-600 text-white font-bold shadow-[0_4px_15px_rgba(37,99,235,0.3)]' 
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white font-medium'
               }`}
             >
               <div className="flex items-center justify-center">

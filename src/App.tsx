@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { TabType, User, AppNotification, Transaction, ChatMessage, Task, Appointment } from './types';
+import { TabType, User, AppNotification, Transaction, ChatMessage, Task, Appointment, Rotina } from './types';
 import { Navigation } from './components/Navigation';
 import { TabHome } from './components/TabHome';
 import { TabTransactions } from './components/TabTransactions';
@@ -8,6 +8,10 @@ import { TabReports } from './components/TabReports';
 import { TabGoals } from './components/TabGoals';
 import { TabTasks } from './components/TabTasks';
 import { TabChat } from './components/TabChat';
+import { TabMore } from './components/TabMore';
+import { TabAgenda } from './components/TabAgenda';
+import { TabFocus } from './components/TabFocus';
+import { TabFinance } from './components/TabFinance';
 import { ToastNotifications } from './components/ToastNotifications';
 import { ProfileModal } from './components/ProfileModal';
 import { FocusModeModal } from './components/FocusModeModal';
@@ -66,6 +70,7 @@ function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [rotinas, setRotinas] = useState<Rotina[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -186,12 +191,22 @@ function Dashboard() {
       handleFirestoreError(error, OperationType.LIST, `users/${user.id}/appointments`);
     });
 
+    // 6. Rotinas Listener
+    const rotinasQuery = query(collection(db, 'users', user.id, 'rotinas'), orderBy('createdAt', 'desc'));
+    const unsubRotinas = onSnapshot(rotinasQuery, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Rotina));
+      setRotinas(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/rotinas`);
+    });
+
     return () => {
       unsubTrans();
       unsubGoals();
       unsubTasks();
       unsubChat();
       unsubAppointments();
+      unsubRotinas();
     };
   }, [user.id]);
 
@@ -271,7 +286,7 @@ function Dashboard() {
       return [...prev, ...addedNotifs];
     });
 
-  }, [user.id, goals, tasks, appointments, transactions]);
+  }, [user.id, goals, tasks, appointments, transactions, rotinas]);
 
   const dismissNotification = (id: string) => {
     setNotifications((prev) => prev.filter(n => n.id !== id));
@@ -285,19 +300,25 @@ function Dashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
-        return <TabHome transactions={transactions} goals={goals} tasks={tasks} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
+        return <TabHome transactions={transactions} tasks={tasks} rotinas={rotinas} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
+      case 'agenda':
+        return <TabAgenda appointments={appointments} tasks={tasks} rotinas={rotinas} setTasks={setTasks} user={user} />;
+      case 'focus':
+        return <TabFocus tasks={tasks} setTasks={setTasks} user={user} onTabChange={setActiveTab} />;
+      case 'finance':
       case 'transactions':
-        return <TabTransactions transactions={transactions} setTransactions={setTransactions} user={user} />;
       case 'reports':
-        return <TabReports transactions={transactions} />;
+        return <TabFinance transactions={transactions} setTransactions={setTransactions} goals={goals} user={user} onTabChange={setActiveTab} />;
       case 'goals':
         return <TabGoals goals={goals} user={user} />;
       case 'tasks':
         return <TabTasks tasks={tasks} setTasks={setTasks} user={user} />;
       case 'chat':
         return <TabChat messages={chatMessages} setMessages={setChatMessages} transactions={transactions} tasks={tasks} setTasks={setTasks} onTabChange={setActiveTab} user={user} initialPrompt={initialChatPrompt} onPromptHandled={() => setInitialChatPrompt(null)} />;
+      case 'more':
+        return <TabMore user={user} onTabChange={setActiveTab} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} onToggleDarkMode={() => setIsDarkMode(!isDarkMode)} onLogout={handleLogout} isDarkMode={isDarkMode} />;
       default:
-        return <TabHome transactions={transactions} goals={goals} tasks={tasks} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
+        return <TabHome transactions={transactions} goals={goals} tasks={tasks} rotinas={rotinas} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
     }
   };
 

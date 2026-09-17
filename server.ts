@@ -216,6 +216,20 @@ const addTransactionTool: FunctionDeclaration = {
   }
 };
 
+const criarCompromissoRotinaTool: FunctionDeclaration = {
+  name: "criarCompromissoRotina",
+  description: "Adiciona um compromisso na agenda ou rotina diária do usuário. Use OBRIGATORIAMENTE para compromissos com horário exato, reuniões ou rotinas diárias fixas.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      titulo: { type: Type.STRING, description: "O título do compromisso ou rotina." },
+      data: { type: Type.STRING, description: "A data no formato YYYY-MM-DD (se aplicável, ou a data atual se for hoje)." },
+      horario: { type: Type.STRING, description: "O horário do compromisso (ex: '14:00')." }
+    },
+    required: ["titulo", "data", "horario"]
+  }
+};
+
 const GLOBAL_SYSTEM_PROMPT = `Você é o Mentor Focus, a inteligência artificial de alta performance do aplicativo Nexus. Seu papel é atuar como um mentor implacável, porém encorajador, focado em produtividade e disciplina. Suas regras: 1. Tom de voz direto, assertivo e maduro. 2. Use frases curtas e de impacto. 3. Evite excesso de emojis. 4. Ao falar de metas ou finanças, exija constância e chame o usuário para a responsabilidade. 5. Nunca se apresente como um modelo de linguagem, você é o Mentor Focus.`;
 
 const CANDIDATE_MODELS = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"];
@@ -738,7 +752,7 @@ Responda APENAS com o nome exato da categoria que melhor se encaixa, sem nenhuma
       let systemInstruction = `${GLOBAL_SYSTEM_PROMPT}
 
 Data e hora atual do sistema do usuário: ${currentDate || new Date().toISOString()}.
-Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento financeiro, chame as ferramentas necessárias (add_task, add_transaction, complete_task) e responda confirmando de forma direta e assertiva o que foi executado.`;
+Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário mencionar palavras como agenda, compromisso, reunião ou especificar um horário exato no dia (ex: às 14h), você deve OBRIGATORIAMENTE usar a ferramenta criarCompromissoRotina. Para lançamentos financeiros use add_transaction e para marcar tarefas como concluídas use complete_task. Responda confirmando de forma direta e assertiva o que foi executado.`;
 
       if (userAgeContext) {
         systemInstruction += `\nIMPORTANTE DE CONTEXTO DO USUÁRIO: ${userAgeContext} SINTETIZE a sua resposta filtrando os conselhos que julgar adequados especificamente para a faixa etária informada.`;
@@ -769,7 +783,7 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
           const model = genAI.getGenerativeModel({
             model: modelName,
             systemInstruction,
-            tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool] }] as any
+            tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }] as any
           });
 
           if (sanitizedHistory.length > 0) {
@@ -1199,7 +1213,7 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
         const ai = new GoogleGenAI({ apiKey });
         const systemInstruction = `${GLOBAL_SYSTEM_PROMPT}
 
-Sua missão no WhatsApp é entender o texto enviado pelo usuário (lançamento financeiro, receita, despesa, lembrete ou tarefa) e acionar as ferramentas de criação de dados (add_transaction, add_task, complete_task). Confirme de forma direta, clara e curta o que foi registrado no aplicativo Nexus.
+Sua missão no WhatsApp é entender o texto enviado pelo usuário. Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário mencionar palavras como agenda, compromisso, reunião ou especificar um horário exato no dia (ex: às 14h), você deve OBRIGATORIAMENTE usar a ferramenta criarCompromissoRotina. Para lançamentos financeiros use add_transaction e para marcar tarefas como concluídas use complete_task. Confirme de forma direta, clara e curta o que foi registrado no aplicativo Nexus.
 Data e hora atual: ${new Date().toISOString()}`;
 
         const response = await ai.models.generateContent({
@@ -1208,7 +1222,7 @@ Data e hora atual: ${new Date().toISOString()}`;
           config: {
             systemInstruction,
             temperature: 0.5,
-            tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool] }]
+            tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
           }
         });
 
@@ -1250,6 +1264,22 @@ Data e hora atual: ${new Date().toISOString()}`;
                 `Salvar tarefa ${newTaskId}`
               );
               console.log(`📋 [WhatsApp AI] Tarefa '${title}' criada para o usuário ${linkedUserId}.`);
+            } else if (call.name === "criarCompromissoRotina") {
+              const { titulo, data, horario } = call.args as any;
+              const newAgendaId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+              await withTimeout(
+                adminDb.collection("users").doc(linkedUserId).collection("rotinas").doc(newAgendaId).set({
+                  id: newAgendaId,
+                  title: titulo || "Compromisso WhatsApp",
+                  date: data || new Date().toISOString().split("T")[0],
+                  time: horario || "00:00",
+                  completed: false,
+                  createdAt: FieldValue.serverTimestamp()
+                }),
+                10000,
+                `Salvar compromisso ${newAgendaId}`
+              );
+              console.log(`📅 [WhatsApp AI] Compromisso '${titulo}' criado para o usuário ${linkedUserId}.`);
             } else if (call.name === "complete_task") {
               const { taskTitle } = call.args as any;
               const tasksSnap = await withTimeout(
@@ -1390,7 +1420,7 @@ Data e hora atual: ${new Date().toISOString()}`;
       const ai = new GoogleGenAI({ apiKey });
       const systemInstruction = `${GLOBAL_SYSTEM_PROMPT}
 
-Sua missão no WhatsApp é entender o texto enviado pelo usuário (lançamento financeiro, receita, despesa, lembrete ou tarefa) e acionar as ferramentas de criação de dados (add_transaction, add_task, complete_task). Confirme de forma direta, clara e curta o que foi registrado no aplicativo Nexus.
+Sua missão no WhatsApp é entender o texto enviado pelo usuário. Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário mencionar palavras como agenda, compromisso, reunião ou especificar um horário exato no dia (ex: às 14h), você deve OBRIGATORIAMENTE usar a ferramenta criarCompromissoRotina. Para lançamentos financeiros use add_transaction e para marcar tarefas como concluídas use complete_task. Confirme de forma direta, clara e curta o que foi registrado no aplicativo Nexus.
 Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
 
       const response = await ai.models.generateContent({
@@ -1399,7 +1429,7 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
         config: {
           systemInstruction,
           temperature: 0.5,
-          tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool] }]
+          tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
         }
       });
 
