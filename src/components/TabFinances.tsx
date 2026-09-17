@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Transaction, User, Goal } from '../types';
 import { db } from '../lib/firebase';
@@ -22,8 +22,7 @@ import {
   ShoppingCart, 
   Utensils, 
   Car, 
-  X,
-  Sparkles
+  X
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -61,8 +60,10 @@ export function TabFinances({
   user, 
   onTabChange 
 }: TabFinancesProps) {
+  // 1. Sincronização com Data Real do Sistema (new Date())
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState<boolean>(false);
   const [showBalance, setShowBalance] = useState(true);
-  const [selectedMonth] = useState('Abr 2026');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [localTransactions, setLocalTransactions] = useState<Transaction[]>([]);
 
@@ -71,50 +72,108 @@ export function TabFinances({
   const [newAmount, setNewAmount] = useState('');
   const [newType, setNewType] = useState<'income' | 'expense'>('expense');
   const [newCategory, setNewCategory] = useState('Alimentação');
+  const [newDate, setNewDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  // Formatar data para 'Mês AAAA' em pt-BR (ex: 'Set 2026') usando Intl.DateTimeFormat
+  const formatMonthYear = (date: Date) => {
+    const formatter = new Intl.DateTimeFormat('pt-BR', { month: 'short' });
+    const month = formatter.format(date).replace('.', '');
+    const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
+    const year = date.getFullYear();
+    return `${capitalizedMonth} ${year}`;
+  };
+
+  // Gerar opções de meses: últimos 3 meses, mês atual e próximos 3 meses
+  const monthOptions = useMemo(() => {
+    const options: Date[] = [];
+    const now = new Date();
+    for (let i = -3; i <= 3; i++) {
+      options.push(new Date(now.getFullYear(), now.getMonth() + i, 1));
+    }
+    return options;
+  }, []);
+
+  // Sincronizar campo de data da transação com o mês selecionado
+  useEffect(() => {
+    const today = new Date();
+    const isSameMonthAndYear = 
+      selectedDate.getFullYear() === today.getFullYear() && 
+      selectedDate.getMonth() === today.getMonth();
+
+    if (isSameMonthAndYear) {
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, '0');
+      const d = String(today.getDate()).padStart(2, '0');
+      setNewDate(`${y}-${m}-${d}`);
+    } else {
+      const y = selectedDate.getFullYear();
+      const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      setNewDate(`${y}-${m}-01`);
+    }
+  }, [selectedDate, isAddModalOpen]);
 
   // Format currency in BRL
   const formatCurrency = (val: number) => {
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
+  // Selected month key in YYYY-MM format
+  const selectedMonthKey = useMemo(() => {
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }, [selectedDate]);
+
   // Combine Firestore transactions with local newly added ones
   const allTransactions = useMemo(() => {
     return [...localTransactions, ...transactions];
   }, [localTransactions, transactions]);
 
-  // Financial metrics (Initialized at 0 clean state)
+  // Transactions filtered by selected month
+  const monthTransactions = useMemo(() => {
+    return allTransactions.filter(t => t.date && t.date.startsWith(selectedMonthKey));
+  }, [allTransactions, selectedMonthKey]);
+
+  // Financial metrics for selected month
   const totalIncome = useMemo(() => {
-    return allTransactions
+    return monthTransactions
       .filter(t => t.type === 'income')
       .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-  }, [allTransactions]);
+  }, [monthTransactions]);
 
   const totalExpense = useMemo(() => {
-    return allTransactions
+    return monthTransactions
       .filter(t => t.type === 'expense')
       .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-  }, [allTransactions]);
+  }, [monthTransactions]);
 
   const balance = totalIncome - totalExpense;
 
-  // Monthly Evolution Data for BarChart
+  // Monthly Evolution Data for BarChart (6 months leading up to selectedDate)
   const monthlyData = useMemo(() => {
-    const months = ['Nov', 'Dez', 'Jan', 'Fev', 'Mar', 'Abr'];
-    return months.map((m, idx) => {
-      // If transactions exist, calculate sum, else keep clean 0
-      const isCurrent = idx === months.length - 1;
-      const monthExpenses = isCurrent ? totalExpense : 0;
-      return {
-        month: m,
-        despesas: monthExpenses,
-        isCurrent
-      };
-    });
-  }, [totalExpense]);
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(selectedDate.getFullYear(), selectedDate.getMonth() - i, 1);
+      const mStr = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+      const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const monthName = mStr.charAt(0).toUpperCase() + mStr.slice(1);
+      
+      const monthExpense = allTransactions
+        .filter(t => t.type === 'expense' && t.date && t.date.startsWith(mKey))
+        .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
-  // Expenses grouped by category for Donut Chart
+      months.push({
+        month: monthName,
+        despesas: monthExpense,
+        isCurrent: i === 0
+      });
+    }
+    return months;
+  }, [allTransactions, selectedDate]);
+
+  // Expenses grouped by category for Donut Chart (for the selected month)
   const categoryData = useMemo(() => {
-    const expenses = allTransactions.filter(t => t.type === 'expense');
+    const expenses = monthTransactions.filter(t => t.type === 'expense');
     if (expenses.length === 0) return [];
 
     const map: Record<string, number> = {};
@@ -129,13 +188,15 @@ export function TabFinances({
       percent: Math.round((value / (totalExpense || 1)) * 100),
       color: CATEGORY_COLORS[name] || CATEGORY_COLORS['Outros']
     })).sort((a, b) => b.value - a.value);
-  }, [allTransactions, totalExpense]);
+  }, [monthTransactions, totalExpense]);
 
-  // Handle adding a new transaction
+  // Handle adding a new transaction using the selected or chosen date
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     const num = parseFloat(newAmount.replace(',', '.'));
     if (!newTitle.trim() || isNaN(num) || num <= 0) return;
+
+    const chosenDate = newDate || `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-01`;
 
     const newTx: Transaction = {
       id: `tx-${Date.now()}`,
@@ -143,10 +204,16 @@ export function TabFinances({
       amount: num,
       type: newType,
       category: newCategory,
-      date: new Date().toISOString().split('T')[0]
+      date: chosenDate
     };
 
     setLocalTransactions(prev => [newTx, ...prev]);
+
+    // Automatically align selectedDate with the newly added transaction's month if different
+    const [txYear, txMonth] = chosenDate.split('-');
+    if (txYear && txMonth) {
+      setSelectedDate(new Date(parseInt(txYear, 10), parseInt(txMonth, 10) - 1, 1));
+    }
 
     if (user?.id) {
       try {
@@ -270,22 +337,35 @@ export function TabFinances({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Categoria</label>
-                    <select
-                      value={newCategory}
-                      onChange={(e) => setNewCategory(e.target.value)}
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Data</label>
+                    <input
+                      type="date"
+                      required
+                      value={newDate}
+                      onChange={(e) => setNewDate(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="Alimentação">Alimentação</option>
-                      <option value="Transporte">Transporte</option>
-                      <option value="Mercado">Mercado</option>
-                      <option value="Lazer">Lazer</option>
-                      <option value="Educação">Educação</option>
-                      <option value="Saúde">Saúde</option>
-                      <option value="Salário">Salário</option>
-                      <option value="Outros">Outros</option>
-                    </select>
+                    />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Categoria</label>
+                  <select
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="Alimentação">Alimentação</option>
+                    <option value="Transporte">Transporte</option>
+                    <option value="Mercado">Mercado</option>
+                    <option value="Lazer">Lazer</option>
+                    <option value="Educação">Educação</option>
+                    <option value="Saúde">Saúde</option>
+                    <option value="Moradia">Moradia</option>
+                    <option value="Salário">Salário</option>
+                    <option value="Investimentos">Investimentos</option>
+                    <option value="Outros">Outros</option>
+                  </select>
                 </div>
 
                 <button
@@ -305,7 +385,7 @@ export function TabFinances({
       {/* ========================================================= */}
       <div className="block md:hidden space-y-4">
         
-        {/* Header & Month Selector */}
+        {/* Header & Dynamic Month Selector Dropdown */}
         <div className="flex items-center justify-between pt-1 pb-1">
           <div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">
@@ -317,11 +397,56 @@ export function TabFinances({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Month selector chip */}
-            <div className="glass-card px-3 py-1.5 flex items-center gap-1.5 shadow-sm text-xs font-bold text-slate-800 dark:text-slate-200">
-              <Calendar size={13} className="text-blue-500" />
-              <span>{selectedMonth}</span>
-              <ChevronDown size={13} className="text-slate-400" />
+            {/* Functional Month Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsMonthDropdownOpen(prev => !prev)}
+                className="glass-card px-3 py-1.5 flex items-center gap-1.5 shadow-sm text-xs font-bold text-slate-800 dark:text-slate-200 hover:scale-[1.02] active:scale-95 transition-all"
+                aria-label="Selecionar mês"
+              >
+                <Calendar size={13} className="text-blue-500" />
+                <span>{formatMonthYear(selectedDate)}</span>
+                <ChevronDown size={13} className={`text-slate-400 transition-transform ${isMonthDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Absolute Dropdown Menu */}
+              {isMonthDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setIsMonthDropdownOpen(false)} 
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-44 z-50 glass-card shadow-lg p-1.5 border border-white/80 dark:border-blue-500/30 rounded-2xl max-h-60 overflow-y-auto">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2.5 py-1">
+                      Selecionar Mês
+                    </div>
+                    {monthOptions.map((opt, idx) => {
+                      const isSelected = 
+                        opt.getFullYear() === selectedDate.getFullYear() && 
+                        opt.getMonth() === selectedDate.getMonth();
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDate(opt);
+                            setIsMonthDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? 'bg-blue-600 text-white font-bold shadow-[0_0_10px_rgba(59,130,246,0.5)]'
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 font-medium'
+                          }`}
+                        >
+                          <span>{formatMonthYear(opt)}</span>
+                          {isSelected && <span className="text-[10px]">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Quick Add Button */}
@@ -411,7 +536,7 @@ export function TabFinances({
             </h2>
             <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
               <ArrowUpRight size={12} />
-              <span>+12% vs. mar</span>
+              <span>+12% vs. mês ant.</span>
             </div>
           </div>
 
@@ -469,10 +594,10 @@ export function TabFinances({
                 <PieChartIcon size={20} />
               </div>
               <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Nenhum gasto registrado
+                Nenhum gasto em {formatMonthYear(selectedDate)}
               </p>
               <p className="text-[11px] text-slate-400 max-w-[200px] mt-0.5">
-                Adicione despesas para visualizar o gráfico de categorias.
+                Adicione despesas neste mês para visualizar o gráfico por categoria.
               </p>
             </div>
           ) : (
@@ -533,7 +658,7 @@ export function TabFinances({
         <div className="glass-card p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xs font-bold text-slate-900 dark:text-white">
-              Transações recentes
+              Transações ({formatMonthYear(selectedDate)})
             </h2>
             <button 
               onClick={() => onTabChange?.('transactions')}
@@ -543,16 +668,16 @@ export function TabFinances({
             </button>
           </div>
 
-          {allTransactions.length === 0 ? (
+          {monthTransactions.length === 0 ? (
             <div className="py-6 flex flex-col items-center justify-center text-center">
               <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 mb-2">
                 <Receipt size={18} />
               </div>
               <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                Nenhuma transação recente
+                Nenhuma transação em {formatMonthYear(selectedDate)}
               </p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Suas movimentações cadastradas aparecerão aqui.
+                Suas movimentações deste período aparecerão aqui.
               </p>
               <button 
                 onClick={() => setIsAddModalOpen(true)}
@@ -563,7 +688,7 @@ export function TabFinances({
             </div>
           ) : (
             <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
-              {allTransactions.slice(0, 4).map((t) => {
+              {monthTransactions.slice(0, 6).map((t) => {
                 const isIncome = t.type === 'income';
                 return (
                   <div key={t.id} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
@@ -674,7 +799,7 @@ export function TabFinances({
       {/* DESKTOP VIEW (Preserved from high-fidelity Desktop Overhaul) */}
       {/* ========================================================= */}
       <div className="hidden md:flex flex-col h-full gap-8">
-        {/* Header */}
+        {/* Desktop Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Finanças</h1>
@@ -683,6 +808,56 @@ export function TabFinances({
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Desktop Month Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsMonthDropdownOpen(prev => !prev)}
+                className="glass-card px-4 py-2 flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 hover:scale-[1.02] active:scale-95 transition-all shadow-sm"
+              >
+                <Calendar size={14} className="text-blue-500" />
+                <span>{formatMonthYear(selectedDate)}</span>
+                <ChevronDown size={14} className={`text-slate-400 transition-transform ${isMonthDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isMonthDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setIsMonthDropdownOpen(false)} 
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-48 z-50 glass-card shadow-lg p-1.5 border border-white/80 dark:border-blue-500/30 rounded-2xl max-h-60 overflow-y-auto">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2.5 py-1">
+                      Selecionar Mês
+                    </div>
+                    {monthOptions.map((opt, idx) => {
+                      const isSelected = 
+                        opt.getFullYear() === selectedDate.getFullYear() && 
+                        opt.getMonth() === selectedDate.getMonth();
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDate(opt);
+                            setIsMonthDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? 'bg-blue-600 text-white font-bold shadow-[0_0_10px_rgba(59,130,246,0.5)]'
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 font-medium'
+                          }`}
+                        >
+                          <span>{formatMonthYear(opt)}</span>
+                          {isSelected && <span className="text-[10px]">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
             <button 
               onClick={() => setIsAddModalOpen(true)}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-xs flex items-center gap-1.5 shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all active:scale-95"
@@ -695,7 +870,7 @@ export function TabFinances({
         {/* Top Cards (3 cols) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="glass-card p-6 relative overflow-hidden group">
-            <h2 className="font-bold text-sm text-slate-600 dark:text-slate-300 mb-2">Saldo disponível</h2>
+            <h2 className="font-bold text-sm text-slate-600 dark:text-slate-300 mb-2">Saldo ({formatMonthYear(selectedDate)})</h2>
             <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
               {formatCurrency(balance)}
             </h3>
@@ -776,11 +951,11 @@ export function TabFinances({
           {/* Donut Chart */}
           <div className="glass-card p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-sm text-slate-900 dark:text-white">Gastos por categoria</h2>
+              <h2 className="font-bold text-sm text-slate-900 dark:text-white">Gastos por categoria ({formatMonthYear(selectedDate)})</h2>
             </div>
             {categoryData.length === 0 ? (
               <div className="h-48 flex flex-col items-center justify-center text-center">
-                <p className="text-xs font-semibold text-slate-500">Nenhuma despesa para exibir no momento.</p>
+                <p className="text-xs font-semibold text-slate-500">Nenhuma despesa para exibir no mês de {formatMonthYear(selectedDate)}.</p>
               </div>
             ) : (
               <div className="flex items-center justify-between gap-6 h-48">
