@@ -22,7 +22,9 @@ import {
   CircleDot,
   Circle,
   Pin,
-  Trash2
+  Trash2,
+  ArrowDownRight,
+  Minus
 } from 'lucide-react';
 import { BalanceStatementModal } from './BalanceStatementModal';
 import { NotificationsModal } from './NotificationsModal';
@@ -121,6 +123,32 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const balance = totalIncome - totalExpense;
+
+  // Cálculo MoM para Saldo
+  const balanceMoM = useMemo(() => {
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
+    const curTx = transactions.filter(t => t.date && t.date.startsWith(currentMonthKey));
+    const prvTx = transactions.filter(t => t.date && t.date.startsWith(prevMonthKey));
+
+    const curInc = curTx.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
+    const curExp = curTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+    const curBal = curInc - curExp;
+
+    const prvInc = prvTx.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
+    const prvExp = prvTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+    const prvBal = prvInc - prvExp;
+
+    if (prvBal === 0) {
+      if (curBal > 0) return 100;
+      if (curBal < 0) return -100;
+      return 0;
+    }
+    return Math.round(((curBal - prvBal) / Math.abs(prvBal)) * 100);
+  }, [transactions]);
 
   const pendingTasks = tasks.filter(t => !t.completed).length;
   const completedTasks = tasks.filter(t => t.completed).length;
@@ -583,9 +611,32 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
             </div>
             <div className="relative z-10">
               <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">R$ {balance.toFixed(2).replace('.', ',')}</h3>
-              <div className="flex items-center gap-1 mt-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 w-max px-2.5 py-1 rounded-lg">
-                <ArrowUpRight size={14} />
-                <span>12% este mês</span>
+              <div className="mt-2">
+                {(() => {
+                  const abs = Math.abs(balanceMoM);
+                  if (balanceMoM === 0) {
+                    return (
+                      <div className="flex items-center gap-1 text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-500/10 border border-slate-500/20 w-max px-2.5 py-1 rounded-lg">
+                        <Minus size={13} strokeWidth={2.5} />
+                        <span>0%</span>
+                      </div>
+                    );
+                  }
+                  if (balanceMoM > 0) {
+                    return (
+                      <div className="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 w-max px-2.5 py-1 rounded-lg">
+                        <ArrowUpRight size={13} strokeWidth={2.5} />
+                        <span>{abs}%</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="flex items-center gap-1 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/20 w-max px-2.5 py-1 rounded-lg">
+                      <ArrowDownRight size={13} strokeWidth={2.5} />
+                      <span>{abs}%</span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
             

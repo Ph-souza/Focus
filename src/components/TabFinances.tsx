@@ -22,7 +22,8 @@ import {
   ShoppingCart, 
   Utensils, 
   Car, 
-  X
+  X,
+  Minus
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -148,6 +149,133 @@ export function TabFinances({
   }, [monthTransactions]);
 
   const balance = totalIncome - totalExpense;
+
+  // Previous month key in YYYY-MM format
+  const previousMonthKey = useMemo(() => {
+    const prevDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1);
+    const y = prevDate.getFullYear();
+    const m = String(prevDate.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }, [selectedDate]);
+
+  // Transactions filtered by previous month
+  const previousMonthTransactions = useMemo(() => {
+    return allTransactions.filter(t => t.date && t.date.startsWith(previousMonthKey));
+  }, [allTransactions, previousMonthKey]);
+
+  // Financial metrics for previous month
+  const previousTotalIncome = useMemo(() => {
+    return previousMonthTransactions
+      .filter(t => t.type === 'income')
+      .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  }, [previousMonthTransactions]);
+
+  const previousTotalExpense = useMemo(() => {
+    return previousMonthTransactions
+      .filter(t => t.type === 'expense')
+      .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  }, [previousMonthTransactions]);
+
+  const previousBalance = previousTotalIncome - previousTotalExpense;
+
+  // 1. O Cálculo Base MoM (Variação Percentual) com tratamento de divisão por zero
+  const calculateMoM = (current: number, previous: number): number => {
+    if (previous === 0) {
+      if (current > 0) return 100;
+      if (current < 0) return -100;
+      return 0;
+    }
+    return Math.round(((current - previous) / Math.abs(previous)) * 100);
+  };
+
+  const incomeMoM = useMemo(() => calculateMoM(totalIncome, previousTotalIncome), [totalIncome, previousTotalIncome]);
+  const expenseMoM = useMemo(() => calculateMoM(totalExpense, previousTotalExpense), [totalExpense, previousTotalExpense]);
+  const balanceMoM = useMemo(() => calculateMoM(balance, previousBalance), [balance, previousBalance]);
+
+  // 2 & 3. Regras de Cor, Ícone e Formatação MoM
+  const renderMoMBadge = (percent: number, type: 'income' | 'expense' | 'balance', customClass = '') => {
+    const abs = Math.abs(percent);
+
+    if (percent === 0) {
+      return (
+        <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border w-max text-slate-500 dark:text-slate-400 bg-slate-500/10 border-slate-500/20 ${customClass}`}>
+          <Minus size={13} strokeWidth={2.5} />
+          <span>0%</span>
+        </div>
+      );
+    }
+
+    if (percent > 0) {
+      // Despesas: Crescimento é negativo (gastar mais) -> Vermelho com seta para cima
+      if (type === 'expense') {
+        return (
+          <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border w-max text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20 ${customClass}`}>
+            <ArrowUpRight size={13} strokeWidth={2.5} />
+            <span>{abs}%</span>
+          </div>
+        );
+      }
+      // Receitas e Saldo: Crescimento é positivo -> Verde com seta para cima
+      return (
+        <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border w-max text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20 ${customClass}`}>
+          <ArrowUpRight size={13} strokeWidth={2.5} />
+          <span>{abs}%</span>
+        </div>
+      );
+    }
+
+    // Queda (< 0): Seta para baixo
+    // Despesas: Queda é positivo (gastar menos) -> Verde com seta para baixo
+    if (type === 'expense') {
+      return (
+        <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border w-max text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20 ${customClass}`}>
+          <ArrowDownRight size={13} strokeWidth={2.5} />
+          <span>{abs}%</span>
+        </div>
+      );
+    }
+
+    // Receitas e Saldo: Queda é negativo -> Vermelho com seta para baixo
+    return (
+      <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border w-max text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20 ${customClass}`}>
+        <ArrowDownRight size={13} strokeWidth={2.5} />
+        <span>{abs}%</span>
+      </div>
+    );
+  };
+
+  const renderCompactMoMBadge = (percent: number, type: 'income' | 'expense' | 'balance') => {
+    const abs = Math.abs(percent);
+
+    if (percent === 0) {
+      return (
+        <span className="flex items-center gap-0.5 text-[10px] font-bold text-slate-400">
+          <Minus size={10} strokeWidth={2.5} />
+          <span>0%</span>
+        </span>
+      );
+    }
+
+    if (percent > 0) {
+      const isGood = type !== 'expense';
+      const color = isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
+      return (
+        <span className={`flex items-center gap-0.5 text-[10px] font-bold ${color}`}>
+          <ArrowUpRight size={11} strokeWidth={2.5} />
+          <span>{abs}%</span>
+        </span>
+      );
+    }
+
+    const isGood = type === 'expense';
+    const color = isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
+    return (
+      <span className={`flex items-center gap-0.5 text-[10px] font-bold ${color}`}>
+        <ArrowDownRight size={11} strokeWidth={2.5} />
+        <span>{abs}%</span>
+      </span>
+    );
+  };
 
   // Monthly Evolution Data for BarChart (6 months leading up to selectedDate)
   const monthlyData = useMemo(() => {
@@ -480,6 +608,9 @@ export function TabFinances({
               <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                 {showBalance ? formatCurrency(balance) : '••••••'}
               </h3>
+              <div className="mt-2">
+                {renderMoMBadge(balanceMoM, 'balance')}
+              </div>
             </div>
 
             {/* Mini Sparkline Bar Chart */}
@@ -501,10 +632,13 @@ export function TabFinances({
               <div className="w-7 h-7 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                 <ArrowUp size={14} className="stroke-[2.5]" />
               </div>
-              <div className="overflow-hidden">
-                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">
-                  Receitas
-                </span>
+              <div className="overflow-hidden flex-1">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">
+                    Receitas
+                  </span>
+                  {renderCompactMoMBadge(incomeMoM, 'income')}
+                </div>
                 <span className="text-xs font-bold text-slate-900 dark:text-white block leading-tight mt-0.5 truncate">
                   {showBalance ? formatCurrency(totalIncome) : '••••'}
                 </span>
@@ -516,10 +650,13 @@ export function TabFinances({
               <div className="w-7 h-7 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
                 <ArrowDown size={14} className="stroke-[2.5]" />
               </div>
-              <div className="overflow-hidden">
-                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">
-                  Despesas
-                </span>
+              <div className="overflow-hidden flex-1">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">
+                    Despesas
+                  </span>
+                  {renderCompactMoMBadge(expenseMoM, 'expense')}
+                </div>
                 <span className="text-xs font-bold text-slate-900 dark:text-white block leading-tight mt-0.5 truncate">
                   {showBalance ? formatCurrency(totalExpense) : '••••'}
                 </span>
@@ -534,10 +671,7 @@ export function TabFinances({
             <h2 className="text-xs font-bold text-slate-900 dark:text-white">
               Evolução mensal
             </h2>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-              <ArrowUpRight size={12} />
-              <span>+12% vs. mês ant.</span>
-            </div>
+            {renderMoMBadge(expenseMoM, 'expense')}
           </div>
 
           <div className="w-full h-36 min-w-0">
@@ -874,10 +1008,7 @@ export function TabFinances({
             <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
               {formatCurrency(balance)}
             </h3>
-            <div className="flex items-center gap-1 mt-4 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 w-max px-2.5 py-1 rounded-lg">
-              <ArrowUpRight size={14} />
-              <span>12% este mês</span>
-            </div>
+            {renderMoMBadge(balanceMoM, 'balance', 'mt-4')}
           </div>
 
           <div className="glass-card p-6 relative overflow-hidden">
@@ -890,9 +1021,7 @@ export function TabFinances({
             <h3 className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
               {formatCurrency(totalIncome)}
             </h3>
-            <div className="flex items-center gap-1 mt-4 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-              <TrendingUp size={14} /> 8%
-            </div>
+            {renderMoMBadge(incomeMoM, 'income', 'mt-4')}
           </div>
 
           <div className="glass-card p-6 relative overflow-hidden">
@@ -905,9 +1034,7 @@ export function TabFinances({
             <h3 className="text-3xl font-black text-rose-600 dark:text-rose-400 tracking-tight">
               {formatCurrency(totalExpense)}
             </h3>
-            <div className="flex items-center gap-1 mt-4 text-xs font-bold text-rose-600 dark:text-rose-400">
-              <TrendingUp size={14} className="transform rotate-180" /> 5%
-            </div>
+            {renderMoMBadge(expenseMoM, 'expense', 'mt-4')}
           </div>
         </div>
 
