@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { User } from '../types';
-import { FolderKanban, Target, StickyNote, LineChart, Bot, MessageCircle, LogOut, Moon, Sun, Lock, HelpCircle } from 'lucide-react';
+import { FolderKanban, Target, StickyNote, LineChart, Bot, MessageCircle, LogOut, Moon, Sun, Lock, HelpCircle, ChevronRight, User as UserIcon } from 'lucide-react';
 
 interface TabMoreProps {
   user: User | null;
@@ -24,7 +24,7 @@ export function TabMore({ user, onTabChange, onOpenProfile, onOpenWhatsApp, onTo
   ];
 
   const conta = [
-    { id: 'profile', name: 'Perfil', desc: 'Gerencie seus dados', icon: <User size={20} />, action: onOpenProfile },
+    { id: 'profile', name: 'Perfil', desc: 'Gerencie seus dados', icon: <UserIcon size={20} />, action: onOpenProfile },
     { id: 'theme', name: 'Aparência', desc: 'Tema, cores e personalização', icon: isDarkMode ? <Sun size={20} /> : <Moon size={20} />, action: onToggleDarkMode },
     { id: 'privacy', name: 'Privacidade', desc: 'Seus dados em segurança', icon: <Lock size={20} />, action: () => {} },
     { id: 'help', name: 'Ajuda', desc: 'Central de suporte', icon: <HelpCircle size={20} />, action: () => {} },
@@ -110,5 +110,4 @@ export function TabMore({ user, onTabChange, onOpenProfile, onOpenWhatsApp, onTo
   );
 }
 
-// Inline dummy component to fix import locally if needed, but normally use lucide-react
-import { ChevronRight } from 'lucide-react';
+
