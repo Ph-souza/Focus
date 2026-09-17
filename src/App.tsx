@@ -28,11 +28,35 @@ import { TermsOfUse } from './components/TermsOfUse';
 function Dashboard() {
   const { currentUser, logout } = useAuth();
 
+  const [userProfile, setUserProfile] = useState<{
+    name?: string;
+    dateOfBirth?: string;
+    photoURL?: string;
+  }>({});
+
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    const unsub = onSnapshot(doc(db, 'users', currentUser.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setUserProfile({
+          name: data.name,
+          dateOfBirth: data.dateOfBirth,
+          photoURL: data.photoURL
+        });
+      }
+    }, (error) => {
+      console.warn('Notice user profile snapshot error:', error);
+    });
+    return () => unsub();
+  }, [currentUser?.uid]);
+
   const user: User = {
     id: currentUser?.uid || '',
-    name: currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Usuário',
+    name: userProfile.name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Usuário',
     email: currentUser?.email || '',
-    photoURL: currentUser?.photoURL || undefined,
+    photoURL: userProfile.photoURL || currentUser?.photoURL || undefined,
+    dateOfBirth: userProfile.dateOfBirth || '',
     isDemo: false
   };
 

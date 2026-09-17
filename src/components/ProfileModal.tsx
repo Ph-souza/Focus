@@ -30,21 +30,41 @@ export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, 
     e.preventDefault();
     if (!name.trim()) return;
 
+    if (!user?.id) {
+      alert('Erro: Usuário não autenticado.');
+      return;
+    }
+
     setIsSaving(true);
     
-    // Fire and forget to allow optimistic UI update without hanging if offline
-    setDoc(doc(db, 'users', user.id), {
-      name,
-      dateOfBirth
-    }, { merge: true }).catch(err => {
-      console.error("Delayed save error", err);
-    });
+    try {
+      const cleanDate = (dateOfBirth || '').trim();
+      console.log('[ProfileModal] Salvando perfil:', {
+        userId: user.id,
+        name: name.trim(),
+        email: user.email,
+        dateOfBirth: cleanDate
+      });
 
-    // Assume success for UI
-    setTimeout(() => {
+      // Validação de formato da data caso preenchida (YYYY-MM-DD)
+      if (cleanDate && !/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+        throw new Error('Formato de data inválido. Use AAAA-MM-DD.');
+      }
+
+      await setDoc(doc(db, 'users', user.id), {
+        name: name.trim(),
+        email: user.email || '',
+        dateOfBirth: cleanDate
+      }, { merge: true });
+
+      console.log('[ProfileModal] Perfil atualizado com sucesso no Firestore.');
       setIsSaving(false);
       onClose();
-    }, 400); // slight delay for visual feedback
+    } catch (error: any) {
+      console.error('[ProfileModal] Erro ao salvar data/perfil no Firestore:', error);
+      setIsSaving(false);
+      alert('Erro ao salvar data: ' + (error?.message || error));
+    }
   };
 
   return (

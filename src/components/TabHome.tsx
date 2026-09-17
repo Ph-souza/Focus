@@ -8,6 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TaskProgressWidget } from './TaskProgressWidget';
 import { BalanceStatementModal } from './BalanceStatementModal';
 import { NotificationsModal } from './NotificationsModal';
+import { getApiUrl } from '../lib/api';
 
 const FINANCIAL_TIPS = [
   "Pague a si mesmo primeiro: reserve uma parte do que ganha assim que receber, antes de pagar as contas.",
@@ -59,25 +60,32 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
     if (!user) return;
     setIsConnectingWhatsApp(true);
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || '';
-      const response = await fetch(`${baseUrl}/api/whatsapp/generate-token`, {
+      const endpoint = getApiUrl('/api/whatsapp/generate-token');
+      console.log('[WhatsApp] Solicitando token em:', endpoint);
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })
       });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || `Falha na requisição (Status HTTP ${response.status})`);
+      }
+
       const data = await response.json();
       if (data.success && data.token) {
-        const botNumber = '5511998765432'; // Número do bot (usando o placeholder do projeto)
+        const botNumber = '5511998765432'; // Número do bot (placeholder do projeto)
         const message = `Quero ativar meu Mentor Nexus. Meu código é: ${data.token}`;
         const url = `https://wa.me/${botNumber}?text=${encodeURIComponent(message)}`;
         window.open(url, '_blank');
       } else {
-        console.error("Erro ao gerar token:", data.error);
-        alert("Não foi possível gerar o código de conexão. Tente novamente.");
+        throw new Error(data.error || 'Não foi possível obter o token de conexão.');
       }
-    } catch (error) {
-      console.error("Erro na requisição:", error);
-      alert("Erro de conexão. Verifique sua internet.");
+    } catch (error: any) {
+      console.error("Erro na requisição da API de WhatsApp:", error);
+      alert('Erro na API: ' + (error?.message || error));
     } finally {
       setIsConnectingWhatsApp(false);
     }

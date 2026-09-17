@@ -302,13 +302,13 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
-  app.use(cors());
+  app.use(cors({ origin: true, credentials: true }));
   app.use(express.json({ limit: '10mb' }));
 
   // =========================================================================
   // Rota Mercado Pago: Guest Checkout Binding Webhook
   // =========================================================================
-  
+
   // Endpoint de diagnóstico e status do Webhook (GET)
   app.get("/api/webhooks/mercadopago", (req, res) => {
     res.status(200).json({
@@ -619,7 +619,7 @@ async function startServer() {
 
   app.post("/api/notifications/send", async (req, res) => {
     const { title, body, url } = req.body;
-    
+
     const notificationPayload = JSON.stringify({
       title,
       body,
@@ -643,7 +643,7 @@ async function startServer() {
   app.post("/api/categorize", async (req, res) => {
     try {
       const { title, type } = req.body;
-      
+
       if (!title) {
         return res.status(400).json({ error: "No title provided" });
       }
@@ -654,12 +654,12 @@ async function startServer() {
       }
 
       const ai = new GoogleGenAI({ apiKey });
-      
+
       const incomeCategories = ['Salário', 'Investimento', 'Venda', 'Outros'];
       const expenseCategories = ['Alimentação', 'Transporte', 'Saúde', 'Moradia', 'Lazer', 'Serviços', 'Mercado', 'Outros'];
-      
+
       const categories = type === 'income' ? incomeCategories : expenseCategories;
-      
+
       const prompt = `Classifique a seguinte transação: "${title}".
 Tipo da transação: ${type === 'income' ? 'Receita' : 'Despesa'}.
 Categorias disponíveis: ${categories.join(', ')}.
@@ -743,7 +743,7 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
       if (userAgeContext) {
         systemInstruction += `\nIMPORTANTE DE CONTEXTO DO USUÁRIO: ${userAgeContext} SINTETIZE a sua resposta filtrando os conselhos que julgar adequados especificamente para a faixa etária informada.`;
       }
-      
+
       if (userDataContext) {
         systemInstruction += `\n\n${userDataContext}`;
       }
@@ -829,7 +829,7 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
         replyText = "Foco mantido. Prossiga para o próximo passo.";
       }
 
-      return res.json({ 
+      return res.json({
         text: replyText,
         feedback: replyText,
         reply: replyText,
@@ -837,7 +837,7 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
       });
     } catch (error: any) {
       console.error('Erro na Rota Chat:', error);
-      
+
       const errorMessage = error?.message || "";
       if (errorMessage.includes("leaked") || errorMessage.includes("403")) {
         return res.json({ text: "Minha API Key do Gemini foi reportada como vazada/inválida. Por favor, acesse as configurações do aplicativo e atualize sua GEMINI_API_KEY." });
@@ -862,7 +862,7 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
 
       if (!apiKey) {
         console.error("❌ [API /api/mentor/feedback] Erro: GEMINI_API_KEY (ou VITE_GEMINI_API_KEY) não encontrada nas variáveis de ambiente (.env).");
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: "GEMINI_API_KEY não configurada no servidor. Verifique seu arquivo .env.",
           code: "MISSING_API_KEY"
         });
@@ -896,8 +896,8 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
     } catch (error: any) {
       console.error('Erro na Rota Mentor Feedback:', error);
 
-      return res.status(500).json({ 
-        error: "Falha ao gerar feedback do Mentor Focus via Gemini.", 
+      return res.status(500).json({
+        error: "Falha ao gerar feedback do Mentor Focus via Gemini.",
         details: error?.message || "Internal Server Error"
       });
     }
@@ -1012,14 +1012,14 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
-    
+
     const configuredToken = process.env.META_WEBHOOK_VERIFY_TOKEN || process.env.META_WEBHOOK_VERIFY_TOKEN_TEST || "nexus_flow_whatsapp_secure_focus_5263";
-    
+
     if (mode === "subscribe" && (token === configuredToken || token === process.env.META_WEBHOOK_VERIFY_TOKEN_TEST || token === "nexus_flow_whatsapp_secure_focus_5263")) {
       console.log("Meta WhatsApp Webhook verificado com sucesso!");
       return res.status(200).send(challenge);
     }
-    
+
     return res.sendStatus(403);
   });
 
@@ -1127,7 +1127,7 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
                 console.log(`8. Enviando mensagem de confirmação de ativação para [${from}] via Meta API...`);
                 await sendWhatsAppTextMessage(
                   from,
-                  "Conexão estabelecida com sucesso! O Mentor Nexus Flow está ativo e pronto para organizar sua rotina.",
+                  "Conexão estabelecida com sucesso! O Mentor Focus está ativo e pronto para organizar sua rotina.",
                   phoneId,
                   uId,
                   true // skipWindowCheck já que acabou de ativar
@@ -1367,7 +1367,7 @@ Data e hora atual: ${new Date().toISOString()}`;
 
               return res.json({
                 success: true,
-                reply: "Conexão estabelecida com sucesso! O Mentor Nexus Flow está ativo e pronto para organizar sua rotina.",
+                reply: "Conexão estabelecida com sucesso! O Mentor Focus está ativo e pronto para organizar sua rotina.",
                 sender: from,
                 timestamp: new Date().toISOString()
               });
