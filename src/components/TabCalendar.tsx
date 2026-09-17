@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Rotina, User } from '../types';
 import { db } from '../lib/firebase';
-import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { 
   Plus, 
   ChevronLeft, 
@@ -13,7 +13,8 @@ import {
   User as UserIcon, 
   GraduationCap, 
   Clock, 
-  X 
+  X,
+  Trash2 
 } from 'lucide-react';
 
 interface TabCalendarProps {
@@ -31,11 +32,117 @@ interface ActivityItem {
   date?: string;
 }
 
+/**
+ * Swipeable Activity Card for Mobile
+ * Implements fluid Drag-to-Delete with visual red background feedback and resilient snapping.
+ */
+function SwipeableActivityCard({
+  activity,
+  badge,
+  onToggleComplete,
+  onDelete
+}: {
+  activity: ActivityItem;
+  badge: { icon: React.ReactNode; classes: string };
+  onToggleComplete: (id: string, currentVal: boolean) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const triggerDelete = () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
+    setTimeout(() => {
+      onDelete(activity.id);
+    }, 220);
+  };
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 1, scale: 1 }}
+      animate={isDeleting ? { opacity: 0, x: -250, height: 0, marginBottom: 0, transition: { duration: 0.22, ease: 'easeInOut' } } : { opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, x: -250, height: 0, marginBottom: 0, transition: { duration: 0.22, ease: 'easeInOut' } }}
+      className="flex-1 relative overflow-hidden rounded-2xl"
+    >
+      {/* Background Revealed Action: Red area with Trash icon */}
+      <div 
+        onClick={triggerDelete}
+        className="absolute inset-0 bg-rose-500/95 dark:bg-rose-600/95 rounded-2xl flex items-center justify-end pr-4 text-white cursor-pointer active:bg-rose-700 transition-colors shadow-inner"
+        aria-label="Apagar atividade"
+      >
+        <div className="flex items-center gap-1.5 font-bold text-xs text-white">
+          <Trash2 size={16} />
+          <span>Apagar</span>
+        </div>
+      </div>
+
+      {/* Foreground Draggable Glass Card */}
+      <motion.div
+        drag="x"
+        dragDirectionLock
+        dragConstraints={{ left: -100, right: 0 }}
+        dragElastic={0.12}
+        dragTransition={{ bounceStiffness: 600, bounceDamping: 25 }}
+        onDragEnd={(_, info) => {
+          // If swiped left beyond 70px or flicked with negative velocity, trigger deletion!
+          if (info.offset.x < -70 || info.velocity.x < -300) {
+            triggerDelete();
+          }
+        }}
+        className="glass-card p-3 flex items-center justify-between gap-2.5 shadow-sm relative z-10 select-none touch-pan-y cursor-grab active:cursor-grabbing bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl"
+        whileDrag={{ scale: 0.99 }}
+      >
+        <div className="flex-1 min-w-0 pr-1 pointer-events-none">
+          <h3 className={`text-xs font-bold truncate transition-colors ${
+            activity.completed 
+              ? 'line-through text-slate-400 dark:text-slate-500' 
+              : 'text-slate-900 dark:text-white'
+          }`}>
+            {activity.title}
+          </h3>
+          {activity.subtitle && (
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+              {activity.subtitle}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Category Tag Pill */}
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 border ${badge.classes}`}>
+            {badge.icon}
+            {activity.category}
+          </span>
+
+          {/* Checkbox Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleComplete(activity.id, activity.completed);
+            }}
+            className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+              activity.completed
+                ? 'bg-blue-600 text-white shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                : 'border-2 border-slate-300 dark:border-slate-600 hover:border-blue-500'
+            }`}
+            aria-label={activity.completed ? 'Marcar como pendente' : 'Marcar como concluída'}
+          >
+            {activity.completed && <Check size={12} strokeWidth={3} />}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const [filter, setFilter] = useState<'Todos' | 'Trabalho' | 'Pessoal' | 'Estudos'>('Todos');
   const [localStatuses, setLocalStatuses] = useState<Record<string, boolean>>({});
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newSubtitle, setNewSubtitle] = useState('');
@@ -79,10 +186,10 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
     { id: 'mock-5', time: '18:30', title: 'Leitura', subtitle: 'Ler 30 minutos', category: 'Pessoal', completed: false },
   ], []);
 
-  // Merge Firestore rotinas for selected date with newly added local activities
+  // Merge Firestore rotinas for selected date with newly added local activities, excluding deleted ones
   const dayActivities: ActivityItem[] = useMemo(() => {
     const firestoreItems = rotinas
-      .filter(r => r.date === selectedDateStr)
+      .filter(r => r.date === selectedDateStr && !deletedIds.includes(r.id))
       .map(r => ({
         id: r.id,
         time: r.time || '09:00',
@@ -93,20 +200,23 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
         date: r.date
       }));
 
-    const addedLocalItems = localCreatedActivities.filter(a => a.date === selectedDateStr);
+    const addedLocalItems = localCreatedActivities
+      .filter(a => a.date === selectedDateStr && !deletedIds.includes(a.id));
 
     const combined = [...firestoreItems, ...addedLocalItems];
 
     if (combined.length === 0) {
-      // Return default activities with local toggle overrides
-      return defaultMockActivities.map(item => ({
-        ...item,
-        completed: localStatuses[item.id] !== undefined ? localStatuses[item.id] : item.completed
-      }));
+      // Return non-deleted default activities with local toggle overrides
+      return defaultMockActivities
+        .filter(item => !deletedIds.includes(item.id))
+        .map(item => ({
+          ...item,
+          completed: localStatuses[item.id] !== undefined ? localStatuses[item.id] : item.completed
+        }));
     }
 
     return combined.sort((a, b) => a.time.localeCompare(b.time));
-  }, [rotinas, selectedDateStr, localCreatedActivities, localStatuses, defaultMockActivities]);
+  }, [rotinas, selectedDateStr, localCreatedActivities, localStatuses, defaultMockActivities, deletedIds]);
 
   // Filter activities by active category pill
   const filteredActivities = useMemo(() => {
@@ -133,6 +243,19 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
         });
       } catch (err) {
         console.error('Error updating routine status in Firestore:', err);
+      }
+    }
+  };
+
+  // Delete activity handler (from Swipe to Delete or click)
+  const handleDeleteActivity = async (id: string) => {
+    setDeletedIds(prev => [...prev, id]);
+
+    if (user?.id && !id.startsWith('mock-')) {
+      try {
+        await deleteDoc(doc(db, 'users', user.id, 'rotinas', id));
+      } catch (err) {
+        console.error('Error deleting routine from Firestore:', err);
       }
     }
   };
@@ -461,7 +584,7 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
           </button>
         </div>
 
-        {/* Timeline Activities List */}
+        {/* Timeline Activities List with Swipe to Delete */}
         <div className="space-y-3 pt-1 pb-4">
           {filteredActivities.length === 0 ? (
             <div className="glass-card p-6 text-center">
@@ -471,65 +594,40 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
             </div>
           ) : (
             <div className="flex flex-col gap-3 relative">
-              {filteredActivities.map((activity) => {
-                const badge = getCategoryBadge(activity.category);
-                return (
-                  <div key={activity.id} className="flex items-center gap-2 relative">
-                    {/* Time Column */}
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 w-11 shrink-0 text-right pr-1">
-                      {activity.time}
-                    </span>
+              <AnimatePresence mode="popLayout">
+                {filteredActivities.map((activity) => {
+                  const badge = getCategoryBadge(activity.category);
+                  return (
+                    <motion.div
+                      layout
+                      key={activity.id}
+                      className="flex items-center gap-2 relative"
+                    >
+                      {/* Time Column */}
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 w-11 shrink-0 text-right pr-1">
+                        {activity.time}
+                      </span>
 
-                    {/* Timeline Node */}
-                    <div className="relative flex flex-col items-center justify-center shrink-0 w-3.5">
-                      <div className={`w-2.5 h-2.5 rounded-full transition-all ${
-                        activity.completed
-                          ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]'
-                          : 'border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900'
-                      }`} />
-                    </div>
-
-                    {/* Activity Card */}
-                    <div className="flex-1 glass-card p-3 flex items-center justify-between gap-2.5 shadow-sm hover:scale-[1.01] transition-all">
-                      <div className="flex-1 min-w-0 pr-1">
-                        <h3 className={`text-xs font-bold truncate transition-colors ${
-                          activity.completed 
-                            ? 'line-through text-slate-400 dark:text-slate-500' 
-                            : 'text-slate-900 dark:text-white'
-                        }`}>
-                          {activity.title}
-                        </h3>
-                        {activity.subtitle && (
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                            {activity.subtitle}
-                          </p>
-                        )}
+                      {/* Timeline Node */}
+                      <div className="relative flex flex-col items-center justify-center shrink-0 w-3.5">
+                        <div className={`w-2.5 h-2.5 rounded-full transition-all ${
+                          activity.completed
+                            ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]'
+                            : 'border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900'
+                        }`} />
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Category Tag Pill */}
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 border ${badge.classes}`}>
-                          {badge.icon}
-                          {activity.category}
-                        </span>
-
-                        {/* Checkbox Button */}
-                        <button
-                          onClick={() => handleToggleComplete(activity.id, activity.completed)}
-                          className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
-                            activity.completed
-                              ? 'bg-blue-600 text-white shadow-[0_0_8px_rgba(59,130,246,0.6)]'
-                              : 'border-2 border-slate-300 dark:border-slate-600 hover:border-blue-500'
-                          }`}
-                          aria-label={activity.completed ? 'Marcar como pendente' : 'Marcar como concluída'}
-                        >
-                          {activity.completed && <Check size={12} strokeWidth={3} />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                      {/* Swipeable Activity Card */}
+                      <SwipeableActivityCard
+                        activity={activity}
+                        badge={badge}
+                        onToggleComplete={handleToggleComplete}
+                        onDelete={handleDeleteActivity}
+                      />
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
             </div>
           )}
         </div>
@@ -569,7 +667,7 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
                 >
                   <ChevronLeft size={16}/>
                 </button>
-                <span className="font-bold text-sm text-slate-900 dark:text-white">
+                <span className="font-bold text-sm text-slate-900 dark:text-white capitalize">
                   {selectedDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                 </span>
                 <button 
@@ -638,35 +736,48 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
               </div>
 
               <div className="flex flex-col gap-2.5">
-                {filteredActivities.map((task) => (
-                  <div key={task.id} className={`flex items-center gap-4 p-4 rounded-2xl transition-colors group ${
-                    task.completed 
-                      ? 'bg-slate-100/40 dark:bg-slate-900/30 opacity-70' 
-                      : 'bg-white/50 dark:bg-slate-900/40 hover:bg-white/80 dark:hover:bg-blue-950/30 border border-slate-200/50 dark:border-blue-500/15 shadow-sm hover:border-blue-500/30'
-                  }`}>
-                    <button 
-                      onClick={() => handleToggleComplete(task.id, task.completed)}
-                      className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                <AnimatePresence mode="popLayout">
+                  {filteredActivities.map((task) => (
+                    <motion.div 
+                      layout
+                      key={task.id} 
+                      className={`flex items-center gap-4 p-4 rounded-2xl transition-colors group ${
                         task.completed 
-                          ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' 
-                          : 'border-2 border-slate-300 dark:border-slate-600 group-hover:border-blue-500'
+                          ? 'bg-slate-100/40 dark:bg-slate-900/30 opacity-70' 
+                          : 'bg-white/50 dark:bg-slate-900/40 hover:bg-white/80 dark:hover:bg-blue-950/30 border border-slate-200/50 dark:border-blue-500/15 shadow-sm hover:border-blue-500/30'
                       }`}
                     >
-                      {task.completed && <Check size={14} strokeWidth={3} />}
-                    </button>
-                    <span className={`text-xs font-bold w-12 ${task.completed ? 'text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-400'}`}>
-                      {task.time}
-                    </span>
-                    <span className={`flex-1 font-semibold text-sm ${
-                      task.completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-100'
-                    }`}>
-                      {task.title}
-                    </span>
-                    <div className={`px-3 py-1 text-[10px] font-bold rounded-full ${getCategoryBadge(task.category).classes} border`}>
-                      {task.category}
-                    </div>
-                  </div>
-                ))}
+                      <button 
+                        onClick={() => handleToggleComplete(task.id, task.completed)}
+                        className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                          task.completed 
+                            ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' 
+                            : 'border-2 border-slate-300 dark:border-slate-600 group-hover:border-blue-500'
+                        }`}
+                      >
+                        {task.completed && <Check size={14} strokeWidth={3} />}
+                      </button>
+                      <span className={`text-xs font-bold w-12 ${task.completed ? 'text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-400'}`}>
+                        {task.time}
+                      </span>
+                      <span className={`flex-1 font-semibold text-sm ${
+                        task.completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-100'
+                      }`}>
+                        {task.title}
+                      </span>
+                      <div className={`px-3 py-1 text-[10px] font-bold rounded-full ${getCategoryBadge(task.category).classes} border`}>
+                        {task.category}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteActivity(task.id)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Apagar atividade"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
             </div>
           </div>
@@ -680,7 +791,7 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
                 <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
                   <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                     <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="10" className="text-slate-200/60 dark:text-slate-800" />
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="10" strokeDasharray="283" strokeDashoffset={283 - (283 * progressPercent) / 100} strokeLinecap="round" className="text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="10" strokeDasharray={283} strokeDashoffset={283 - (283 * progressPercent) / 100} strokeLinecap="round" className="text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
                   </svg>
                   <span className="absolute text-xl font-black text-slate-900 dark:text-white">{progressPercent}%</span>
                 </div>
