@@ -1,4 +1,4 @@
-export type TransactionType = 'income' | 'expense';
+export type TransactionType = 'income' | 'expense' | 'investimento_meta' | 'receita' | 'despesa';
 
 export interface Transaction {
   id: string;
@@ -7,7 +7,10 @@ export interface Transaction {
   type: TransactionType;
   date: string;
   category?: string;
+  metaId?: string; // Vincula a transação a uma meta específica
 }
+
+export type Transacao = Transaction;
 
 export interface Goal {
   id: string;
@@ -15,6 +18,7 @@ export interface Goal {
   currentAmount: number;
   targetAmount: number;
   icon?: string;
+  valorAcumulado?: number; // Compatibilidade com atualização de meta
 }
 
 export interface Task {

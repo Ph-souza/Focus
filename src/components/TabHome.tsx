@@ -120,8 +120,8 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
     else setGreeting('Boa noite');
   }, []);
 
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+  const totalIncome = transactions.filter(t => t.type === 'income' || t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta').reduce((acc, t) => acc + t.amount, 0);
   const balance = totalIncome - totalExpense;
 
   // Cálculo MoM para Saldo
@@ -134,12 +134,12 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
     const curTx = transactions.filter(t => t.date && t.date.startsWith(currentMonthKey));
     const prvTx = transactions.filter(t => t.date && t.date.startsWith(prevMonthKey));
 
-    const curInc = curTx.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-    const curExp = curTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+    const curInc = curTx.filter(t => t.type === 'income' || t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
+    const curExp = curTx.filter(t => t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta').reduce((acc, t) => acc + t.amount, 0);
     const curBal = curInc - curExp;
 
-    const prvInc = prvTx.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-    const prvExp = prvTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+    const prvInc = prvTx.filter(t => t.type === 'income' || t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
+    const prvExp = prvTx.filter(t => t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta').reduce((acc, t) => acc + t.amount, 0);
     const prvBal = prvInc - prvExp;
 
     if (prvBal === 0) {

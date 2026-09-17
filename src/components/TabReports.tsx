@@ -28,8 +28,8 @@ export function TabReports({ transactions }: TabReportsProps) {
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     });
 
-    const income = monthlyTransactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
-    const expense = monthlyTransactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
+    const income = monthlyTransactions.filter(t => t.type === 'income' || t.type === 'receita').reduce((acc, curr) => acc + curr.amount, 0);
+    const expense = monthlyTransactions.filter(t => t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta').reduce((acc, curr) => acc + curr.amount, 0);
     const net = income - expense;
     const saveRate = income > 0 ? ((income - expense) / income) * 100 : 0;
 

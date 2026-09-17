@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Transaction, User, Goal } from '../types';
 import { db } from '../lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch, increment, serverTimestamp } from 'firebase/firestore';
 import { 
   ArrowUp, 
   ArrowDown, 
@@ -74,7 +74,8 @@ export function TabFinances({
   // Form states for new transaction
   const [newTitle, setNewTitle] = useState('');
   const [newAmount, setNewAmount] = useState('');
-  const [newType, setNewType] = useState<'income' | 'expense'>('expense');
+  const [newType, setNewType] = useState<TransactionType>('expense');
+  const [selectedMetaId, setSelectedMetaId] = useState<string>('');
   const [newCategory, setNewCategory] = useState('Alimentação');
   const [newDate, setNewDate] = useState(() => new Date().toISOString().split('T')[0]);
 
@@ -143,13 +144,13 @@ export function TabFinances({
   // Financial metrics for selected month
   const totalIncome = useMemo(() => {
     return monthTransactions
-      .filter(t => t.type === 'income')
+      .filter(t => t.type === 'income' || t.type === 'receita')
       .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   }, [monthTransactions]);
 
   const totalExpense = useMemo(() => {
     return monthTransactions
-      .filter(t => t.type === 'expense')
+      .filter(t => t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta')
       .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   }, [monthTransactions]);
 
@@ -171,13 +172,13 @@ export function TabFinances({
   // Financial metrics for previous month
   const previousTotalIncome = useMemo(() => {
     return previousMonthTransactions
-      .filter(t => t.type === 'income')
+      .filter(t => t.type === 'income' || t.type === 'receita')
       .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   }, [previousMonthTransactions]);
 
   const previousTotalExpense = useMemo(() => {
     return previousMonthTransactions
-      .filter(t => t.type === 'expense')
+      .filter(t => t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta')
       .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   }, [previousMonthTransactions]);
 
@@ -357,7 +358,7 @@ export function TabFinances({
       const monthName = mStr.charAt(0).toUpperCase() + mStr.slice(1);
       
       const monthExpense = allTransactions
-        .filter(t => t.type === 'expense' && t.date && t.date.startsWith(mKey))
+        .filter(t => (t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta') && t.date && t.date.startsWith(mKey))
         .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
       months.push({
@@ -371,7 +372,7 @@ export function TabFinances({
 
   // Expenses grouped by category for Donut Chart (for the selected month)
   const categoryData = useMemo(() => {
-    const expenses = monthTransactions.filter(t => t.type === 'expense');
+    const expenses = monthTransactions.filter(t => t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta');
     if (expenses.length === 0) return [];
 
     const map: Record<string, number> = {};
@@ -394,6 +395,11 @@ export function TabFinances({
     const num = parseFloat(newAmount.replace(',', '.'));
     if (!newTitle.trim() || isNaN(num) || num <= 0) return;
 
+    if (newType === 'investimento_meta' && !selectedMetaId) {
+      alert('Por favor, selecione uma meta para guardar o valor.');
+      return;
+    }
+
     const chosenDate = newDate || `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-01`;
 
     const newTx: Transaction = {
@@ -401,8 +407,9 @@ export function TabFinances({
       title: newTitle.trim(),
       amount: num,
       type: newType,
-      category: newCategory,
-      date: chosenDate
+      category: newType === 'investimento_meta' ? 'Investimentos' : newCategory,
+      date: chosenDate,
+      metaId: newType === 'investimento_meta' ? selectedMetaId : undefined
     };
 
     setLocalTransactions(prev => [newTx, ...prev]);
@@ -415,14 +422,31 @@ export function TabFinances({
 
     if (user?.id) {
       try {
-        await addDoc(collection(db, 'users', user.id, 'transactions'), {
+        const batch = writeBatch(db);
+
+        // 1. Grava a transação no Firestore (para ficar no histórico de movimentações)
+        const txDocRef = doc(collection(db, 'users', user.id, 'transactions'));
+        batch.set(txDocRef, {
           title: newTx.title,
           amount: newTx.amount,
           type: newTx.type,
           category: newTx.category,
           date: newTx.date,
-          createdAt: new Date()
+          metaId: newTx.metaId || null,
+          createdAt: serverTimestamp()
         });
+
+        // 2. Se for aporte em meta, atualiza a Meta na mesma operação (currentAmount e valorAcumulado)
+        if (newType === 'investimento_meta' && selectedMetaId) {
+          const goalRef = doc(db, 'users', user.id, 'goals', selectedMetaId);
+          batch.update(goalRef, {
+            currentAmount: increment(num),
+            valorAcumulado: increment(num),
+            updatedAt: serverTimestamp()
+          });
+        }
+
+        await batch.commit();
       } catch (err) {
         console.error('Error adding transaction to Firestore:', err);
       }
@@ -434,9 +458,12 @@ export function TabFinances({
   };
 
   // Icon selector based on category
-  const getTransactionIcon = (cat?: string, type?: 'income' | 'expense') => {
-    if (type === 'income') {
+  const getTransactionIcon = (cat?: string, type?: TransactionType) => {
+    if (type === 'income' || type === 'receita') {
       return <Briefcase size={16} className="text-emerald-500" />;
+    }
+    if (type === 'investimento_meta') {
+      return <Target size={16} className="text-blue-500" />;
     }
     switch (cat) {
       case 'Alimentação':
@@ -483,15 +510,15 @@ export function TabFinances({
               </div>
 
               <form onSubmit={handleAddTransaction} className="space-y-3.5">
-                {/* Income / Expense Switcher */}
-                <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/10">
+                {/* Switcher de Tipo: [ Receita ] [ Despesa ] [ Guardar na Meta ] */}
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/10">
                   <button
                     type="button"
                     onClick={() => setNewType('income')}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all ${
-                      newType === 'income' 
+                    className={`py-2 text-[11px] font-bold rounded-lg transition-all text-center ${
+                      newType === 'income' || newType === 'receita'
                         ? 'bg-emerald-500 text-white shadow-sm' 
-                        : 'text-slate-600 dark:text-slate-400'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     Receita
@@ -499,22 +526,80 @@ export function TabFinances({
                   <button
                     type="button"
                     onClick={() => setNewType('expense')}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all ${
-                      newType === 'expense' 
+                    className={`py-2 text-[11px] font-bold rounded-lg transition-all text-center ${
+                      newType === 'expense' || newType === 'despesa'
                         ? 'bg-rose-500 text-white shadow-sm' 
-                        : 'text-slate-600 dark:text-slate-400'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     Despesa
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewType('investimento_meta');
+                      if (!selectedMetaId && goals.length > 0) {
+                        setSelectedMetaId(goals[0].id);
+                        if (!newTitle.trim()) {
+                          setNewTitle(`Aporte: ${goals[0].title}`);
+                        }
+                      }
+                      setNewCategory('Investimentos');
+                    }}
+                    className={`py-2 text-[11px] font-bold rounded-lg transition-all text-center ${
+                      newType === 'investimento_meta'
+                        ? 'bg-blue-600 text-white shadow-sm' 
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    Guardar na Meta
+                  </button>
                 </div>
+
+                {/* Dropdown de Metas Ativas quando Guardar na Meta está selecionado */}
+                {newType === 'investimento_meta' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Destino do dinheiro (Meta)
+                    </label>
+                    {goals.length === 0 ? (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                        Nenhuma meta ativa cadastrada. Crie uma meta para realizar aportes.
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedMetaId}
+                        onChange={(e) => {
+                          const goalId = e.target.value;
+                          setSelectedMetaId(goalId);
+                          const chosen = goals.find(g => g.id === goalId);
+                          if (chosen && (!newTitle.trim() || newTitle.startsWith('Aporte:'))) {
+                            setNewTitle(`Aporte: ${chosen.title}`);
+                          }
+                        }}
+                        required
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="" disabled>Selecione a meta de destino...</option>
+                        {goals.map((g) => {
+                          const curr = g.currentAmount ?? g.valorAcumulado ?? 0;
+                          return (
+                            <option key={g.id} value={g.id}>
+                              {g.title} ({formatCurrency(curr)} / {formatCurrency(g.targetAmount)})
+                            </option>
+                          );
+                        })}
+                      </select>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Título</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ex: Supermercado"
+                    placeholder={newType === 'investimento_meta' ? 'Ex: Aporte Viagem' : 'Ex: Supermercado'}
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:border-blue-500"
@@ -546,31 +631,33 @@ export function TabFinances({
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Categoria</label>
-                  <select
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="Alimentação">Alimentação</option>
-                    <option value="Transporte">Transporte</option>
-                    <option value="Mercado">Mercado</option>
-                    <option value="Lazer">Lazer</option>
-                    <option value="Educação">Educação</option>
-                    <option value="Saúde">Saúde</option>
-                    <option value="Moradia">Moradia</option>
-                    <option value="Salário">Salário</option>
-                    <option value="Investimentos">Investimentos</option>
-                    <option value="Outros">Outros</option>
-                  </select>
-                </div>
+                {newType !== 'investimento_meta' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Categoria</label>
+                    <select
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="Alimentação">Alimentação</option>
+                      <option value="Transporte">Transporte</option>
+                      <option value="Mercado">Mercado</option>
+                      <option value="Lazer">Lazer</option>
+                      <option value="Educação">Educação</option>
+                      <option value="Saúde">Saúde</option>
+                      <option value="Moradia">Moradia</option>
+                      <option value="Salário">Salário</option>
+                      <option value="Investimentos">Investimentos</option>
+                      <option value="Outros">Outros</option>
+                    </select>
+                  </div>
+                )}
 
                 <button
                   type="submit"
-                  className="w-full py-3 mt-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-all active:scale-[0.98]"
+                  className="w-full py-3 mt-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-all active:scale-[0.98] cursor-pointer"
                 >
-                  Salvar Transação
+                  {newType === 'investimento_meta' ? 'Guardar na Meta' : 'Salvar Transação'}
                 </button>
               </form>
             </motion.div>
@@ -893,12 +980,13 @@ export function TabFinances({
           ) : (
             <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
               {monthTransactions.slice(0, 6).map((t) => {
-                const isIncome = t.type === 'income';
+                const isIncome = t.type === 'income' || t.type === 'receita';
+                const isGoalInvestment = t.type === 'investimento_meta';
                 return (
                   <div key={t.id} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-3 min-w-0 pr-2">
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                        isIncome ? 'bg-emerald-500/15' : 'bg-rose-500/15'
+                        isIncome ? 'bg-emerald-500/15' : isGoalInvestment ? 'bg-blue-500/15' : 'bg-rose-500/15'
                       }`}>
                         {getTransactionIcon(t.category, t.type)}
                       </div>
@@ -915,6 +1003,8 @@ export function TabFinances({
                     <span className={`text-xs font-bold shrink-0 ${
                       isIncome 
                         ? 'text-emerald-600 dark:text-emerald-400' 
+                        : isGoalInvestment
+                        ? 'text-blue-600 dark:text-blue-400'
                         : 'text-rose-600 dark:text-rose-400'
                     }`}>
                       {isIncome ? `+ ${formatCurrency(t.amount)}` : `- ${formatCurrency(t.amount)}`}
@@ -1241,7 +1331,8 @@ export function TabFinances({
               ) : (
                 <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
                   {monthTransactions.slice(0, 5).map((t) => {
-                    const isIncome = t.type === 'income';
+                    const isIncome = t.type === 'income' || t.type === 'receita';
+                    const isGoalInvestment = t.type === 'investimento_meta';
                     return (
                       <div key={t.id} className="flex items-center justify-between py-3.5 first:pt-1 last:pb-1">
                         {/* Esquerda: Data/Status */}
@@ -1256,7 +1347,11 @@ export function TabFinances({
 
                         {/* Direita: Valor formatado */}
                         <span className={`text-sm font-bold shrink-0 ${
-                          isIncome ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'
+                          isIncome 
+                            ? 'text-green-500 dark:text-green-400' 
+                            : isGoalInvestment
+                            ? 'text-blue-500 dark:text-blue-400'
+                            : 'text-red-500 dark:text-red-400'
                         }`}>
                           {isIncome ? `+ ${formatCurrency(t.amount)}` : `- ${formatCurrency(t.amount)}`}
                         </span>
