@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Rotina, User } from '../types';
 import { db } from '../lib/firebase';
@@ -14,8 +14,15 @@ import {
   GraduationCap, 
   Clock, 
   X,
-  Trash2 
+  Trash2,
+  Pin
 } from 'lucide-react';
+
+interface DailyNote {
+  id: string;
+  texto: string;
+  date: string;
+}
 
 interface TabCalendarProps {
   rotinas?: Rotina[];
@@ -291,8 +298,51 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
   const totalTasks = dayActivities.length || 1;
   const completedTasks = dayActivities.filter(a => a.completed).length;
   const progressPercent = Math.round((completedTasks / totalTasks) * 100);
+  const concluidas = completedTasks;
+  const pendentes = Math.max(0, dayActivities.length - completedTasks);
   const strokeCircumference = 125.6; // 2 * pi * 20
   const strokeDashoffset = strokeCircumference - (strokeCircumference * progressPercent) / 100;
+
+  // Notas e Avisos do Dia com persistência local
+  const [dailyNotes, setDailyNotes] = useState<DailyNote[]>(() => {
+    try {
+      const saved = localStorage.getItem('nexus_calendar_daily_notes');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isAddingNotice, setIsAddingNotice] = useState(false);
+  const [newNoticeText, setNewNoticeText] = useState('');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('nexus_calendar_daily_notes', JSON.stringify(dailyNotes));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [dailyNotes]);
+
+  const notasDoDia = useMemo(() => {
+    return dailyNotes.filter(n => n.date === selectedDateStr);
+  }, [dailyNotes, selectedDateStr]);
+
+  const handleAddNotice = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNoticeText.trim()) return;
+    const newNote: DailyNote = {
+      id: `notice-${Date.now()}`,
+      texto: newNoticeText.trim(),
+      date: selectedDateStr
+    };
+    setDailyNotes(prev => [newNote, ...prev]);
+    setNewNoticeText('');
+    setIsAddingNotice(false);
+  };
+
+  const handleDeleteNotice = (id: string) => {
+    setDailyNotes(prev => prev.filter(n => n.id !== id));
+  };
 
   // 3. Preservação de Status por Document ID
   const handleToggleComplete = async (id: string, currentVal: boolean) => {
@@ -376,6 +426,104 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
         };
     }
   };
+
+  {/* Grid dividido: 1 coluna no mobile, 2 colunas no desktop */}
+  const renderDividedTopGrid = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 w-full">
+      {/* COLUNA 1: Card de Progresso (Compacto e centralizado) */}
+      <div className="glass-card p-5 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">Progresso do dia</h3>
+          <div className="flex items-center gap-4">
+            {/* Componente do timer circular */}
+            <div className="w-16 h-16 rounded-full border-4 border-blue-500 flex items-center justify-center font-bold text-slate-900 dark:text-white">
+              {progressPercent}%
+            </div>
+            <div className="text-sm">
+              <p className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                <span className="w-2 h-2 rounded-full bg-green-500"></span> {concluidas} concluídas
+              </p>
+              <p className="flex items-center gap-2 text-slate-600 dark:text-slate-300 mt-1">
+                <span className="w-2 h-2 rounded-full bg-orange-400"></span> {pendentes} pendentes
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* COLUNA 2: Card de Lembretes/Notas do Dia */}
+      <div className="glass-card p-5 flex flex-col relative overflow-hidden border-l-4 border-yellow-400/80">
+        <div className="flex items-center justify-between mb-3">
+           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+             <Pin className="w-4 h-4 text-yellow-500" /> Avisos de Hoje
+           </h3>
+           <button 
+             type="button"
+             onClick={() => setIsAddingNotice(prev => !prev)}
+             className="text-blue-500 hover:bg-blue-500/10 p-1 rounded-md transition-colors"
+             aria-label="Adicionar aviso"
+           >
+             <Plus className="w-4 h-4" />
+           </button>
+        </div>
+
+        {isAddingNotice && (
+          <form onSubmit={handleAddNotice} className="flex items-center gap-1.5 mb-2">
+            <input
+              type="text"
+              value={newNoticeText}
+              onChange={(e) => setNewNoticeText(e.target.value)}
+              placeholder="Novo aviso..."
+              autoFocus
+              className="flex-1 px-2.5 py-1.5 rounded-lg bg-white/70 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-yellow-400"
+            />
+            <button 
+              type="submit" 
+              className="p-1.5 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white shadow-sm transition-all"
+            >
+              <Check size={13} strokeWidth={3} />
+            </button>
+            <button 
+              type="button" 
+              onClick={() => {
+                setIsAddingNotice(false);
+                setNewNoticeText('');
+              }}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
+            >
+              <X size={13} />
+            </button>
+          </form>
+        )}
+        
+        {/* Lista de Notas ou Empty State */}
+        <div className="flex-1 overflow-y-auto pr-2 max-h-36">
+          {notasDoDia.length > 0 ? (
+            <ul className="space-y-2">
+              {notasDoDia.map(nota => (
+                <li key={nota.id} className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-md border border-slate-100 dark:border-slate-700 flex items-center justify-between gap-2 group">
+                  <span className="flex-1 break-words">{nota.texto}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteNotice(nota.id)}
+                    className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                    title="Excluir aviso"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="h-full flex items-center justify-center text-xs text-slate-400 text-center italic py-2">
+              Nenhum aviso para este dia.<br/>Clique no + para adicionar.
+            </div>
+          )}
+        </div>
+      </div>
+
+    </div>
+  );
 
   return (
     <motion.div
@@ -537,61 +685,8 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
           </button>
         </div>
 
-        {/* Progress Card ("Seu progresso hoje") */}
-        <div className="glass-card p-4 relative overflow-hidden flex items-center justify-between gap-3 shadow-sm">
-          {/* Circular Checkmark Badge */}
-          <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
-            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 50 50">
-              <circle 
-                cx="25" 
-                cy="25" 
-                r="20" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="4" 
-                className="text-slate-200/80 dark:text-slate-800" 
-              />
-              <circle 
-                cx="25" 
-                cy="25" 
-                r="20" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="4" 
-                strokeDasharray={strokeCircumference} 
-                strokeDashoffset={strokeDashoffset} 
-                strokeLinecap="round" 
-                className="text-blue-600 dark:text-blue-400 drop-shadow-[0_0_6px_rgba(59,130,246,0.6)] transition-all duration-700" 
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center text-blue-600 dark:text-blue-400">
-              <Check size={16} strokeWidth={3} />
-            </div>
-          </div>
-
-          {/* Progress Texts & Bar */}
-          <div className="flex-1 min-w-0 pr-1">
-            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 leading-none">
-              Seu progresso hoje
-            </p>
-            <p className="text-xs font-bold text-slate-900 dark:text-white mt-1 leading-none">
-              {completedTasks}/{totalTasks} tarefas concluídas
-            </p>
-            <div className="flex items-center gap-2 mt-2">
-              <div className="flex-1 h-1.5 bg-slate-200/80 dark:bg-slate-800/80 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-blue-600 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" 
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-              <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 shrink-0">
-                {progressPercent}%
-              </span>
-            </div>
-          </div>
-
-          <ChevronRight size={16} className="text-slate-400 shrink-0" />
-        </div>
+        {/* Topo Dividido: Progresso do Dia e Avisos de Hoje */}
+        {renderDividedTopGrid()}
 
         {/* Category Filters (Pills) */}
         <div className="flex items-center gap-2 overflow-x-auto pb-0.5 no-scrollbar">
@@ -783,6 +878,9 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
               </button>
             </div>
 
+            {/* Topo Dividido: Progresso do Dia e Avisos de Hoje */}
+            {renderDividedTopGrid()}
+
             {/* Tasks List */}
             <div className="glass-card p-6">
               <div className="flex items-center justify-between mb-6">
@@ -843,30 +941,6 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
 
           {/* Sidebar Widgets (Right, 1 col width) */}
           <div className="flex flex-col gap-6">
-            {/* Progresso do dia */}
-            <div className="glass-card p-6 relative overflow-hidden">
-              <h2 className="font-bold text-sm text-slate-900 dark:text-white mb-6">Progresso do dia</h2>
-              <div className="flex items-center gap-6">
-                <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="10" className="text-slate-200/60 dark:text-slate-800" />
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="10" strokeDasharray={283} strokeDashoffset={283 - (283 * progressPercent) / 100} strokeLinecap="round" className="text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
-                  </svg>
-                  <span className="absolute text-xl font-black text-slate-900 dark:text-white">{progressPercent}%</span>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
-                    <span>{completedTasks} concluídas</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]"></span>
-                    <span>{totalTasks - completedTasks} pendentes</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* Minicalendário Desktop */}
             <div className="glass-card p-6">
               <div className="flex items-center justify-between mb-4">
