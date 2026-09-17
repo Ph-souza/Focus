@@ -23,7 +23,7 @@ interface SimulatedMessage {
 export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
   const [activeTab, setActiveTab] = useState<'simulator' | 'setup' | 'guide'>('simulator');
   const [phoneNumber, setPhoneNumber] = useState<string>(() => {
-    return localStorage.getItem('nexus_whatsapp_number') || localStorage.getItem('aurora_whatsapp_number') || '+55 (11) 99876-5432';
+    return localStorage.getItem('nexus_whatsapp_number') || localStorage.getItem('aurora_whatsapp_number') || '+55 3197568153';
   });
   const [isSavedPhone, setIsSavedPhone] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);

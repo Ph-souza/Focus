@@ -76,7 +76,7 @@ export function TabHome({ transactions, goals, tasks, onTabChange, user, onOpenP
 
       const data = await response.json();
       if (data.success && data.token) {
-        const botNumber = '5511998765432'; // Número do bot (placeholder do projeto)
+        const botNumber = '553197568153'; // Número oficial do Mentor Focus (+55 3197568153)
         const message = `Quero ativar meu Mentor Nexus. Meu código é: ${data.token}`;
         const url = `https://wa.me/${botNumber}?text=${encodeURIComponent(message)}`;
         window.open(url, '_blank');
