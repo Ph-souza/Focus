@@ -302,7 +302,7 @@ function Dashboard() {
       case 'home':
         return <TabHome transactions={transactions} goals={goals} tasks={tasks} rotinas={rotinas} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
       case 'calendar':
-        return <TabCalendar />;
+        return <TabCalendar rotinas={rotinas} user={user} />;
       case 'focus':
         return <TabFocus />;
       case 'finances':
