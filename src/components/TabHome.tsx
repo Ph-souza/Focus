@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Transaction, User, Rotina } from '../types';
-import { Bot, Target, ChevronRight, Plus, FileText, Wallet, Calendar } from 'lucide-react';
+import { Bot, Target, ChevronRight, Plus, FileText, Wallet, Calendar, Bell } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 interface TabHomeProps {
