@@ -1,5 +1,16 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { 
+  addDays, 
+  subDays, 
+  addMonths, 
+  subMonths, 
+  startOfWeek, 
+  startOfMonth, 
+  format, 
+  isSameDay 
+} from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Rotina, User } from '../types';
 import { db } from '../lib/firebase';
 import { collection, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
@@ -207,8 +218,11 @@ function SwipeableActivityCard({
 }
 
 export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
+  // 1 & 4. Gestão de Estado centralizada com date-fns
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => 
+    startOfWeek(new Date(), { weekStartsOn: 1 })
+  );
   const [filter, setFilter] = useState<'Todos' | 'Trabalho' | 'Pessoal' | 'Estudos'>('Todos');
   const [localStatuses, setLocalStatuses] = useState<Record<string, boolean>>({});
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
@@ -218,30 +232,55 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
   const [newTime, setNewTime] = useState('09:00');
   const [newCategory, setNewCategory] = useState<'Trabalho' | 'Pessoal' | 'Estudos'>('Trabalho');
 
-  // Format date to YYYY-MM-DD
-  const formatDateStr = (d: Date) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  // 7 dias da semana visível (Segunda a Domingo)
+  const weekDays = useMemo(() => {
+    return Array.from({ length: 7 }).map((_, i) => addDays(currentWeekStart, i));
+  }, [currentWeekStart]);
+
+  // Formato estrito YYYY-MM-DD
+  const selectedDateStr = useMemo(() => format(selectedDate, 'yyyy-MM-dd'), [selectedDate]);
+
+  // 3. Sincronização Bidirecional: O mês exibido deriva da semana/dia selecionado
+  const displayedMonthDate = useMemo(() => {
+    const inVisibleWeek = weekDays.some(d => isSameDay(d, selectedDate));
+    if (inVisibleWeek) return selectedDate;
+    return addDays(currentWeekStart, 3);
+  }, [selectedDate, weekDays, currentWeekStart]);
+
+  // 2. Formatar como 'Setembro 2026' (primeira letra maiúscula, sem 'de')
+  const formattedMonthTitle = useMemo(() => {
+    const raw = format(displayedMonthDate, 'MMMM yyyy', { locale: ptBR });
+    const clean = raw.replace(/\s+de\s+/i, ' ').trim();
+    return clean.charAt(0).toUpperCase() + clean.slice(1);
+  }, [displayedMonthDate]);
+
+  // 1. Controles de Semana: Avança ou retrocede exatamente 7 dias
+  const handlePrevWeek = () => {
+    const newSelected = subDays(selectedDate, 7);
+    setSelectedDate(newSelected);
+    setCurrentWeekStart(startOfWeek(newSelected, { weekStartsOn: 1 }));
   };
 
-  const selectedDateStr = formatDateStr(selectedDate);
+  const handleNextWeek = () => {
+    const newSelected = addDays(selectedDate, 7);
+    setSelectedDate(newSelected);
+    setCurrentWeekStart(startOfWeek(newSelected, { weekStartsOn: 1 }));
+  };
 
-  // Generate 7 days of the selected week (Mon to Sun)
-  const weekDays = useMemo(() => {
-    const base = new Date();
-    const currentDay = base.getDay(); // 0 is Sun, 1 is Mon...
-    const distanceToMonday = (currentDay + 6) % 7;
-    const monday = new Date(base);
-    monday.setDate(base.getDate() - distanceToMonday + currentWeekOffset * 7);
+  // 2. Controles de Mês: Pula exatamente 1 mês e posiciona na primeira semana do mês
+  const handlePrevMonth = () => {
+    const prevMonth = subMonths(displayedMonthDate, 1);
+    const firstDay = startOfMonth(prevMonth);
+    setSelectedDate(firstDay);
+    setCurrentWeekStart(startOfWeek(firstDay, { weekStartsOn: 1 }));
+  };
 
-    return Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      return d;
-    });
-  }, [currentWeekOffset]);
+  const handleNextMonth = () => {
+    const nextMonth = addMonths(displayedMonthDate, 1);
+    const firstDay = startOfMonth(nextMonth);
+    setSelectedDate(firstDay);
+    setCurrentWeekStart(startOfWeek(firstDay, { weekStartsOn: 1 }));
+  };
 
   const weekdayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
@@ -622,8 +661,8 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
       {/* ========================================================= */}
       <div className="block md:hidden space-y-4">
         
-        {/* Mobile Header */}
-        <div className="flex items-center justify-between pt-1 pb-1">
+        {/* Mobile Header com Título e Seletor Superior de Mês */}
+        <div className="flex items-center justify-between pt-1 pb-1 gap-2">
           <div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">
               Agenda
@@ -633,33 +672,52 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
             </p>
           </div>
 
-          <button 
-            onClick={() => setIsCreateModalOpen(true)}
-            className="w-11 h-11 rounded-2xl glass-card flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer"
-            aria-label="Nova atividade"
-          >
-            <CalendarPlus size={20} />
-          </button>
+          {/* 2. Controles de Mês (Topo): Função exclusiva de pular meses (< Setembro 2026 >) */}
+          <div className="flex items-center gap-1 glass-card px-2.5 py-1.5 shadow-sm shrink-0">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              className="p-1 hover:text-blue-500 text-slate-500 dark:text-slate-400 active:scale-90 transition-all rounded-lg"
+              aria-label="Mês anterior"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="font-bold text-xs text-slate-900 dark:text-white select-none whitespace-nowrap">
+              {formattedMonthTitle}
+            </span>
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              className="p-1 hover:text-blue-500 text-slate-500 dark:text-slate-400 active:scale-90 transition-all rounded-lg"
+              aria-label="Próximo mês"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
 
-        {/* Horizontal Days Carousel */}
-        <div className="glass-card p-2 flex items-center justify-between gap-1 shadow-sm">
+        {/* 1. Controles de Semana (Nova UI): Barra de dias com setas < e > e botão + no canto direito */}
+        <div className="glass-card p-1.5 flex items-center justify-between gap-1 shadow-sm">
+          {/* Seta Esquerda Semana (<) */}
           <button 
-            onClick={() => setCurrentWeekOffset(prev => prev - 1)}
-            className="w-7 h-10 flex items-center justify-center text-slate-400 hover:text-blue-500 active:scale-90 transition-transform"
+            type="button"
+            onClick={handlePrevWeek}
+            className="w-7 h-11 flex items-center justify-center text-slate-400 hover:text-blue-500 active:scale-90 transition-transform shrink-0"
             aria-label="Semana anterior"
           >
             <ChevronLeft size={16} />
           </button>
 
-          <div className="flex-1 flex items-center justify-between gap-1">
+          {/* 7 Dias da Semana Visível */}
+          <div className="flex-1 flex items-center justify-between gap-1 min-w-0">
             {weekDays.map((d, index) => {
-              const isSelected = formatDateStr(d) === selectedDateStr;
+              const isSelected = isSameDay(d, selectedDate);
               return (
                 <button
                   key={index}
+                  type="button"
                   onClick={() => setSelectedDate(d)}
-                  className={`flex flex-col items-center justify-center py-2 px-1.5 rounded-2xl transition-all duration-200 flex-1 min-w-[38px] ${
+                  className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition-all duration-200 flex-1 min-w-[32px] ${
                     isSelected
                       ? 'bg-blue-600 text-white shadow-[0_0_18px_rgba(59,130,246,0.6)] scale-105'
                       : 'hover:bg-white/40 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400'
@@ -676,12 +734,24 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
             })}
           </div>
 
+          {/* Seta Direita Semana (>) */}
           <button 
-            onClick={() => setCurrentWeekOffset(prev => prev + 1)}
-            className="w-7 h-10 flex items-center justify-center text-slate-400 hover:text-blue-500 active:scale-90 transition-transform"
+            type="button"
+            onClick={handleNextWeek}
+            className="w-7 h-11 flex items-center justify-center text-slate-400 hover:text-blue-500 active:scale-90 transition-transform shrink-0"
             aria-label="Próxima semana"
           >
             <ChevronRight size={16} />
+          </button>
+
+          {/* Botão + de nova atividade no canto direito */}
+          <button 
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="w-8 h-11 flex items-center justify-center text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 active:scale-90 rounded-xl transition-all shrink-0 ml-0.5"
+            aria-label="Nova atividade"
+          >
+            <Plus size={18} strokeWidth={2.5} />
           </button>
         </div>
 
@@ -814,19 +884,24 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
           <div className="xl:col-span-2 flex flex-col gap-6">
             {/* Controls */}
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-4 glass-card px-4 py-2">
+              {/* 2. Controles de Mês (Topo): Pula 1 mês por clique */}
+              <div className="flex items-center gap-3 glass-card px-4 py-2">
                 <button 
-                  onClick={() => setCurrentWeekOffset(prev => prev - 1)}
+                  type="button"
+                  onClick={handlePrevMonth}
                   className="p-1 hover:bg-white/50 dark:hover:bg-blue-500/20 rounded-lg text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors"
+                  aria-label="Mês anterior"
                 >
                   <ChevronLeft size={16}/>
                 </button>
-                <span className="font-bold text-sm text-slate-900 dark:text-white capitalize">
-                  {selectedDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                <span className="font-bold text-sm text-slate-900 dark:text-white select-none">
+                  {formattedMonthTitle}
                 </span>
                 <button 
-                  onClick={() => setCurrentWeekOffset(prev => prev + 1)}
+                  type="button"
+                  onClick={handleNextMonth}
                   className="p-1 hover:bg-white/50 dark:hover:bg-blue-500/20 rounded-lg text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors"
+                  aria-label="Próximo mês"
                 >
                   <ChevronRight size={16}/>
                 </button>
@@ -849,30 +924,54 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
               </div>
             </div>
 
-            {/* Days Carousel */}
-            <div className="flex justify-between items-center glass-card p-3">
-              {weekDays.map((d, i) => {
-                const isSelected = formatDateStr(d) === selectedDateStr;
-                return (
-                  <button 
-                    key={i}
-                    onClick={() => setSelectedDate(d)}
-                    className={`flex flex-col items-center justify-center w-16 h-16 rounded-2xl transition-all ${
-                      isSelected 
-                        ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.6)] scale-105' 
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    <span className={`text-[10px] font-bold uppercase ${isSelected ? 'text-blue-100' : ''}`}>
-                      {weekdayNames[i]}
-                    </span>
-                    <span className="text-xl font-black mt-0.5">{d.getDate()}</span>
-                  </button>
-                );
-              })}
+            {/* 1. Controles de Semana (Nova UI): Barra de dias com setas < e > e botão + no canto direito */}
+            <div className="flex justify-between items-center glass-card p-3 gap-2">
               <button 
+                type="button"
+                onClick={handlePrevWeek}
+                className="w-12 h-16 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-white/40 dark:hover:bg-white/5 rounded-2xl transition-all shrink-0"
+                aria-label="Semana anterior"
+              >
+                <ChevronLeft size={20} />
+              </button>
+
+              <div className="flex-1 flex justify-between items-center gap-2">
+                {weekDays.map((d, i) => {
+                  const isSelected = isSameDay(d, selectedDate);
+                  return (
+                    <button 
+                      key={i}
+                      type="button"
+                      onClick={() => setSelectedDate(d)}
+                      className={`flex flex-col items-center justify-center flex-1 h-16 rounded-2xl transition-all ${
+                        isSelected 
+                          ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.6)] scale-105' 
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <span className={`text-[10px] font-bold uppercase ${isSelected ? 'text-blue-100' : ''}`}>
+                        {weekdayNames[i]}
+                      </span>
+                      <span className="text-xl font-black mt-0.5">{d.getDate()}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button 
+                type="button"
+                onClick={handleNextWeek}
+                className="w-12 h-16 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-white/40 dark:hover:bg-white/5 rounded-2xl transition-all shrink-0"
+                aria-label="Próxima semana"
+              >
+                <ChevronRight size={20} />
+              </button>
+
+              <button 
+                type="button"
                 onClick={() => setIsCreateModalOpen(true)}
-                className="w-16 h-16 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-white/40 dark:hover:bg-white/5 rounded-2xl transition-colors"
+                className="w-16 h-16 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-white/40 dark:hover:bg-white/5 rounded-2xl transition-colors shrink-0"
+                aria-label="Nova atividade"
               >
                 <Plus size={20} />
               </button>
@@ -944,8 +1043,8 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
             {/* Minicalendário Desktop */}
             <div className="glass-card p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white capitalize">
-                  {selectedDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  {formattedMonthTitle}
                 </h3>
               </div>
               <div className="grid grid-cols-7 gap-1 text-center mb-2">
@@ -954,13 +1053,14 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-1 text-center">
-                {Array.from({ length: 31 }).map((_, i) => (
+                {Array.from({ length: new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate() }).map((_, i) => (
                   <div 
                     key={i} 
                     onClick={() => {
                       const newD = new Date(selectedDate);
                       newD.setDate(i + 1);
                       setSelectedDate(newD);
+                      setCurrentWeekStart(startOfWeek(newD, { weekStartsOn: 1 }));
                     }}
                     className={`w-8 h-8 mx-auto flex items-center justify-center rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
                       (i + 1) === selectedDate.getDate()
