@@ -1,10 +1,10 @@
-import React from 'react';
 import { 
   Home, 
   Calendar,
   Target,
   BarChart3,
   LayoutGrid,
+  MoreHorizontal,
   Bot
 } from 'lucide-react';
 import { TabType, User } from '../types';
@@ -16,6 +16,11 @@ interface NavigationProps {
   user: User | null;
   isDarkMode: boolean;
   onOpenProfile: () => void;
+  onToggleDarkMode?: () => void;
+  appointments?: any[];
+  tasks?: any[];
+  onOpenFocusMode?: () => void;
+  onOpenSmartCapture?: () => void;
 }
 
 export function Navigation({ 
@@ -25,12 +30,12 @@ export function Navigation({
   onOpenProfile,
 }: NavigationProps) {
   
-  const navItems: { id: TabType; label: string; icon: React.ReactNode }[] = [
-    { id: 'home', label: 'Início', icon: <Home size={20} /> },
-    { id: 'calendar', label: 'Agenda', icon: <Calendar size={20} /> },
-    { id: 'focus', label: 'Foco', icon: <Target size={20} /> },
-    { id: 'finances', label: 'Finanças', icon: <BarChart3 size={20} /> },
-    { id: 'more', label: 'Mais', icon: <LayoutGrid size={20} /> },
+  const navItems: { id: TabType; label: string; icon: React.ReactNode; mobileIcon: React.ReactNode }[] = [
+    { id: 'home', label: 'Início', icon: <Home size={20} />, mobileIcon: <Home size={22} className={activeTab === 'home' ? 'fill-blue-500/20' : ''} /> },
+    { id: 'calendar', label: 'Agenda', icon: <Calendar size={20} />, mobileIcon: <Calendar size={22} /> },
+    { id: 'focus', label: 'Foco', icon: <Target size={20} />, mobileIcon: <Target size={22} /> },
+    { id: 'finances', label: 'Finanças', icon: <BarChart3 size={20} />, mobileIcon: <BarChart3 size={22} /> },
+    { id: 'more', label: 'Mais', icon: <LayoutGrid size={20} />, mobileIcon: <MoreHorizontal size={22} /> },
   ];
 
   return (
@@ -119,26 +124,26 @@ export function Navigation({
 
       </aside>
 
-      {/* Mobile Bottom Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/25 dark:bg-slate-950/35 backdrop-blur-xl border-t border-slate-200/40 dark:border-blue-500/20 z-50 flex items-center justify-around px-2 py-2 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+      {/* Mobile Floating Bottom Bar */}
+      <nav className="md:hidden fixed bottom-3 left-4 right-4 max-w-lg mx-auto glass-card z-50 flex items-center justify-around px-2 py-2 shadow-[0_12px_35px_rgba(0,0,0,0.15)] border border-white/80 dark:border-blue-500/30">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           return (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all relative ${
+              className={`flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all duration-200 relative ${
                 isActive 
-                  ? 'text-blue-600 dark:text-blue-400' 
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                  ? 'text-blue-600 dark:text-blue-400 font-bold' 
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white font-medium'
               }`}
             >
-              <div className={`transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}>
-                {item.icon}
+              <div className={`transition-all duration-200 ${isActive ? 'scale-110 drop-shadow-[0_0_10px_rgba(59,130,246,0.6)]' : 'opacity-80'}`}>
+                {item.mobileIcon || item.icon}
               </div>
-              <span className={`text-[10px] mt-0.5 ${isActive ? 'font-bold' : 'font-medium'}`}>{item.label}</span>
+              <span className="text-[10px] mt-0.5 tracking-tight">{item.label}</span>
               {isActive && (
-                <div className="w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.8)] mt-0.5"></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.9)] mt-0.5"></div>
               )}
             </button>
           );

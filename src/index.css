@@ -30,6 +30,39 @@ body.dark {
   min-height: 100vh;
 }
 
+/* Enhanced Glassmorphism Design System */
+.glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 2px 8px -1px rgba(0, 0, 0, 0.02);
+  border-radius: 1.5rem;
+}
+
+.dark .glass-card, body.dark .glass-card {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  box-shadow: 0 14px 36px -4px rgba(0, 0, 0, 0.6), 0 0 20px rgba(59, 130, 246, 0.08);
+  border-radius: 1.5rem;
+}
+
+.glass-pill {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.dark .glass-pill, body.dark .glass-pill {
+  background: rgba(30, 41, 59, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
 /* Custom Sleek Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
