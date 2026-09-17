@@ -340,7 +340,13 @@ function Dashboard() {
   }, [isDarkMode]);
 
   return (
-    <div className="flex h-screen overflow-hidden font-sans antialiased pb-[68px] md:pb-0 bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-white transition-colors duration-200">
+    <div 
+      className="flex h-screen overflow-hidden font-sans antialiased pb-[68px] md:pb-0 text-slate-900 dark:text-white transition-colors duration-300 bg-cover bg-center bg-fixed bg-no-repeat relative selection:bg-blue-500/30 selection:text-blue-500"
+      style={{
+        backgroundImage: isDarkMode ? "url('/assets/bg-dark.jpg')" : "url('/assets/bg-light.jpg')",
+        backgroundColor: isDarkMode ? "#030712" : "#f1f5f9"
+      }}
+    >
       <ToastNotifications notifications={notifications} onDismiss={dismissNotification} />
       <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} user={user} onLogout={handleLogout} />
       <WhatsAppModal isOpen={isWhatsAppModalOpen} onClose={() => setIsWhatsAppModalOpen(false)} user={user} />

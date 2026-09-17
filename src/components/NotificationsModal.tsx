@@ -31,17 +31,17 @@ export function NotificationsModal({ isOpen, onClose }: NotificationsModalProps)
           initial={{ opacity: 0, scale: 0.95, y: -20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: -20 }}
-          className="relative w-full max-w-sm bg-white dark:bg-[#0f111a] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+          className="relative w-full max-w-sm bg-white/80 dark:bg-slate-950/80 backdrop-blur-2xl border border-slate-200/60 dark:border-blue-500/20 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.2)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col"
         >
           {/* Header */}
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-[#121214] flex items-center justify-between">
+          <div className="p-4 border-b border-slate-200/40 dark:border-blue-500/20 bg-white/50 dark:bg-slate-900/50 flex items-center justify-between">
             <div className="flex items-center gap-2 text-slate-800 dark:text-white">
-              <Bell size={18} className="text-indigo-500" />
+              <Bell size={18} className="text-blue-500" />
               <h2 className="font-bold text-sm tracking-wide">Notificações</h2>
             </div>
             <button 
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-[#18181b] rounded-full transition-colors"
+              className="p-1.5 text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800 rounded-full transition-colors"
             >
               <X size={16} />
             </button>

@@ -66,10 +66,10 @@ export function BalanceStatementModal({ isOpen, onClose, transactions, balance }
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-lg bg-white dark:bg-[#0f111a] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+          className="relative w-full max-w-lg bg-white/80 dark:bg-slate-950/80 backdrop-blur-2xl border border-slate-200/60 dark:border-blue-500/20 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.2)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col max-h-[85vh]"
         >
           {/* Header */}
-          <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-br from-indigo-500 to-indigo-600 text-white relative">
+          <div className="p-6 border-b border-white/10 bg-gradient-to-br from-blue-600 to-indigo-600 text-white relative">
             <button 
               onClick={onClose}
               className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors text-white"
@@ -81,21 +81,21 @@ export function BalanceStatementModal({ isOpen, onClose, transactions, balance }
           </div>
 
           {/* Filters */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-[#121214]">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/40 dark:border-blue-500/20 bg-white/50 dark:bg-slate-900/50">
             <div className="flex items-center gap-2">
               <Filter size={14} className="text-slate-400" />
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Período</span>
             </div>
-            <div className="flex bg-white dark:bg-[#18181b] border border-slate-200 dark:border-slate-800 rounded-lg p-1">
+            <div className="flex bg-white/60 dark:bg-slate-900/80 border border-slate-200/50 dark:border-blue-500/20 rounded-xl p-1">
               <button
                 onClick={() => setFilter('1d')}
-                className={`text-xs font-bold px-3 py-1.5 rounded-md transition-colors ${filter === '1d' ? 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'}`}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${filter === '1d' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}
               >
                 24 Horas
               </button>
               <button
                 onClick={() => setFilter('7d')}
-                className={`text-xs font-bold px-3 py-1.5 rounded-md transition-colors ${filter === '7d' ? 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'}`}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${filter === '7d' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}
               >
                 7 Dias
               </button>

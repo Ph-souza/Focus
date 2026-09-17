@@ -34,16 +34,16 @@ export function Navigation({
   ];
 
   return (
-    <aside className="hidden md:flex flex-col w-64 bg-slate-50 dark:bg-[#070b14] border-r border-slate-200 dark:border-white/5 h-screen sticky top-0 overflow-y-auto">
+    <aside className="hidden md:flex flex-col w-64 bg-white/70 dark:bg-slate-950/40 backdrop-blur-xl border-r border-slate-200/60 dark:border-blue-500/20 shadow-[0_10px_30px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)] h-screen sticky top-0 overflow-y-auto z-20">
       
       {/* Brand Header */}
-      <div className="flex items-center gap-3 p-6 mb-4">
-        <div className="h-10 w-10 flex items-center justify-center text-[#6366f1]">
-          <AuraLogo className="w-8 h-8" />
+      <div className="flex items-center gap-3 p-6 mb-2">
+        <div className="h-10 w-10 flex items-center justify-center text-blue-500">
+          <AuraLogo className="w-8 h-8 drop-shadow-[0_0_12px_rgba(59,130,246,0.5)]" />
         </div>
         <div>
           <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white leading-none">NEXUS</h1>
-          <h1 className="text-lg font-black tracking-tight text-[#6366f1] leading-none">FOCUS</h1>
+          <h1 className="text-lg font-black tracking-tight text-blue-500 leading-none">FOCUS</h1>
         </div>
       </div>
       
@@ -56,24 +56,24 @@ export function Navigation({
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 relative group ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 relative group ${
                 isActive 
-                  ? 'bg-blue-50 text-[#6366f1] dark:bg-[#6366f1]/10 dark:text-[#6366f1] shadow-[0_4px_20px_rgba(99,102,241,0.05)]' 
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5'
+                  ? 'bg-blue-500/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400 font-bold' 
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5'
               }`}
             >
-              {/* Active neon border glow for dark mode */}
+              {/* Active neon border glow */}
               {isActive && (
-                <div className="hidden dark:block absolute inset-0 rounded-xl border border-[#6366f1]/30 shadow-[0_0_15px_rgba(99,102,241,0.2)] pointer-events-none"></div>
+                <div className="absolute inset-0 rounded-2xl border border-blue-500/40 shadow-[0_0_15px_rgba(59,130,246,0.25)] pointer-events-none"></div>
               )}
               {/* Left active indicator */}
               {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#6366f1] rounded-r-full"></div>
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-blue-500 rounded-r-full shadow-[0_0_10px_rgba(59,130,246,0.8)]"></div>
               )}
               <div className={`transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
                 {item.icon}
               </div>
-              <span className={`font-semibold text-sm ${isActive ? 'tracking-wide' : ''}`}>{item.label}</span>
+              <span className={`text-sm ${isActive ? 'tracking-wide' : 'font-medium'}`}>{item.label}</span>
             </button>
           );
         })}
@@ -82,9 +82,9 @@ export function Navigation({
       {/* Footer Area */}
       <div className="p-4 mt-auto flex flex-col gap-3">
         {/* Mentor CTA */}
-        <button onClick={() => onTabChange('chat')} className="w-full flex items-center gap-3 p-3 rounded-xl border border-[#6366f1]/20 bg-[#6366f1]/5 hover:bg-[#6366f1]/10 transition-colors text-left group relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-[#6366f1]/0 via-[#6366f1]/10 to-[#6366f1]/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-          <div className="w-8 h-8 rounded-full bg-[#6366f1]/10 flex items-center justify-center text-[#6366f1]">
+        <button onClick={() => onTabChange('chat')} className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-blue-500/20 bg-blue-500/5 hover:bg-blue-500/10 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 transition-all text-left group relative overflow-hidden shadow-[0_0_15px_rgba(59,130,246,0.1)] hover:shadow-[0_0_20px_rgba(59,130,246,0.25)]">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+          <div className="w-8 h-8 rounded-full bg-blue-500/15 flex items-center justify-center text-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]">
             <Bot size={18} />
           </div>
           <div>
@@ -96,18 +96,18 @@ export function Navigation({
         {/* User Profile Card */}
         <button 
           onClick={onOpenProfile}
-          className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border border-transparent dark:hover:border-white/5 text-left"
+          className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white/40 dark:bg-slate-900/40 hover:bg-white/70 dark:hover:bg-slate-800/60 border border-slate-200/50 dark:border-blue-500/20 transition-all text-left group shadow-sm"
         >
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 dark:bg-zinc-800 flex items-center justify-center border border-slate-300 dark:border-zinc-700">
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800 flex items-center justify-center border border-slate-300 dark:border-blue-500/30">
             {user?.photoURL ? (
               <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover" />
             ) : (
-              <span className="font-bold text-slate-500">{user?.name?.charAt(0) || 'U'}</span>
+              <span className="font-bold text-blue-500">{user?.name?.charAt(0) || 'U'}</span>
             )}
           </div>
           <div className="flex-1 overflow-hidden">
             <p className="text-sm font-bold text-slate-800 dark:text-white truncate">Olá, {user?.name?.split(' ')[0] || 'Usuário'}</p>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-[#6366f1] transition-colors">Ver perfil</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 group-hover:text-blue-500 transition-colors">Ver perfil</p>
           </div>
         </button>
       </div>

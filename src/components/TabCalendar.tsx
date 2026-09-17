@@ -38,7 +38,7 @@ export function TabCalendar() {
             Seus compromissos, em harmonia com seus objetivos.
           </p>
         </div>
-        <button className="px-5 py-2.5 bg-[#3b82f6] dark:bg-[#6366f1] hover:bg-blue-600 dark:hover:bg-indigo-500 text-white rounded-xl font-bold text-sm transition-colors shadow-sm flex items-center gap-2">
+        <button className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-sm transition-all shadow-[0_0_20px_rgba(59,130,246,0.5)] hover:shadow-[0_0_25px_rgba(59,130,246,0.7)] flex items-center gap-2 active:scale-95">
           <Plus size={18} /> Nova atividade
         </button>
       </div>
@@ -49,22 +49,22 @@ export function TabCalendar() {
         <div className="xl:col-span-2 flex flex-col gap-6">
           
           {/* Controls */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4 bg-white dark:bg-[#0b101e] border border-slate-200 dark:border-white/5 rounded-xl px-2 py-1 shadow-sm">
-              <button className="p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded-md text-slate-500 dark:text-slate-400 transition-colors"><ChevronLeft size={16}/></button>
-              <span className="font-bold text-sm text-slate-800 dark:text-white">Maio de 2025</span>
-              <button className="p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded-md text-slate-500 dark:text-slate-400 transition-colors"><ChevronRight size={16}/></button>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4 bg-white/70 dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200/60 dark:border-blue-500/20 rounded-2xl px-3 py-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+              <button className="p-1 hover:bg-white/50 dark:hover:bg-blue-500/20 rounded-lg text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors"><ChevronLeft size={16}/></button>
+              <span className="font-bold text-sm text-slate-900 dark:text-white">Maio de 2025</span>
+              <button className="p-1 hover:bg-white/50 dark:hover:bg-blue-500/20 rounded-lg text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors"><ChevronRight size={16}/></button>
             </div>
             
-            <div className="flex items-center gap-2 bg-white dark:bg-[#0b101e] border border-slate-200 dark:border-white/5 rounded-xl p-1 shadow-sm">
+            <div className="flex items-center gap-2 bg-white/70 dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200/60 dark:border-blue-500/20 rounded-2xl p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
               {['Todos', 'Trabalho', 'Pessoal', 'Estudos'].map(f => (
                 <button 
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     filter === f 
-                      ? 'bg-[#3b82f6] dark:bg-[#6366f1] text-white shadow-sm' 
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]' 
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/40 dark:hover:bg-white/5'
                   }`}
                 >
                   {f}
@@ -74,60 +74,60 @@ export function TabCalendar() {
           </div>
 
           {/* Days Carousel */}
-          <div className="flex justify-between items-center bg-white dark:bg-[#0b101e] border border-slate-200 dark:border-white/5 rounded-2xl p-2 shadow-sm">
+          <div className="flex justify-between items-center bg-white/70 dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200/60 dark:border-blue-500/20 rounded-3xl p-3 shadow-[0_10px_30px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
             {days.map((d, i) => (
               <button 
                 key={i}
                 onClick={() => setSelectedDay(d.dayNum)}
-                className={`flex flex-col items-center justify-center w-16 h-16 rounded-xl transition-all ${
+                className={`flex flex-col items-center justify-center w-16 h-16 rounded-2xl transition-all ${
                   selectedDay === d.dayNum 
-                    ? 'bg-[#3b82f6] dark:bg-[#6366f1] text-white shadow-md scale-105' 
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'
+                    ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.6)] scale-105' 
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                <span className={`text-[10px] font-bold uppercase ${selectedDay === d.dayNum ? 'text-blue-100 dark:text-indigo-200' : ''}`}>{d.dayStr}</span>
+                <span className={`text-[10px] font-bold uppercase ${selectedDay === d.dayNum ? 'text-blue-100' : ''}`}>{d.dayStr}</span>
                 <span className="text-xl font-black mt-0.5">{d.dayNum}</span>
               </button>
             ))}
-            <button className="w-16 h-16 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+            <button className="w-16 h-16 flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-white/40 dark:hover:bg-white/5 rounded-2xl transition-colors">
               <Plus size={20} />
             </button>
           </div>
 
           {/* Tasks List */}
-          <div className="bg-white dark:bg-[#0b101e] border border-slate-200 dark:border-white/5 rounded-3xl p-6 shadow-sm">
+          <div className="bg-white/70 dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200/60 dark:border-blue-500/20 rounded-3xl p-6 shadow-[0_10px_30px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="font-bold text-sm text-slate-800 dark:text-white">Segunda-feira, 26 de maio</h2>
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">5 atividades</span>
+              <h2 className="font-bold text-sm text-slate-900 dark:text-white">Segunda-feira, 26 de maio</h2>
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">5 atividades</span>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2.5">
               {tasks.map((task, i) => (
                 <div key={i} className={`flex items-center gap-4 p-4 rounded-2xl transition-colors group ${
                   task.completed 
-                    ? 'bg-slate-50 dark:bg-white/5 opacity-70' 
-                    : 'bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 border border-slate-100 dark:border-white/5 shadow-sm'
+                    ? 'bg-slate-100/40 dark:bg-slate-900/30 opacity-70' 
+                    : 'bg-white/50 dark:bg-slate-900/40 hover:bg-white/80 dark:hover:bg-blue-950/30 border border-slate-200/50 dark:border-blue-500/15 shadow-sm hover:border-blue-500/30'
                 }`}>
-                  <button className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                  <button className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                     task.completed 
-                      ? 'bg-[#3b82f6] dark:bg-[#6366f1] text-white' 
-                      : 'border-2 border-slate-300 dark:border-slate-600 group-hover:border-[#3b82f6] dark:group-hover:border-[#6366f1]'
+                      ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' 
+                      : 'border-2 border-slate-300 dark:border-slate-600 group-hover:border-blue-500'
                   }`}>
                     {task.completed && <Check size={14} strokeWidth={3} />}
                   </button>
-                  <span className={`text-xs font-bold w-12 ${task.completed ? 'text-slate-400 dark:text-slate-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                  <span className={`text-xs font-bold w-12 ${task.completed ? 'text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-400'}`}>
                     {task.time}
                   </span>
                   <span className={`flex-1 font-semibold text-sm ${
-                    task.completed ? 'text-slate-500 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-200'
+                    task.completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-100'
                   }`}>
                     {task.title}
                   </span>
                   <span className={`text-[10px] font-bold text-slate-400 dark:text-slate-500`}>{task.duration}</span>
                   <div className={`px-3 py-1 text-[10px] font-bold rounded-full ${
-                    task.tagColor === 'blue' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50' :
-                    task.tagColor === 'emerald' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50' :
-                    'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50'
+                    task.tagColor === 'blue' ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30' :
+                    task.tagColor === 'emerald' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30' :
+                    'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
                   }`}>
                     {task.tag}
                   </div>
@@ -141,23 +141,23 @@ export function TabCalendar() {
         <div className="flex flex-col gap-6">
           
           {/* Progresso do dia */}
-          <div className="bg-white dark:bg-[#0b101e] border border-slate-200 dark:border-white/5 rounded-3xl p-6 shadow-sm relative overflow-hidden">
-            <h2 className="font-bold text-sm text-slate-800 dark:text-white mb-6">Progresso do dia</h2>
+          <div className="bg-white/70 dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200/60 dark:border-blue-500/20 rounded-3xl p-6 shadow-[0_10px_30px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)] relative overflow-hidden">
+            <h2 className="font-bold text-sm text-slate-900 dark:text-white mb-6">Progresso do dia</h2>
             <div className="flex items-center gap-6">
               <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
                 <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="10" className="text-slate-100 dark:text-slate-800" />
-                  <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="10" strokeDasharray="283" strokeDashoffset="113.2" strokeLinecap="round" className="text-[#3b82f6] dark:text-[#6366f1]" />
+                  <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="10" className="text-slate-200/60 dark:text-slate-800" />
+                  <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="10" strokeDasharray="283" strokeDashoffset="113.2" strokeLinecap="round" className="text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
                 </svg>
-                <span className="absolute text-xl font-bold text-slate-800 dark:text-white">60%</span>
+                <span className="absolute text-xl font-black text-slate-900 dark:text-white">60%</span>
               </div>
               <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
                   <span>3 concluídas</span>
                 </div>
-                <div className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]"></span>
                   <span>2 pendentes</span>
                 </div>
               </div>
@@ -165,12 +165,12 @@ export function TabCalendar() {
           </div>
 
           {/* Minicalendário */}
-          <div className="bg-white dark:bg-[#0b101e] border border-slate-200 dark:border-white/5 rounded-3xl p-6 shadow-sm">
+          <div className="bg-white/70 dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200/60 dark:border-blue-500/20 rounded-3xl p-6 shadow-[0_10px_30px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-sm text-slate-800 dark:text-white">Maio 2025</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white">Maio 2025</h3>
               <div className="flex gap-1">
-                <button className="text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"><ChevronLeft size={16}/></button>
-                <button className="text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"><ChevronRight size={16}/></button>
+                <button className="text-slate-400 hover:text-blue-500"><ChevronLeft size={16}/></button>
+                <button className="text-slate-400 hover:text-blue-500"><ChevronRight size={16}/></button>
               </div>
             </div>
             <div className="grid grid-cols-7 gap-1 text-center mb-2">
@@ -182,10 +182,10 @@ export function TabCalendar() {
               {Array.from({length: 31}).map((_, i) => (
                 <div 
                   key={i} 
-                  className={`w-8 h-8 mx-auto flex items-center justify-center rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                  className={`w-8 h-8 mx-auto flex items-center justify-center rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
                     (i + 1) === 26 
-                      ? 'bg-[#3b82f6] dark:bg-[#6366f1] text-white shadow-sm font-bold' 
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10'
+                      ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.6)] font-black' 
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-white/50 dark:hover:bg-white/10 hover:text-blue-500'
                   }`}
                 >
                   {i + 1}
@@ -195,11 +195,11 @@ export function TabCalendar() {
           </div>
 
           {/* Quote Card */}
-          <div className="mt-auto bg-[#f8fafc] dark:bg-[#111827] border border-slate-200 dark:border-white/5 rounded-3xl p-6 text-center shadow-sm">
-            <p className="text-sm text-slate-600 dark:text-slate-400 italic font-medium leading-relaxed">
+          <div className="mt-auto bg-white/70 dark:bg-slate-950/40 backdrop-blur-xl border border-slate-200/60 dark:border-blue-500/20 rounded-3xl p-6 text-center shadow-[0_10px_30px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+            <p className="text-sm text-slate-700 dark:text-slate-300 italic font-medium leading-relaxed">
               "Tempo bem planejado é uma forma de autocuidado."
             </p>
-            <span className="block mt-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+            <span className="block mt-4 text-[10px] font-bold text-blue-500 uppercase tracking-widest">
               NEXUS FOCUS
             </span>
           </div>
