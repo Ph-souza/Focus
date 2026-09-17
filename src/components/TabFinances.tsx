@@ -23,7 +23,10 @@ import {
   Utensils, 
   Car, 
   X,
-  Minus
+  Minus,
+  Plane,
+  Shield,
+  ArrowRight
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -130,9 +133,11 @@ export function TabFinances({
     return [...localTransactions, ...transactions];
   }, [localTransactions, transactions]);
 
-  // Transactions filtered by selected month
+  // Transactions filtered by selected month, sorted newest first
   const monthTransactions = useMemo(() => {
-    return allTransactions.filter(t => t.date && t.date.startsWith(selectedMonthKey));
+    return allTransactions
+      .filter(t => t.date && t.date.startsWith(selectedMonthKey))
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [allTransactions, selectedMonthKey]);
 
   // Financial metrics for selected month
@@ -275,6 +280,71 @@ export function TabFinances({
         <span>{abs}%</span>
       </span>
     );
+  };
+
+  // Formatação de Data/Status: 'Hoje', 'Ontem', ou 'DD mmm' (ex: '24 mai')
+  const formatDateStatus = (dateStr?: string): string => {
+    if (!dateStr) return 'Hoje';
+    try {
+      const today = new Date();
+      const todayYear = today.getFullYear();
+      const todayMonth = today.getMonth();
+      const todayDate = today.getDate();
+
+      const parts = dateStr.split('-');
+      if (parts.length >= 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2].slice(0, 2), 10);
+
+        if (year === todayYear && month === todayMonth && day === todayDate) {
+          return 'Hoje';
+        }
+
+        const yesterday = new Date(todayYear, todayMonth, todayDate - 1);
+        if (year === yesterday.getFullYear() && month === yesterday.getMonth() && day === yesterday.getDate()) {
+          return 'Ontem';
+        }
+
+        const txDate = new Date(year, month, day);
+        if (!isNaN(txDate.getTime())) {
+          const formatted = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short' }).format(txDate);
+          return formatted.replace('.', '');
+        }
+      }
+      return dateStr;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Helper de ícone e estilo para metas/caixinhas
+  const getGoalVisual = (goal: Goal) => {
+    const titleLower = (goal.title || '').toLowerCase();
+    const iconKey = (goal.icon || '').toLowerCase();
+
+    if (titleLower.includes('viagem') || titleLower.includes('praia') || titleLower.includes('ferias') || titleLower.includes('chile') || iconKey === 'plane') {
+      return {
+        icon: <Plane className="w-5 h-5 stroke-[2.2]" />,
+        bg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+      };
+    }
+    if (titleLower.includes('reserva') || titleLower.includes('emergência') || titleLower.includes('emergencia') || iconKey === 'shield') {
+      return {
+        icon: <Shield className="w-5 h-5 stroke-[2.2]" />,
+        bg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+      };
+    }
+    if (titleLower.includes('carro') || titleLower.includes('veiculo') || titleLower.includes('moto') || iconKey === 'car') {
+      return {
+        icon: <Car className="w-5 h-5 stroke-[2.2]" />,
+        bg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+      };
+    }
+    return {
+      icon: <Target className="w-5 h-5 stroke-[2.2]" />,
+      bg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+    };
   };
 
   // Monthly Evolution Data for BarChart (6 months leading up to selectedDate)
@@ -1127,6 +1197,157 @@ export function TabFinances({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* 3. Cards Inferiores: Transações recentes & Caixinhas e metas (Grid responsivo 2 cols) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Card 1: Transações recentes */}
+          <div className="glass-card p-6 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold text-sm text-slate-900 dark:text-white">
+                  Transações recentes
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => onTabChange?.('transactions')}
+                  className="text-xs font-semibold text-blue-500 hover:text-blue-600 transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Ver todas</span>
+                  <ArrowRight size={12} />
+                </button>
+              </div>
+
+              {monthTransactions.length === 0 ? (
+                <div className="py-10 flex flex-col items-center justify-center text-center">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 mb-2">
+                    <Receipt size={18} />
+                  </div>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Nenhuma transação em {formatMonthYear(selectedDate)}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Suas movimentações deste mês aparecerão aqui.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="mt-3 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm active:scale-95 transition-all cursor-pointer"
+                  >
+                    + Nova transação
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
+                  {monthTransactions.slice(0, 5).map((t) => {
+                    const isIncome = t.type === 'income';
+                    return (
+                      <div key={t.id} className="flex items-center justify-between py-3.5 first:pt-1 last:pb-1">
+                        {/* Esquerda: Data/Status */}
+                        <span className="text-xs font-medium text-slate-400 w-16 sm:w-20 shrink-0">
+                          {formatDateStatus(t.date)}
+                        </span>
+
+                        {/* Centro: Título da transação */}
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1 min-w-0 truncate px-4">
+                          {t.title}
+                        </span>
+
+                        {/* Direita: Valor formatado */}
+                        <span className={`text-sm font-bold shrink-0 ${
+                          isIncome ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'
+                        }`}>
+                          {isIncome ? `+ ${formatCurrency(t.amount)}` : `- ${formatCurrency(t.amount)}`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: Caixinhas e metas */}
+          <div className="glass-card p-6 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold text-sm text-slate-900 dark:text-white">
+                  Caixinhas e metas
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => onTabChange?.('goals')}
+                  className="text-xs font-semibold text-blue-500 hover:text-blue-600 transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Ver todas</span>
+                  <ArrowRight size={12} />
+                </button>
+              </div>
+
+              {goals.length === 0 ? (
+                <div className="py-10 flex flex-col items-center justify-center text-center">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 mb-2">
+                    <Target size={18} />
+                  </div>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Nenhuma meta ativa
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Crie caixinhas para organizar seus objetivos financeiros.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onTabChange?.('goals')}
+                    className="mt-3 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm active:scale-95 transition-all cursor-pointer"
+                  >
+                    + Criar Meta
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {goals.slice(0, 4).map((goal) => {
+                    const target = goal.targetAmount || 1;
+                    const current = goal.currentAmount || 0;
+                    const percent = Math.min(100, Math.round((current / target) * 100));
+                    const visual = getGoalVisual(goal);
+
+                    return (
+                      <div key={goal.id} className="flex items-center gap-3.5">
+                        {/* Ícone */}
+                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${visual.bg}`}>
+                          {visual.icon}
+                        </div>
+
+                        {/* Corpo textual e barra de progresso */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
+                              {goal.title}
+                            </span>
+                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">
+                              {percent}%
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                            {formatCurrency(current)} / {formatCurrency(target)}
+                          </p>
+
+                          {/* Barra de progresso linear muito fina */}
+                          <div className="w-full h-1.5 bg-slate-200/80 dark:bg-slate-700/60 rounded-full overflow-hidden mt-2">
+                            <div
+                              className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
