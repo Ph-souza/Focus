@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
+import { format } from 'date-fns';
 import { Transaction, User, Rotina, Task } from '../types';
 import { 
   Bell, 
@@ -19,10 +20,18 @@ import {
   Trophy,
   MessageSquare,
   CircleDot,
-  Circle
+  Circle,
+  Pin,
+  Trash2
 } from 'lucide-react';
 import { BalanceStatementModal } from './BalanceStatementModal';
 import { NotificationsModal } from './NotificationsModal';
+
+interface DailyNote {
+  id: string;
+  texto: string;
+  date: string;
+}
 
 interface TabHomeProps {
   transactions: Transaction[];
@@ -40,6 +49,67 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
   const [greeting, setGreeting] = useState('');
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  // Integração com fluxo de Notas / Avisos do Dia
+  const [dailyNotes, setDailyNotes] = useState<DailyNote[]>(() => {
+    try {
+      const saved = localStorage.getItem('nexus_calendar_daily_notes');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isAddingNotice, setIsAddingNotice] = useState(false);
+  const [newNoticeText, setNewNoticeText] = useState('');
+
+  const todayDateStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const saved = localStorage.getItem('nexus_calendar_daily_notes');
+        if (saved) setDailyNotes(JSON.parse(saved));
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // 3 últimas notas criadas para o dia atual
+  const todayNotes = useMemo(() => {
+    return dailyNotes.filter(n => n.date === todayDateStr).slice(0, 3);
+  }, [dailyNotes, todayDateStr]);
+
+  const handleAddNotice = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNoticeText.trim()) return;
+    const newNote: DailyNote = {
+      id: `notice-${Date.now()}`,
+      texto: newNoticeText.trim(),
+      date: todayDateStr
+    };
+    const updated = [newNote, ...dailyNotes];
+    setDailyNotes(updated);
+    try {
+      localStorage.setItem('nexus_calendar_daily_notes', JSON.stringify(updated));
+    } catch (err) {
+      console.error(err);
+    }
+    setNewNoticeText('');
+    setIsAddingNotice(false);
+  };
+
+  const handleDeleteNotice = (id: string) => {
+    const updated = dailyNotes.filter(n => n.id !== id);
+    setDailyNotes(updated);
+    try {
+      localStorage.setItem('nexus_calendar_daily_notes', JSON.stringify(updated));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -59,6 +129,159 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
   const strokeDashoffset = 283 - (283 * progressPercent) / 100;
 
   const todayStr = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+
+  // Componente Otimizado: Card Resumo de Hoje (Grid 2 Colunas com Progresso e Avisos de Hoje)
+  const renderResumoDeHojeCard = () => (
+    <div className="glass-card p-5 md:p-6 relative overflow-hidden group">
+      <div className="absolute inset-0 bg-gradient-to-br from-transparent to-blue-500/5 pointer-events-none"></div>
+
+      {/* 2. Layout em Grid (2 Colunas): grid-cols-1 md:grid-cols-2 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10 h-full">
+        {/* 3. Coluna 1 (Esquerda) — Progresso */}
+        <div className="flex flex-col justify-between h-full">
+          <div>
+            {/* Título sem o ícone de sino redundante (QA-016) */}
+            <h2 className="font-bold text-sm text-slate-900 dark:text-white mb-4">
+              Resumo de Hoje
+            </h2>
+
+            <div className="flex items-center gap-4">
+              {/* Circular Progress */}
+              <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
+                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                  <circle 
+                    cx="50" 
+                    cy="50" 
+                    r="45" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="10" 
+                    className="text-slate-200/60 dark:text-slate-800" 
+                  />
+                  <circle 
+                    cx="50" 
+                    cy="50" 
+                    r="45" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="10" 
+                    strokeDasharray="283" 
+                    strokeDashoffset={strokeDashoffset} 
+                    strokeLinecap="round" 
+                    className="text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)] transition-all duration-1000 ease-out" 
+                  />
+                </svg>
+                <span className="absolute text-lg font-black text-slate-900 dark:text-white">
+                  {progressPercent}%
+                </span>
+              </div>
+              
+              {/* 3 Pílulas / Legendas */}
+              <div className="flex flex-col gap-1.5 min-w-0">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] shrink-0"></span>
+                  <span className="truncate">{completedTasks} concluídas</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)] shrink-0"></span>
+                  <span className="truncate">{pendingTasks} pendentes</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                  <span className="truncate">0 em atraso</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Link 'Ver agenda ->' no rodapé da coluna */}
+          <div className="mt-4 pt-2">
+            <button 
+              type="button"
+              onClick={() => onTabChange('calendar')} 
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 group cursor-pointer"
+            >
+              <span>Ver agenda</span>
+              <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </div>
+        </div>
+
+        {/* 4. Coluna 2 (Direita) — Avisos de Hoje */}
+        <div className="flex flex-col justify-between border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-700 pt-4 md:pt-0 md:pl-6 h-full min-w-0">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.5">
+                <Pin size={14} className="text-yellow-500 fill-yellow-500 shrink-0" />
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  Avisos de Hoje
+                </h3>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsAddingNotice(prev => !prev)}
+                className="w-6 h-6 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center transition-colors active:scale-90 shrink-0 cursor-pointer"
+                title="Adicionar aviso para hoje"
+                aria-label="Adicionar aviso"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+
+            {/* Input inline para novo aviso rápido */}
+            {isAddingNotice && (
+              <form onSubmit={handleAddNotice} className="mb-2.5 flex items-center gap-1.5">
+                <input 
+                  type="text"
+                  value={newNoticeText}
+                  onChange={(e) => setNewNoticeText(e.target.value)}
+                  placeholder="Novo aviso rápido..."
+                  autoFocus
+                  className="flex-1 text-xs px-2.5 py-1.5 rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-500/40 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button 
+                  type="submit" 
+                  disabled={!newNoticeText.trim()}
+                  className="px-2.5 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-xl disabled:opacity-50 transition-opacity cursor-pointer"
+                >
+                  Salvar
+                </button>
+              </form>
+            )}
+
+            {/* Lista compacta com as 3 últimas notas criadas para o dia atual */}
+            {todayNotes.length > 0 ? (
+              <ul className="space-y-1.5">
+                {todayNotes.map((nota) => (
+                  <li 
+                    key={nota.id}
+                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-slate-200/50 dark:border-slate-700/50 text-xs text-slate-700 dark:text-slate-300 group"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"></span>
+                      <span className="truncate leading-tight font-medium">{nota.texto}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteNotice(nota.id)}
+                      className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer"
+                      title="Apagar aviso"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="py-5 text-center text-slate-400 dark:text-slate-500 italic text-xs">
+                Nenhum aviso para hoje
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <motion.div
@@ -117,16 +340,19 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
         </div>
 
         {/* Card Resumo de Hoje (Mobile) */}
+        {renderResumoDeHojeCard()}
+
+        {/* Card Saldo disponível / Finanças (Mobile) */}
         <div className="glass-card p-5 relative overflow-hidden">
           {/* Card Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-xl bg-blue-500/15 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm">
-                <Target size={15} />
+                <Banknote size={15} />
               </div>
-              <span className="font-bold text-sm text-slate-900 dark:text-white">Resumo de Hoje</span>
+              <span className="font-bold text-sm text-slate-900 dark:text-white">Saldo disponível</span>
             </div>
-            <button onClick={() => onTabChange('finances')} className="text-slate-400 hover:text-blue-500 transition-colors">
+            <button onClick={() => onTabChange('finances')} className="text-slate-400 hover:text-blue-500 transition-colors" aria-label="Ir para finanças">
               <ChevronRight size={18} />
             </button>
           </div>
@@ -344,47 +570,8 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
         {/* Top Grid (3 columns) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Card 1: Resumo de Hoje */}
-          <div className="glass-card p-6 relative overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-br from-transparent to-blue-500/5 pointer-events-none"></div>
-            <div className="flex justify-between items-center mb-6 relative z-10">
-              <h2 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                Resumo de Hoje
-              </h2>
-              <button className="text-slate-400 hover:text-blue-500 transition-colors"><Bell size={16}/></button>
-            </div>
-            
-            <div className="flex items-center gap-6 relative z-10">
-              {/* Circular Progress */}
-              <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
-                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="10" className="text-slate-200/60 dark:text-slate-800" />
-                  <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="10" strokeDasharray="283" strokeDashoffset={strokeDashoffset} strokeLinecap="round" className="text-blue-600 dark:text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)] transition-all duration-1000 ease-out" />
-                </svg>
-                <span className="absolute text-xl font-black text-slate-900 dark:text-white">{progressPercent}%</span>
-              </div>
-              
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
-                  <span>{completedTasks} concluídas</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]"></span>
-                  <span>{pendingTasks} pendentes</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
-                  <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                  <span>0 em atraso</span>
-                </div>
-              </div>
-            </div>
-            <div className="mt-6 text-right relative z-10">
-              <button onClick={() => onTabChange('calendar')} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 justify-end w-full">
-                Ver agenda <ArrowRight size={14} />
-              </button>
-            </div>
-          </div>
+          {/* Card 1: Resumo de Hoje (Otimizado: Grid 2 Colunas com Progresso e Avisos de Hoje) */}
+          {renderResumoDeHojeCard()}
 
           {/* Card 2: Saldo disponível */}
           <div className="glass-card p-6 relative overflow-hidden group">
