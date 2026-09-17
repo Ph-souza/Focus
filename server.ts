@@ -1028,12 +1028,8 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
   // =========================================================================
   async function processMetaWebhookAsync(body: any) {
     try {
-      // 1. Parsing do Payload e validação de segurança
-      if (body?.object !== "whatsapp_business_account") {
-        return;
-      }
-
-      const entry = body.entry?.[0];
+      // 1. Parsing do Payload e validação da estrutura da Meta Cloud API
+      const entry = body?.entry?.[0];
       const change = entry?.changes?.[0];
       const value = change?.value;
 
@@ -1047,28 +1043,32 @@ Se o usuário pedir para adicionar um compromisso, tarefa ou lançamento finance
         return;
       }
 
-      // 3. Validação de mensagens recebidas
+      // 3. Validação e extração da mensagem no padrão Meta Cloud API:
+      // const message = req.body.entry[0].changes[0].value.messages[0];
       const messages = value.messages;
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
         return;
       }
 
-      const messageObj = messages[0];
+      const message = messages[0];
       const phoneId = value.metadata?.phone_number_id;
+      const messageType = message?.type;
 
-      // Ignora mensagens que não sejam do tipo texto (ex: mídias, contatos, localização)
-      if (messageObj.type !== "text") {
-        console.log(`[WhatsApp Webhook] Mensagem de tipo '${messageObj.type}' recebida. Apenas mensagens de texto são processadas no momento.`);
+      console.log('Tipo detectado:', messageType);
+
+      // 4. Validação de mensagem de texto e extração de message.text.body
+      let text = "";
+      if (messageType === 'text') {
+        text = message.text?.body || "";
+      } else {
+        console.log(`[WhatsApp Webhook] Mensagem de tipo '${messageType}' recebida. Apenas mensagens de texto são processadas no momento.`);
         return;
       }
 
-      // 4. Extração de Dados
-      // Capture o número de quem enviou: entry[0].changes[0].value.messages[0].from
-      const from = messageObj.from;
-      // Capture o texto da mensagem: entry[0].changes[0].value.messages[0].text.body
-      const text = messageObj.text?.body || "";
+      const from = message.from;
 
       if (!from || !text) {
+        console.warn(`[WhatsApp Webhook] Mensagem vazia ou remetente não identificado: from=${from}, text=${text}`);
         return;
       }
 
@@ -1308,7 +1308,7 @@ Data e hora atual: ${new Date().toISOString()}`;
     const body = req.body || {};
 
     // Se vier payload da Meta Cloud API nesta rota por engano, garante 200 imediato
-    if (body.object === "whatsapp_business_account") {
+    if (body.object === "whatsapp_business_account" || (body.entry && body.entry[0]?.changes)) {
       res.sendStatus(200);
       setImmediate(() => {
         processMetaWebhookAsync(body).catch((err) => {
