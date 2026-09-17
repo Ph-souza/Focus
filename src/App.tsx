@@ -306,7 +306,7 @@ function Dashboard() {
       case 'focus':
         return <TabFocus onTabChange={setActiveTab} />;
       case 'finances':
-        return <TabFinances />;
+        return <TabFinances transactions={transactions} goals={goals} user={user} onTabChange={setActiveTab} />;
       case 'transactions':
         return <TabTransactions transactions={transactions} setTransactions={setTransactions} user={user} />;
       case 'reports':
