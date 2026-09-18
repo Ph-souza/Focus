@@ -158,42 +158,38 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
 
   const todayStr = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 
-  // Componente Otimizado: Cards Resumo de Hoje e Avisos de Hoje (Totalmente Isolados)
+  // Cards Independentes e Compactos: Resumo de Hoje e Avisos de Hoje
   const renderResumoDeHojeCards = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full mb-6">
       
-      {/* CARD 1: Progresso (Totalmente isolado) */}
-      <div className="glass-card p-6 flex flex-col justify-between min-h-[220px]">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-6">Resumo de Hoje</h3>
-          <div className="flex items-center gap-6">
-            {/* Gráfico Redimensionado */}
-            <div className="w-20 h-20 rounded-full border-[5px] border-blue-500 flex items-center justify-center font-bold text-lg text-slate-700 dark:text-slate-200 shadow-inner">
-              {progressPercent}%
-            </div>
-            {/* Legendas */}
-            <div className="flex flex-col gap-2 text-sm text-slate-600 dark:text-slate-300">
-              <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-green-500"></div> {completedTasks} concluídas</span>
-              <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-orange-400"></div> {pendingTasks} pendentes</span>
-              <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-red-500"></div> 0 em atraso</span>
-            </div>
+      {/* CARD 1: Progresso (Compacto e Independente) */}
+      <div className="glass-card p-5 flex flex-col justify-between min-h-[160px]">
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">Resumo de Hoje</h3>
+        <div className="flex items-center gap-5 mb-2">
+          {/* Gráfico Compacto */}
+          <div className="w-16 h-16 rounded-full border-[4px] border-blue-500 flex items-center justify-center font-bold text-sm text-slate-700 dark:text-slate-200 shadow-inner">
+            {progressPercent}%
+          </div>
+          {/* Legendas Menores */}
+          <div className="flex flex-col gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+            <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500"></div> {completedTasks} concluídas</span>
+            <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-400"></div> {pendingTasks} pendentes</span>
+            <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"></div> 0 em atraso</span>
           </div>
         </div>
-        <div className="mt-6">
-          <button 
-            type="button"
-            onClick={() => onTabChange('calendar')}
-            className="text-blue-500 font-medium hover:text-blue-600 flex items-center gap-1 transition-colors cursor-pointer"
-          >
-            Ver agenda <span>→</span>
-          </button>
-        </div>
+        <button 
+          type="button"
+          onClick={() => onTabChange('calendar')}
+          className="text-blue-500 text-xs font-medium hover:text-blue-600 flex items-center gap-1 mt-auto cursor-pointer"
+        >
+          Ver agenda <span>→</span>
+        </button>
       </div>
 
-      {/* CARD 2: Avisos (Totalmente isolado) */}
-      <div className="glass-card p-6 flex flex-col min-h-[220px]">
-        <div className="flex justify-between items-center mb-6">
-           <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+      {/* CARD 2: Avisos (Compacto e Independente) */}
+      <div className="glass-card p-5 flex flex-col min-h-[160px]">
+        <div className="flex justify-between items-center mb-4">
+           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
              <span className="text-yellow-500">📌</span> Avisos de Hoje
            </h3>
            <button 
@@ -203,13 +199,13 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
              title="Adicionar aviso"
              aria-label="Adicionar aviso"
            >
-             <Plus size={18} />
+             <Plus size={16} />
            </button>
         </div>
 
         {/* Input inline para novo aviso rápido */}
         {isAddingNotice && (
-          <form onSubmit={handleAddNotice} className="mb-3 flex items-center gap-1.5">
+          <form onSubmit={handleAddNotice} className="mb-2 flex items-center gap-1.5">
             <input 
               type="text"
               value={newNoticeText}
@@ -251,7 +247,7 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
             ))}
           </ul>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-slate-400 italic text-sm text-center">
+          <div className="flex-1 flex items-center justify-center text-slate-400 italic text-xs text-center bg-slate-50/50 dark:bg-slate-800/50 rounded border border-dashed border-slate-200 dark:border-slate-700 py-3">
             Nenhum aviso para hoje
           </div>
         )}
