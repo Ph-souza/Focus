@@ -69,7 +69,6 @@ export function TabFinances({
   const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState<boolean>(false);
   const [showBalance, setShowBalance] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [localTransactions, setLocalTransactions] = useState<Transaction[]>([]);
 
   // Form states for new transaction
   const [newTitle, setNewTitle] = useState('');
@@ -129,19 +128,14 @@ export function TabFinances({
     return `${y}-${m}`;
   }, [selectedDate]);
 
-  // Combine Firestore transactions with local newly added ones
-  const allTransactions = useMemo(() => {
-    return [...localTransactions, ...transactions];
-  }, [localTransactions, transactions]);
-
-  // Transactions filtered by selected month, sorted newest first
+  // 1. Fonte Única da Verdade: Transações filtradas pelo mês selecionado diretamente do Firestore (onSnapshot)
   const monthTransactions = useMemo(() => {
-    return allTransactions
+    return transactions
       .filter(t => t.date && t.date.startsWith(selectedMonthKey))
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  }, [allTransactions, selectedMonthKey]);
+  }, [transactions, selectedMonthKey]);
 
-  // Financial metrics for selected month
+  // 3. Recálculo Seguro: Métricas financeiras derivadas unicamente do array do Firestore
   const totalIncome = useMemo(() => {
     return monthTransactions
       .filter(t => t.type === 'income' || t.type === 'receita')
@@ -164,10 +158,10 @@ export function TabFinances({
     return `${y}-${m}`;
   }, [selectedDate]);
 
-  // Transactions filtered by previous month
+  // Transações do mês anterior derivadas diretamente de transactions
   const previousMonthTransactions = useMemo(() => {
-    return allTransactions.filter(t => t.date && t.date.startsWith(previousMonthKey));
-  }, [allTransactions, previousMonthKey]);
+    return transactions.filter(t => t.date && t.date.startsWith(previousMonthKey));
+  }, [transactions, previousMonthKey]);
 
   // Financial metrics for previous month
   const previousTotalIncome = useMemo(() => {
@@ -357,7 +351,7 @@ export function TabFinances({
       const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const monthName = mStr.charAt(0).toUpperCase() + mStr.slice(1);
       
-      const monthExpense = allTransactions
+      const monthExpense = transactions
         .filter(t => (t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta') && t.date && t.date.startsWith(mKey))
         .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
@@ -368,7 +362,7 @@ export function TabFinances({
       });
     }
     return months;
-  }, [allTransactions, selectedDate]);
+  }, [transactions, selectedDate]);
 
   // Expenses grouped by category for Donut Chart (for the selected month)
   const categoryData = useMemo(() => {
@@ -389,7 +383,7 @@ export function TabFinances({
     })).sort((a, b) => b.value - a.value);
   }, [monthTransactions, totalExpense]);
 
-  // Handle adding a new transaction using the selected or chosen date
+  // Handle adding a new transaction using the selected or chosen date (Fonte Única da Verdade)
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     const num = parseFloat(newAmount.replace(',', '.'));
@@ -402,17 +396,10 @@ export function TabFinances({
 
     const chosenDate = newDate || `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-01`;
 
-    const newTx: Transaction = {
-      id: `tx-${Date.now()}`,
-      title: newTitle.trim(),
-      amount: num,
-      type: newType,
-      category: newType === 'investimento_meta' ? 'Investimentos' : newCategory,
-      date: chosenDate,
-      metaId: newType === 'investimento_meta' ? selectedMetaId : undefined
-    };
-
-    setLocalTransactions(prev => [newTx, ...prev]);
+    const txTitle = newTitle.trim();
+    const txType = newType;
+    const txCategory = newType === 'investimento_meta' ? 'Investimentos' : newCategory;
+    const txMetaId = newType === 'investimento_meta' ? selectedMetaId : null;
 
     // Automatically align selectedDate with the newly added transaction's month if different
     const [txYear, txMonth] = chosenDate.split('-');
@@ -420,24 +407,30 @@ export function TabFinances({
       setSelectedDate(new Date(parseInt(txYear, 10), parseInt(txMonth, 10) - 1, 1));
     }
 
+    // Reset de formulário e fechamento do modal imediatos (SEM atualização otimista manual no estado)
+    setNewTitle('');
+    setNewAmount('');
+    setSelectedMetaId('');
+    setIsAddModalOpen(false);
+
     if (user?.id) {
       try {
         const batch = writeBatch(db);
 
-        // 1. Grava a transação no Firestore (para ficar no histórico de movimentações)
+        // 1. Grava a transação no Firestore (o onSnapshot de App.tsx atualizará a interface)
         const txDocRef = doc(collection(db, 'users', user.id, 'transactions'));
         batch.set(txDocRef, {
-          title: newTx.title,
-          amount: newTx.amount,
-          type: newTx.type,
-          category: newTx.category,
-          date: newTx.date,
-          metaId: newTx.metaId || null,
+          title: txTitle,
+          amount: num,
+          type: txType,
+          category: txCategory,
+          date: chosenDate,
+          metaId: txMetaId,
           createdAt: serverTimestamp()
         });
 
-        // 2. Se for aporte em meta, atualiza a Meta na mesma operação (currentAmount e valorAcumulado)
-        if (newType === 'investimento_meta' && selectedMetaId) {
+        // 2. Se for aporte em meta, atualiza a Meta na mesma operação atômica
+        if (txType === 'investimento_meta' && selectedMetaId) {
           const goalRef = doc(db, 'users', user.id, 'goals', selectedMetaId);
           batch.update(goalRef, {
             currentAmount: increment(num),
@@ -451,10 +444,6 @@ export function TabFinances({
         console.error('Error adding transaction to Firestore:', err);
       }
     }
-
-    setNewTitle('');
-    setNewAmount('');
-    setIsAddModalOpen(false);
   };
 
   // Icon selector based on category
