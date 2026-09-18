@@ -6,7 +6,11 @@ import {
   addMonths, 
   subMonths, 
   startOfWeek, 
+  endOfWeek,
   startOfMonth, 
+  endOfMonth,
+  eachDayOfInterval,
+  isSameMonth,
   format, 
   isSameDay 
 } from 'date-fns';
@@ -283,6 +287,21 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
   };
 
   const weekdayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+  // 1. Geração Dinâmica da Grade do Mini-Calendário Mensal (date-fns)
+  const miniCalendarDays = useMemo(() => {
+    const monthStart = startOfMonth(selectedDate);
+    const monthEnd = endOfMonth(selectedDate);
+    const startWeek = startOfWeek(monthStart, { weekStartsOn: 0 }); // Domingo
+    const endWeek = endOfWeek(monthEnd, { weekStartsOn: 0 }); // Sábado
+    return eachDayOfInterval({ start: startWeek, end: endWeek });
+  }, [selectedDate]);
+
+  // 3. Interatividade: sincronizar selectedDate e carrossel de semanas
+  const handleSelectMiniCalendarDay = (day: Date) => {
+    setSelectedDate(day);
+    setCurrentWeekStart(startOfWeek(day, { weekStartsOn: 1 }));
+  };
 
   // Default mock activities matching mockup pixel-by-pixel if date has no Firestore routines
   const defaultMockActivities: ActivityItem[] = useMemo(() => [
@@ -1053,24 +1072,29 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-1 text-center">
-                {Array.from({ length: new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate() }).map((_, i) => (
-                  <div 
-                    key={i} 
-                    onClick={() => {
-                      const newD = new Date(selectedDate);
-                      newD.setDate(i + 1);
-                      setSelectedDate(newD);
-                      setCurrentWeekStart(startOfWeek(newD, { weekStartsOn: 1 }));
-                    }}
-                    className={`w-8 h-8 mx-auto flex items-center justify-center rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
-                      (i + 1) === selectedDate.getDate()
-                        ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.6)] font-black' 
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-white/50 dark:hover:bg-white/10 hover:text-blue-500'
-                    }`}
-                  >
-                    {i + 1}
-                  </div>
-                ))}
+                {miniCalendarDays.map((day) => {
+                  const isSelected = isSameDay(day, selectedDate);
+                  const isCurrentMonth = isSameMonth(day, selectedDate);
+                  const dayNumber = format(day, 'd');
+
+                  return (
+                    <button
+                      key={day.toISOString()}
+                      type="button"
+                      onClick={() => handleSelectMiniCalendarDay(day)}
+                      className={`w-8 h-8 mx-auto flex items-center justify-center rounded-full text-xs font-semibold cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-blue-500 text-white font-bold shadow-[0_0_12px_rgba(59,130,246,0.6)]'
+                          : isCurrentMonth
+                          ? 'text-slate-700 dark:text-slate-200 hover:bg-white/50 dark:hover:bg-white/10 hover:text-blue-500'
+                          : 'text-slate-400 opacity-50 hover:opacity-80 hover:bg-white/30 dark:hover:bg-white/5'
+                      }`}
+                      title={format(day, 'dd/MM/yyyy')}
+                    >
+                      {dayNumber}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
