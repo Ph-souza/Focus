@@ -158,101 +158,107 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
 
   const todayStr = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 
-  // Cards Independentes e Compactos: Resumo de Hoje e Avisos de Hoje
+  // Card Otimizado: Resumo de Hoje com Grid de 2 Colunas (Progresso + Avisos de Hoje) - QA-016
   const renderResumoDeHojeCards = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full mb-6">
-      
-      {/* CARD 1: Progresso (Compacto e Independente) */}
-      <div className="glass-card p-5 flex flex-col justify-between min-h-[160px]">
-        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">Resumo de Hoje</h3>
-        <div className="flex items-center gap-5 mb-2">
-          {/* Gráfico Compacto */}
-          <div className="w-16 h-16 rounded-full border-[4px] border-blue-500 flex items-center justify-center font-bold text-sm text-slate-700 dark:text-slate-200 shadow-inner">
-            {progressPercent}%
+    <div className="glass-card p-5 md:p-6 w-full mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+        
+        {/* Coluna 1 (Esquerda) — Progresso */}
+        <div className="flex flex-col justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">Resumo de Hoje</h3>
+            <div className="flex items-center gap-5 mb-2">
+              {/* Timer Circular de Progresso */}
+              <div className="w-16 h-16 rounded-full border-[4px] border-blue-500 flex items-center justify-center font-bold text-sm text-slate-700 dark:text-slate-200 shadow-inner shrink-0">
+                {progressPercent}%
+              </div>
+              {/* Legendas */}
+              <div className="flex flex-col gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+                <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500"></div> {completedTasks} concluídas</span>
+                <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-400"></div> {pendingTasks} pendentes</span>
+                <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"></div> 0 em atraso</span>
+              </div>
+            </div>
           </div>
-          {/* Legendas Menores */}
-          <div className="flex flex-col gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-            <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500"></div> {completedTasks} concluídas</span>
-            <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-400"></div> {pendingTasks} pendentes</span>
-            <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"></div> 0 em atraso</span>
-          </div>
-        </div>
-        <button 
-          type="button"
-          onClick={() => onTabChange('calendar')}
-          className="text-blue-500 text-xs font-medium hover:text-blue-600 flex items-center gap-1 mt-auto cursor-pointer"
-        >
-          Ver agenda <span>→</span>
-        </button>
-      </div>
-
-      {/* CARD 2: Avisos (Compacto e Independente) */}
-      <div className="glass-card p-5 flex flex-col min-h-[160px]">
-        <div className="flex justify-between items-center mb-4">
-           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-             <span className="text-yellow-500">📌</span> Avisos de Hoje
-           </h3>
-           <button 
-             type="button"
-             onClick={() => setIsAddingNotice(prev => !prev)}
-             className="bg-blue-50 dark:bg-blue-500/10 text-blue-500 p-1.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors cursor-pointer"
-             title="Adicionar aviso"
-             aria-label="Adicionar aviso"
-           >
-             <Plus size={16} />
-           </button>
+          <button 
+            type="button"
+            onClick={() => onTabChange('calendar')}
+            className="text-blue-500 text-xs font-medium hover:text-blue-600 flex items-center gap-1 mt-4 transition-colors cursor-pointer w-max"
+          >
+            Ver agenda <span>→</span>
+          </button>
         </div>
 
-        {/* Input inline para novo aviso rápido */}
-        {isAddingNotice && (
-          <form onSubmit={handleAddNotice} className="mb-2 flex items-center gap-1.5">
-            <input 
-              type="text"
-              value={newNoticeText}
-              onChange={(e) => setNewNoticeText(e.target.value)}
-              placeholder="Novo aviso rápido..."
-              autoFocus
-              className="flex-1 text-xs px-2.5 py-1.5 rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-500/40 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            <button 
-              type="submit" 
-              disabled={!newNoticeText.trim()}
-              className="px-2.5 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-xl disabled:opacity-50 transition-opacity cursor-pointer"
-            >
-              Salvar
-            </button>
-          </form>
-        )}
-
-        {todayNotes.length > 0 ? (
-          <ul className="space-y-1.5 flex-1">
-            {todayNotes.map((nota) => (
-              <li 
-                key={nota.id}
-                className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-slate-200/50 dark:border-slate-700/50 text-xs text-slate-700 dark:text-slate-300 group"
+        {/* Coluna 2 (Direita) — Avisos de Hoje (com borda esquerda divisória) */}
+        <div className="flex flex-col border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-700 pt-5 md:pt-0 md:pl-6 justify-between">
+          <div>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <span className="text-yellow-500">📌</span> Avisos de Hoje
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setIsAddingNotice(prev => !prev)}
+                className="bg-blue-50 dark:bg-blue-500/10 text-blue-500 p-1.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors cursor-pointer"
+                title="Adicionar aviso"
+                aria-label="Adicionar aviso"
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"></span>
-                  <span className="truncate leading-tight font-medium">{nota.texto}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteNotice(nota.id)}
-                  className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer"
-                  title="Apagar aviso"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-slate-400 italic text-xs text-center bg-slate-50/50 dark:bg-slate-800/50 rounded border border-dashed border-slate-200 dark:border-slate-700 py-3">
-            Nenhum aviso para hoje
-          </div>
-        )}
-      </div>
+                <Plus size={16} />
+              </button>
+            </div>
 
+            {/* Input inline para novo aviso rápido */}
+            {isAddingNotice && (
+              <form onSubmit={handleAddNotice} className="mb-2.5 flex items-center gap-1.5">
+                <input 
+                  type="text"
+                  value={newNoticeText}
+                  onChange={(e) => setNewNoticeText(e.target.value)}
+                  placeholder="Novo aviso rápido..."
+                  autoFocus
+                  className="flex-1 text-xs px-2.5 py-1.5 rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-500/40 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button 
+                  type="submit" 
+                  disabled={!newNoticeText.trim()}
+                  className="px-2.5 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-xl disabled:opacity-50 transition-opacity cursor-pointer"
+                >
+                  Salvar
+                </button>
+              </form>
+            )}
+
+            {todayNotes.length > 0 ? (
+              <ul className="space-y-1.5">
+                {todayNotes.map((nota) => (
+                  <li 
+                    key={nota.id}
+                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-slate-200/50 dark:border-slate-700/50 text-xs text-slate-700 dark:text-slate-300 group"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"></span>
+                      <span className="truncate leading-tight font-medium">{nota.texto}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteNotice(nota.id)}
+                      className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer"
+                      title="Apagar aviso"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="h-full min-h-[64px] flex items-center justify-center text-slate-400 italic text-xs text-center bg-slate-50/50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 px-3 py-2">
+                Nenhum aviso para hoje
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 
