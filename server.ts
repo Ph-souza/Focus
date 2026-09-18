@@ -620,6 +620,150 @@ async function startServer() {
     }
   });
 
+  // =========================================================================
+  // Rota Stripe Checkout: Criação de Sessão com client_reference_id e metadata
+  // =========================================================================
+  app.post("/api/stripe/create-checkout-session", async (req, res) => {
+    try {
+      const { userId, email } = req.body || {};
+
+      if (!userId) {
+        return res.status(400).json({ success: false, error: "userId (user.uid) é obrigatório." });
+      }
+
+      const stripeSecretKey = process.env.STRIPE_SECRET_KEY?.trim();
+      const appUrl = process.env.APP_URL || "https://nexusfocus.web.app";
+      const userEmail = (email || "").trim().toLowerCase();
+
+      // Se a chave secreta da Stripe estiver configurada, chamamos a API oficial da Stripe
+      if (stripeSecretKey) {
+        try {
+          const params = new URLSearchParams();
+          params.append("mode", "subscription");
+          params.append("client_reference_id", userId);
+          if (userEmail) {
+            params.append("customer_email", userEmail);
+          }
+          params.append("metadata[userId]", userId);
+          if (userEmail) {
+            params.append("metadata[email]", userEmail);
+          }
+          params.append("success_url", `${appUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}`);
+          params.append("cancel_url", `${appUrl}/page`);
+
+          // Linha de item recorrente de R$ 19,90/mês
+          const stripePriceId = process.env.STRIPE_PRICE_ID?.trim();
+          if (stripePriceId) {
+            params.append("line_items[0][price]", stripePriceId);
+            params.append("line_items[0][quantity]", "1");
+          } else {
+            params.append("line_items[0][price_data][currency]", "brl");
+            params.append("line_items[0][price_data][product_data][name]", "Nexus Focus Pro - Mensal");
+            params.append("line_items[0][price_data][product_data][description]", "Acesso completo ao Mentor IA, Gestão Financeira e Modo Foco");
+            params.append("line_items[0][price_data][unit_amount]", "1990"); // R$ 19,90 em centavos
+            params.append("line_items[0][price_data][recurring][interval]", "month");
+            params.append("line_items[0][quantity]", "1");
+          }
+
+          const stripeRes = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${stripeSecretKey}`,
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: params.toString()
+          });
+
+          const sessionData = await stripeRes.json();
+
+          if (stripeRes.ok && sessionData.url) {
+            console.log(`[Stripe Checkout] Sessão criada com sucesso para user ${userId}: ${sessionData.id}`);
+            return res.status(200).json({
+              success: true,
+              sessionId: sessionData.id,
+              url: sessionData.url
+            });
+          } else {
+            console.warn("[Stripe Checkout] Erro retornado pela API Stripe:", sessionData);
+          }
+        } catch (stripeApiErr: any) {
+          console.error("[Stripe Checkout] Erro ao conectar com a API Stripe:", stripeApiErr?.message);
+        }
+      }
+
+      // Fallback para URL de pagamento externa ou tela de checkout interna com userId atrelado
+      const directStripeUrl = process.env.STRIPE_CHECKOUT_URL || process.env.VITE_STRIPE_CHECKOUT_URL;
+      if (directStripeUrl) {
+        const separator = directStripeUrl.includes("?") ? "&" : "?";
+        const redirectUrl = `${directStripeUrl}${separator}client_reference_id=${encodeURIComponent(userId)}${userEmail ? `&prefilled_email=${encodeURIComponent(userEmail)}` : ""}`;
+        return res.status(200).json({
+          success: true,
+          url: redirectUrl
+        });
+      }
+
+      // Fallback padrão seguro para o Checkout com vinculação de userId
+      return res.status(200).json({
+        success: true,
+        url: `${appUrl}/checkout?userId=${encodeURIComponent(userId)}&intent=checkout`
+      });
+
+    } catch (err: any) {
+      console.error("[Stripe Checkout] Erro geral ao criar sessão:", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erro interno" });
+    }
+  });
+
+  // Webhook Stripe para ativação automática sem assinaturas órfãs
+  app.post("/api/webhooks/stripe", async (req, res) => {
+    res.status(200).json({ received: true });
+
+    try {
+      const event = req.body || {};
+      const eventType = event.type;
+      const dataObj = event.data?.object || {};
+
+      console.log(`[Stripe Webhook] Evento recebido: ${eventType}`);
+
+      if (eventType === "checkout.session.completed" || eventType === "invoice.payment_succeeded") {
+        const userId = dataObj.client_reference_id || dataObj.metadata?.userId;
+        const email = (dataObj.customer_details?.email || dataObj.customer_email || dataObj.metadata?.email || "").trim().toLowerCase();
+        const subscriptionId = dataObj.subscription || dataObj.id;
+
+        console.log(`[Stripe Webhook] Pagamento aprovado para userId: ${userId}, email: ${email}`);
+
+        // 1. Atualizar users/{userId} no Firestore
+        if (userId) {
+          const userRef = adminDb.collection("users").doc(userId);
+          await userRef.set({
+            isPremium: true,
+            role: "premium_user",
+            plan: "pro_unlimited",
+            stripeSubscriptionId: subscriptionId,
+            stripeCustomerId: dataObj.customer || null,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          console.log(`[Stripe Webhook] Documento users/${userId} atualizado com isPremium: true`);
+        }
+
+        // 2. Atualizar users/{email}
+        if (email) {
+          const emailRef = adminDb.collection("users").doc(email);
+          await emailRef.set({
+            email,
+            isPremium: true,
+            role: "premium_user",
+            plan: "pro_unlimited",
+            stripeSubscriptionId: subscriptionId,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+      }
+    } catch (whErr: any) {
+      console.error("[Stripe Webhook] Erro ao processar webhook:", whErr);
+    }
+  });
+
   // Push Notification Endpoints
   app.get("/api/vapidPublicKey", (req, res) => {
     res.json({ publicKey: vapidPublicKey });

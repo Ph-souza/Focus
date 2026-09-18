@@ -28,6 +28,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { CheckoutScreen } from './components/CheckoutScreen';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfUse } from './components/TermsOfUse';
+import { LandingPage } from './components/LandingPage';
 
 function Dashboard() {
   const { currentUser, logout } = useAuth();
@@ -398,6 +399,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/page" element={<LandingPage />} />
           <Route path="/login" element={<LoginScreen />} />
           <Route path="/checkout" element={<CheckoutScreen />} />
           <Route path="/privacidade" element={<PrivacyPolicy />} />

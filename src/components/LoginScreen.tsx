@@ -1,33 +1,87 @@
-import React, { useState } from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Navigate, Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Shield, AlertCircle, Loader2 } from 'lucide-react';
+import { Shield, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { NexusFocusLogo } from './AuraLogo';
 import { mapAuthError } from '../lib/firebase';
+import { createStripeCheckoutSession } from '../lib/stripe';
 
 export function LoginScreen() {
   const { currentUser, isPremium, isLoading, loginWithGoogle } = useAuth();
+  const [searchParams] = useSearchParams();
+  const isCheckoutIntent = searchParams.get('intent') === 'checkout';
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
   const hasAccess = isPremium || isWhitelistedPro(userEmail);
 
-  // Redirecionamento automático se já autenticado
+  // Redirecionamento automático ou interceptação caso já esteja autenticado
+  useEffect(() => {
+    if (!isLoading && currentUser) {
+      if (isCheckoutIntent && !hasAccess) {
+        setCheckoutLoading(true);
+        createStripeCheckoutSession({
+          userId: currentUser.uid,
+          email: currentUser.email || undefined
+        }).then((session) => {
+          if (session.url) {
+            window.location.href = session.url;
+          } else {
+            window.location.href = `/checkout?userId=${encodeURIComponent(currentUser.uid)}&intent=checkout`;
+          }
+        }).catch(() => {
+          window.location.href = `/checkout?userId=${encodeURIComponent(currentUser.uid)}&intent=checkout`;
+        });
+      }
+    }
+  }, [isLoading, currentUser, isCheckoutIntent, hasAccess]);
+
   if (!isLoading && currentUser) {
-    return <Navigate to={hasAccess ? "/dashboard" : "/checkout"} replace />;
+    if (hasAccess) {
+      return <Navigate to="/dashboard" replace />;
+    }
+    if (!isCheckoutIntent) {
+      return <Navigate to="/checkout" replace />;
+    }
   }
 
   const handleGoogleClick = async () => {
     try {
       setErrorMsg(null);
       setIsSubmitting(true);
-      await loginWithGoogle();
+      const user = await loginWithGoogle();
+
+      // Interceptação Pós-Login (Firebase + Stripe)
+      if (user) {
+        const email = (user.email || user.providerData?.[0]?.email || '').trim().toLowerCase();
+        const userHasAccess = isPremium || isWhitelistedPro(email);
+
+        if (isCheckoutIntent && !userHasAccess) {
+          // Impede o redirecionamento imediato para o dashboard!
+          setCheckoutLoading(true);
+          const session = await createStripeCheckoutSession({
+            userId: user.uid,
+            email: user.email || undefined
+          });
+
+          if (session.url) {
+            window.location.href = session.url;
+            return;
+          } else {
+            window.location.href = `/checkout?userId=${encodeURIComponent(user.uid)}&intent=checkout`;
+            return;
+          }
+        }
+      }
     } catch (err: any) {
       console.error('Login error:', err);
       const mapped = mapAuthError(err);
       setErrorMsg(mapped.message || 'Erro ao autenticar com o Google. Tente novamente.');
+      setCheckoutLoading(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -49,23 +103,41 @@ export function LoginScreen() {
         className="w-full max-w-xl flex flex-col items-center text-center relative z-10 my-auto py-2 sm:py-4"
       >
         {/* Logo Card */}
-        <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white/95 rounded-2xl sm:rounded-3xl shadow-[0_12px_32px_rgba(0,0,0,0.07),0_2px_8px_rgba(0,0,0,0.04)] border border-white flex items-center justify-center mb-5 sm:mb-6 transition-transform duration-300 hover:scale-[1.03]">
+        <Link to="/page" className="w-20 h-20 sm:w-24 sm:h-24 bg-white/95 rounded-2xl sm:rounded-3xl shadow-[0_12px_32px_rgba(0,0,0,0.07),0_2px_8px_rgba(0,0,0,0.04)] border border-white flex items-center justify-center mb-5 sm:mb-6 transition-transform duration-300 hover:scale-[1.03]">
           <NexusFocusLogo className="w-12 h-12 sm:w-14 sm:h-14" variant="dark" />
-        </div>
+        </Link>
 
-        {/* Brand Title (Now dominant, prominent and larger than the impact headline) */}
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-[0.25em] text-zinc-950 uppercase mb-8 sm:mb-10">
+        {/* Brand Title */}
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-[0.25em] text-zinc-950 uppercase mb-6 sm:mb-8">
           NEXUS FOCUS
         </h1>
 
-        {/* Impact Section with distinct spacing */}
+        {/* Impact Section / Contextual Rendering */}
         <div className="flex flex-col items-center mb-6 sm:mb-8">
-          <h2 className="text-xl sm:text-2xl lg:text-[28px] font-bold tracking-tight text-zinc-800 mb-2 sm:mb-2.5 leading-snug">
-            Sua rotina, mais inteligente.
-          </h2>
-          <p className="text-zinc-600 text-sm sm:text-base max-w-md leading-relaxed">
-            Seu assistente pessoal para organização, produtividade e controle financeiro em uma única experiência.
-          </p>
+          {isCheckoutIntent ? (
+            <>
+              {/* Visual Step Indicator Badge */}
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50/90 backdrop-blur-md border border-blue-200/80 text-blue-700 text-xs font-semibold mb-3.5 shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                <span>Passo 1 de 2: Autenticação</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl lg:text-[28px] font-bold tracking-tight text-zinc-900 mb-2 sm:mb-2.5 leading-snug">
+                Quase lá! Crie sua conta para assinar
+              </h2>
+              <p className="text-zinc-600 text-sm sm:text-base max-w-md leading-relaxed">
+                Autentique-se com sua conta Google para vincular com segurança sua assinatura de <strong className="text-zinc-800">R$ 19,90/mês</strong>.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl sm:text-2xl lg:text-[28px] font-bold tracking-tight text-zinc-800 mb-2 sm:mb-2.5 leading-snug">
+                Sua rotina, mais inteligente.
+              </h2>
+              <p className="text-zinc-600 text-sm sm:text-base max-w-md leading-relaxed">
+                Seu assistente pessoal para organização, produtividade e controle financeiro em uma única experiência.
+              </p>
+            </>
+          )}
         </div>
 
         {/* Login Card */}
@@ -81,16 +153,18 @@ export function LoginScreen() {
             </motion.div>
           )}
 
-          {/* Clean Official Google Sign-In Button */}
+          {/* Clean Official Google Sign-In Button with Contextual Label */}
           <button
             onClick={handleGoogleClick}
-            disabled={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading || checkoutLoading}
             className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold py-3.5 px-5 rounded-2xl border border-zinc-200/80 shadow-[0_4px_16px_rgba(0,0,0,0.05)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.09)] transition-all duration-200 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3 cursor-pointer"
           >
-            {isSubmitting ? (
+            {isSubmitting || checkoutLoading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin text-zinc-700" />
-                <span className="text-sm sm:text-base font-bold text-zinc-800">Conectando ao Google...</span>
+                <span className="text-sm sm:text-base font-bold text-zinc-800">
+                  {checkoutLoading ? 'Preparando pagamento seguro...' : 'Conectando ao Google...'}
+                </span>
               </>
             ) : (
               <>
@@ -114,11 +188,18 @@ export function LoginScreen() {
                   />
                 </svg>
                 <span className="text-[15px] sm:text-base font-bold text-zinc-900 tracking-normal">
-                  Entrar com o Google
+                  {isCheckoutIntent ? 'Começar com Google' : 'Entrar com o Google'}
                 </span>
               </>
             )}
           </button>
+
+          {/* Contextual Footnote when intent=checkout */}
+          {isCheckoutIntent && (
+            <p className="text-[11px] sm:text-xs text-zinc-500 text-center mt-3.5 leading-relaxed">
+              Você será redirecionado para o pagamento seguro após criar a conta
+            </p>
+          )}
 
           {/* Security Badge with Horizontal Dividers */}
           <div className="flex items-center gap-3 mt-5 w-full">

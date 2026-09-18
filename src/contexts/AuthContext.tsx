@@ -7,7 +7,7 @@ export interface AuthContextType {
   currentUser: FirebaseUser | null;
   isPremium: boolean;
   isLoading: boolean;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: () => Promise<FirebaseUser | null>;
   logout: () => Promise<void>;
 }
 
@@ -133,10 +133,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (): Promise<FirebaseUser | null> => {
     setIsLoading(true);
     try {
-      await signInWithGoogle();
+      const result = await signInWithGoogle();
+      return result?.user || null;
     } catch (error) {
       setIsLoading(false);
       throw error;
