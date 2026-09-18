@@ -346,6 +346,41 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
       .sort((a, b) => a.time.localeCompare(b.time));
   }, [rotinas, selectedDateStr, localStatuses, defaultMockActivities, deletedIds]);
 
+  // Próximos compromissos futuros (> selectedDateStr)
+  const upcomingActivities = useMemo(() => {
+    const validRoutines = rotinas
+      .filter(r => r.date && r.date > selectedDateStr && !deletedIds.includes(r.id))
+      .sort((a, b) => {
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return dateCompare;
+        return (a.time || '').localeCompare(b.time || '');
+      });
+
+    return validRoutines.slice(0, 3).map(r => ({
+      id: r.id,
+      title: r.title,
+      date: r.date,
+      time: r.time,
+      category: ((r as any).category || 'Trabalho') as 'Trabalho' | 'Pessoal' | 'Estudos'
+    }));
+  }, [rotinas, selectedDateStr, deletedIds]);
+
+  // Helper para formatar a data dos próximos compromissos (ex: 'Sex, 18')
+  const formatUpcomingDate = (dateStr: string) => {
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length >= 3) {
+        const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2].slice(0, 2)));
+        const raw = format(d, 'EEE, dd', { locale: ptBR });
+        const clean = raw.replace('.', '');
+        return clean.charAt(0).toUpperCase() + clean.slice(1);
+      }
+      return dateStr;
+    } catch {
+      return dateStr;
+    }
+  };
+
   // Filter activities by active category pill
   const filteredActivities = useMemo(() => {
     if (filter === 'Todos') return dayActivities;
@@ -1096,6 +1131,68 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
                   );
                 })}
               </div>
+            </div>
+
+            {/* Card 'Próximos Compromissos' */}
+            <div className="glass-card p-5 flex flex-col">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-1.5">
+                  <Clock size={14} className="text-blue-500" />
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                    Próximos
+                  </h3>
+                </div>
+                <span className="text-[11px] font-medium text-slate-400">
+                  Amanhã em diante
+                </span>
+              </div>
+
+              {upcomingActivities.length === 0 ? (
+                <div className="py-5 text-center">
+                  <p className="text-xs italic font-light text-slate-400">
+                    Nenhum compromisso próximo. Caminho livre!
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
+                  {upcomingActivities.map((item) => {
+                    const dotColor =
+                      item.category === 'Trabalho'
+                        ? 'bg-rose-500'
+                        : item.category === 'Pessoal'
+                        ? 'bg-emerald-500'
+                        : item.category === 'Estudos'
+                        ? 'bg-purple-500'
+                        : 'bg-blue-500';
+
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          const parts = item.date.split('-');
+                          if (parts.length >= 3) {
+                            const targetDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2].slice(0, 2)));
+                            setSelectedDate(targetDate);
+                            setCurrentWeekStart(startOfWeek(targetDate, { weekStartsOn: 1 }));
+                          }
+                        }}
+                        className="flex items-center justify-between gap-3 py-2.5 first:pt-1 last:pb-1 cursor-pointer hover:bg-white/40 dark:hover:bg-white/5 px-1.5 -mx-1.5 rounded-lg transition-colors group"
+                        title="Ver este dia na agenda"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate group-hover:text-blue-500 transition-colors">
+                            {item.title}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-medium text-slate-400 shrink-0">
+                          {formatUpcomingDate(item.date)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Quote Card */}
