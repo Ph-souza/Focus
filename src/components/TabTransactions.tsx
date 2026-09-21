@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, ArrowUpRight, ArrowDownRight, Coffee, Monitor, Home, Briefcase, Trash2, Sparkles, Receipt } from 'lucide-react';
+import { Plus, ArrowUpRight, ArrowDownRight, Coffee, Monitor, Home, Briefcase, Trash2, Sparkles, Receipt, ChevronDown } from 'lucide-react';
 import { Transaction, User } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, serverTimestamp, collection, query, orderBy, limit, startAfter, getDocs, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { getApiUrl } from '../lib/api';
 
 import { MonthlyBudgetWidget } from './MonthlyBudgetWidget';
@@ -24,6 +24,89 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [isSuggestingCategory, setIsSuggestingCategory] = useState(false);
+
+  // Paginação por Cursor
+  const [paginatedTransactions, setPaginatedTransactions] = useState<Transaction[]>([]);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // 1. Carrega inicialmente apenas 20 itens (.limit(20)) ordenados por date desc
+  useEffect(() => {
+    if (!user?.id) {
+      setPaginatedTransactions(transactions.slice(0, 20));
+      return;
+    }
+
+    let isMounted = true;
+    const fetchInitial = async () => {
+      setIsLoadingInitial(true);
+      try {
+        const firstQuery = query(
+          collection(db, 'users', user.id, 'transactions'),
+          orderBy('date', 'desc'),
+          limit(20)
+        );
+        const snapshot = await getDocs(firstQuery);
+        if (isMounted) {
+          const docs = snapshot.docs;
+          if (docs.length > 0) {
+            setLastVisible(docs[docs.length - 1]);
+          } else {
+            setLastVisible(null);
+          }
+          setHasMore(docs.length === 20);
+          setPaginatedTransactions(docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
+        }
+      } catch (err) {
+        console.error("Erro ao carregar transações paginadas:", err);
+        if (isMounted) {
+          setPaginatedTransactions(transactions.slice(0, 20));
+        }
+      } finally {
+        if (isMounted) setIsLoadingInitial(false);
+      }
+    };
+
+    fetchInitial();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  // 2. Paginação baseada em cursor: busca próxima página de 20 itens com startAfter(lastVisible)
+  const loadMore = async () => {
+    if (!lastVisible || isLoadingMore || !hasMore || !user?.id) return;
+    setIsLoadingMore(true);
+    try {
+      const nextQuery = query(
+        collection(db, 'users', user.id, 'transactions'),
+        orderBy('date', 'desc'),
+        startAfter(lastVisible),
+        limit(20)
+      );
+      const snapshot = await getDocs(nextQuery);
+      const newDocs = snapshot.docs;
+      if (newDocs.length < 20) {
+        setHasMore(false);
+      }
+      if (newDocs.length > 0) {
+        setLastVisible(newDocs[newDocs.length - 1]);
+        const newItems = newDocs.map(d => ({ id: d.id, ...d.data() } as Transaction));
+        setPaginatedTransactions(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const uniqueNew = newItems.filter(item => !existingIds.has(item.id));
+          return [...prev, ...uniqueNew];
+        });
+      }
+    } catch (err) {
+      console.error("Erro ao carregar mais transações:", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   const incomeCategories = ['Salário', 'Investimento', 'Venda', 'Outros'];
   const expenseCategories = ['Alimentação', 'Transporte', 'Saúde', 'Moradia', 'Lazer', 'Serviços', 'Mercado', 'Outros'];
@@ -90,6 +173,7 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
       
       try {
         await setDoc(doc(db, `users/${user.id}/transactions`, txId), newTx);
+        setPaginatedTransactions(prev => [{ id: txId, ...newTx } as Transaction, ...prev]);
       } catch(err) {
         handleFirestoreError(err, OperationType.CREATE, `users/${user.id}/transactions/${txId}`);
       }
@@ -113,6 +197,7 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
     e.stopPropagation();
     try {
       await deleteDoc(doc(db, `users/${user.id}/transactions`, id));
+      setPaginatedTransactions(prev => prev.filter(tx => tx.id !== id));
     } catch(err) {
       handleFirestoreError(err, OperationType.DELETE, `users/${user.id}/transactions/${id}`);
     }
@@ -262,7 +347,7 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
         </div>
         <div className="p-2 flex flex-col gap-1 overflow-hidden divide-y divide-slate-50 dark:divide-[#27272a]/50">
           <AnimatePresence mode="popLayout">
-            {transactions.filter(tx => (filter === 'all' || tx.type === filter) && (categoryFilter === 'all' || tx.category === categoryFilter)).map((tx) => (
+            {paginatedTransactions.filter(tx => (filter === 'all' || tx.type === filter) && (categoryFilter === 'all' || tx.category === categoryFilter)).map((tx) => (
               <motion.div 
                 layout
                 initial={{ opacity: 0, x: -20, scale: 0.95 }}
@@ -304,7 +389,7 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
             ))}
           </AnimatePresence>
           
-          {transactions.filter(tx => (filter === 'all' || tx.type === filter) && (categoryFilter === 'all' || tx.category === categoryFilter)).length === 0 && (
+          {paginatedTransactions.filter(tx => (filter === 'all' || tx.type === filter) && (categoryFilter === 'all' || tx.category === categoryFilter)).length === 0 && !isLoadingInitial && (
             <div className="py-14 px-4 flex flex-col items-center justify-center text-center">
               <div className="w-12 h-12 rounded-2xl bg-zinc-800/80 border border-zinc-700/80 flex items-center justify-center text-white mb-3 shadow-inner">
                 <Receipt size={22} />
@@ -313,6 +398,34 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
               <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-xs mt-1 leading-relaxed">
                 Não há registros com os filtros selecionados. Alterne as categorias ou registre uma nova transação acima.
               </p>
+            </div>
+          )}
+
+          {/* Paginação baseada em cursor: Carregar mais */}
+          {hasMore && (
+            <div className="p-4 flex justify-center border-t border-slate-100 dark:border-[#27272a]">
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={isLoadingMore}
+                className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-slate-700 dark:text-zinc-200 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                {isLoadingMore ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Buscando próximas 20 transações...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Carregar mais (próximas 20)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+          {!hasMore && paginatedTransactions.length > 0 && (
+            <div className="p-3 text-center border-t border-slate-100 dark:border-[#27272a]/40 text-[11px] text-slate-400 dark:text-zinc-500 font-medium">
+              Todas as transações foram carregadas ({paginatedTransactions.length} itens)
             </div>
           )}
         </div>

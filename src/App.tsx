@@ -19,7 +19,7 @@ import { QuickChat } from './components/QuickChat';
 import { SmartCaptureModal } from './components/SmartCaptureModal';
 import { WhatsAppModal } from './components/WhatsAppModal';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, onSnapshot, query, orderBy, setDoc, doc, getDoc, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, setDoc, doc, getDoc, where, limit } from 'firebase/firestore';
 import { subscribeToPushNotifications } from './lib/pushNotifications';
 import { getApiUrl } from './lib/api';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -144,10 +144,11 @@ function Dashboard() {
   useEffect(() => {
     if (!user.id) return;
 
-    // 1. Transactions Listener
+    // 1. Transactions Listener (Limit 5 mais recentes para cards de resumo da Tela Início)
     const transQuery = query(
       collection(db, 'users', user.id, 'transactions'),
-      orderBy('date', 'desc')
+      orderBy('date', 'desc'),
+      limit(5)
     );
     const unsubTrans = onSnapshot(transQuery, (snapshot) => {
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
@@ -165,8 +166,8 @@ function Dashboard() {
       handleFirestoreError(error, OperationType.LIST, `users/${user.id}/goals`);
     });
 
-    // 3. Tasks Listener
-    const tasksQuery = query(collection(db, 'users', user.id, 'tasks'), orderBy('createdAt', 'desc'));
+    // 3. Tasks Listener (Limit 20)
+    const tasksQuery = query(collection(db, 'users', user.id, 'tasks'), orderBy('createdAt', 'desc'), limit(20));
     const unsubTasks = onSnapshot(tasksQuery, (snapshot) => {
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Task));
       setTasks(docs);
@@ -184,7 +185,7 @@ function Dashboard() {
     });
 
     // 5. Appointments Listener
-    const appointmentsQuery = query(collection(db, 'users', user.id, 'appointments'), orderBy('createdAt', 'desc'));
+    const appointmentsQuery = query(collection(db, 'users', user.id, 'appointments'), orderBy('createdAt', 'desc'), limit(10));
     const unsubAppointments = onSnapshot(appointmentsQuery, (snapshot) => {
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Appointment));
       setAppointments(docs);
@@ -192,8 +193,8 @@ function Dashboard() {
       handleFirestoreError(error, OperationType.LIST, `users/${user.id}/appointments`);
     });
 
-    // 6. Rotinas Listener
-    const rotinasQuery = query(collection(db, 'users', user.id, 'rotinas'), orderBy('createdAt', 'desc'));
+    // 6. Rotinas Listener (Limit 5 para Próximas Atividades da Tela Início)
+    const rotinasQuery = query(collection(db, 'users', user.id, 'rotinas'), orderBy('date', 'desc'), limit(5));
     const unsubRotinas = onSnapshot(rotinasQuery, (snapshot) => {
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Rotina));
       setRotinas(docs);

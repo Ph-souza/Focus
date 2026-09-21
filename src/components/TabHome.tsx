@@ -47,7 +47,7 @@ interface TabHomeProps {
   latestMentorFeedback?: string | null;
 }
 
-export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile, latestMentorFeedback }: TabHomeProps) {
+export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, onOpenProfile, latestMentorFeedback }: TabHomeProps) {
   const [greeting, setGreeting] = useState('');
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -83,6 +83,11 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
   const todayNotes = useMemo(() => {
     return dailyNotes.filter(n => n.date === todayDateStr).slice(0, 3);
   }, [dailyNotes, todayDateStr]);
+
+  // 5 próximas atividades mais recentes (limitadas rigidamente a 5 na query do Firestore)
+  const recentActivities = useMemo(() => {
+    return rotinas.slice(0, 5);
+  }, [rotinas]);
 
   const handleAddNotice = (e: React.FormEvent) => {
     e.preventDefault();
@@ -428,44 +433,23 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
           </div>
 
           <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
-            {/* Item 1 */}
-            <div className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-              <CircleDot size={15} className="text-rose-500 shrink-0" />
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 w-11 shrink-0">08:30</span>
-              <div className="flex-1 min-w-0 pr-2">
-                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">Reunião com o time</p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Alinhar objetivos do projeto</p>
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 shrink-0">
-                Alta
-              </span>
-            </div>
-
-            {/* Item 2 */}
-            <div className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-              <div className="w-3.5 h-3.5 rounded-full bg-blue-500 shrink-0 mx-0.5"></div>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 w-11 shrink-0">10:00</span>
-              <div className="flex-1 min-w-0 pr-2">
-                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">Revisar finanças</p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Verificar gastos e atualizar planilha</p>
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25 shrink-0">
-                Média
-              </span>
-            </div>
-
-            {/* Item 3 */}
-            <div className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-              <Circle size={15} className="text-slate-400 shrink-0" />
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 w-11 shrink-0">14:00</span>
-              <div className="flex-1 min-w-0 pr-2">
-                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">Estudo / Curso</p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">NEXUS Focus Academy</p>
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
-                Baixa
-              </span>
-            </div>
+            {recentActivities.length > 0 ? (
+              recentActivities.map((act) => (
+                <div key={act.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <CircleDot size={15} className="text-blue-500 shrink-0" />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 w-11 shrink-0">{act.time || '09:00'}</span>
+                  <div className="flex-1 min-w-0 pr-2">
+                    <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{act.title}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{act.date || 'Hoje'}</p>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25 shrink-0">
+                    {(act as any).category || 'Rotina'}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 dark:text-slate-400 py-3 text-center">Nenhuma atividade agendada</p>
+            )}
           </div>
         </div>
 
@@ -646,26 +630,20 @@ export function TabHome({ transactions, tasks, onTabChange, user, onOpenProfile,
             </div>
             
             <div className="flex flex-col gap-2.5">
-              <div className="flex items-center gap-4 p-3.5 hover:bg-white/50 dark:hover:bg-blue-500/10 rounded-2xl transition-colors border border-transparent hover:border-slate-200/40 dark:hover:border-blue-500/20 group">
-                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 w-12 flex items-center gap-1.5"><Clock size={12}/> 09:00</div>
-                <div className="flex-1 font-semibold text-sm text-slate-800 dark:text-slate-100 group-hover:text-blue-500 transition-colors">Revisar proposta do projeto</div>
-                <div className="px-3 py-1 text-[10px] font-bold rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">Trabalho</div>
-              </div>
-              <div className="flex items-center gap-4 p-3.5 hover:bg-white/50 dark:hover:bg-blue-500/10 rounded-2xl transition-colors border border-transparent hover:border-slate-200/40 dark:hover:border-blue-500/20 group">
-                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 w-12 flex items-center gap-1.5"><Clock size={12}/> 11:00</div>
-                <div className="flex-1 font-semibold text-sm text-slate-800 dark:text-slate-100 group-hover:text-blue-500 transition-colors">Estudar para a prova</div>
-                <div className="px-3 py-1 text-[10px] font-bold rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">Estudos</div>
-              </div>
-              <div className="flex items-center gap-4 p-3.5 hover:bg-white/50 dark:hover:bg-blue-500/10 rounded-2xl transition-colors border border-transparent hover:border-slate-200/40 dark:hover:border-blue-500/20 group">
-                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 w-12 flex items-center gap-1.5"><Clock size={12}/> 14:00</div>
-                <div className="flex-1 font-semibold text-sm text-slate-800 dark:text-slate-100 group-hover:text-blue-500 transition-colors">Reunião com o time</div>
-                <div className="px-3 py-1 text-[10px] font-bold rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">Trabalho</div>
-              </div>
-              <div className="flex items-center gap-4 p-3.5 hover:bg-white/50 dark:hover:bg-blue-500/10 rounded-2xl transition-colors border border-transparent hover:border-slate-200/40 dark:hover:border-blue-500/20 group">
-                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 w-12 flex items-center gap-1.5"><Clock size={12}/> 16:00</div>
-                <div className="flex-1 font-semibold text-sm text-slate-800 dark:text-slate-100 group-hover:text-blue-500 transition-colors">Academia</div>
-                <div className="px-3 py-1 text-[10px] font-bold rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">Pessoal</div>
-              </div>
+              {recentActivities.length > 0 ? (
+                recentActivities.map((act) => (
+                  <div key={act.id} className="flex items-center gap-4 p-3.5 hover:bg-white/50 dark:hover:bg-blue-500/10 rounded-2xl transition-colors border border-transparent hover:border-slate-200/40 dark:hover:border-blue-500/20 group">
+                    <div className="text-xs font-bold text-slate-500 dark:text-slate-400 w-12 flex items-center gap-1.5"><Clock size={12}/> {act.time || '09:00'}</div>
+                    <div className="flex-1 font-semibold text-sm text-slate-800 dark:text-slate-100 group-hover:text-blue-500 transition-colors">{act.title}</div>
+                    <div className="text-xs text-slate-400 dark:text-slate-500">{act.date || 'Hoje'}</div>
+                    <div className="px-3 py-1 text-[10px] font-bold rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                      {(act as any).category || 'Rotina'}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400 py-4 text-center">Nenhuma atividade recente encontrada.</p>
+              )}
             </div>
           </div>
 

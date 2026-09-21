@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Transaction, User, Goal } from '../types';
 import { db } from '../lib/firebase';
-import { collection, doc, writeBatch, increment, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, writeBatch, increment, serverTimestamp, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { startOfMonth, endOfMonth, format } from 'date-fns';
 import { 
   ArrowUp, 
   ArrowDown, 
@@ -128,12 +129,43 @@ export function TabFinances({
     return `${y}-${m}`;
   }, [selectedDate]);
 
-  // 1. Fonte Única da Verdade: Transações filtradas pelo mês selecionado diretamente do Firestore (onSnapshot)
+  // Contextual Firestore Listener: carrega exclusivamente as transações do mês visível
+  const [contextualTransactions, setContextualTransactions] = useState<Transaction[]>([]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    const startOfMonthStr = format(startOfMonth(selectedDate), 'yyyy-MM-dd');
+    const endOfMonthStr = format(endOfMonth(selectedDate), 'yyyy-MM-dd');
+
+    const q = query(
+      collection(db, 'users', user.id, 'transactions'),
+      where('date', '>=', startOfMonthStr),
+      where('date', '<=', endOfMonthStr),
+      orderBy('date', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
+      setContextualTransactions(docs);
+    }, (error) => {
+      console.error("Erro ao carregar transações do mês selecionado:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user?.id, format(selectedDate, 'yyyy-MM')]);
+
+  // 1. Fonte Única da Verdade: Transações filtradas pelo mês selecionado via query contextual do Firestore
   const monthTransactions = useMemo(() => {
+    if (user?.id) {
+      return contextualTransactions;
+    }
     return transactions
       .filter(t => t.date && t.date.startsWith(selectedMonthKey))
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  }, [transactions, selectedMonthKey]);
+  }, [user?.id, contextualTransactions, transactions, selectedMonthKey]);
 
   // 3. Recálculo Seguro: Métricas financeiras derivadas unicamente do array do Firestore
   const totalIncome = useMemo(() => {

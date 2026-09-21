@@ -17,7 +17,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { Rotina, User } from '../types';
 import { db } from '../lib/firebase';
-import { collection, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { 
   Plus, 
   ChevronLeft, 
@@ -310,9 +310,39 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
     { id: 'mock-5', time: '18:30', title: 'Leitura', subtitle: 'Ler 30 minutos', category: 'Pessoal', completed: false },
   ], []);
 
-  // 1. Fonte Única da Verdade: Firestore Listener via rotinas prop
+  // Contextual Firestore Listener: busca exclusivamente o intervalo do mês visível
+  const [calendarRotinas, setCalendarRotinas] = useState<Rotina[]>(rotinas);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setCalendarRotinas(rotinas);
+      return;
+    }
+
+    const monthTarget = displayedMonthDate || selectedDate;
+    const startOfMonthStr = format(startOfMonth(monthTarget), 'yyyy-MM-dd');
+    const endOfMonthStr = format(endOfMonth(monthTarget), 'yyyy-MM-dd');
+
+    const q = query(
+      collection(db, 'users', user.id, 'rotinas'),
+      where('date', '>=', startOfMonthStr),
+      where('date', '<=', endOfMonthStr),
+      orderBy('date', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Rotina));
+      setCalendarRotinas(docs);
+    }, (error) => {
+      console.error("Erro ao carregar rotinas do mês selecionado:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user?.id, format(displayedMonthDate || selectedDate, 'yyyy-MM')]);
+
+  // 1. Fonte Única da Verdade: Firestore Listener contextual via calendarRotinas
   const dayActivities: ActivityItem[] = useMemo(() => {
-    const firestoreItems = rotinas
+    const firestoreItems = calendarRotinas
       .filter(r => r.date === selectedDateStr)
       .map(r => {
         let displayTime = '09:00';
@@ -344,17 +374,17 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
     }
 
     // Se o usuário possui rotinas no Firestore (mas nenhuma para a data selecionada), exibe vazio
-    if (rotinas.length > 0) {
+    if (calendarRotinas.length > 0) {
       return [];
     }
 
     // Apenas para onboarding/usuário novo sem nenhuma rotina no Firestore, exibe atividades de exemplo
     return defaultMockActivities.sort((a, b) => a.time.localeCompare(b.time));
-  }, [rotinas, selectedDateStr, defaultMockActivities]);
+  }, [calendarRotinas, selectedDateStr, defaultMockActivities]);
 
   // Próximos compromissos futuros (> selectedDateStr) derivados unicamente do Firestore
   const upcomingActivities = useMemo(() => {
-    const validRoutines = rotinas
+    const validRoutines = calendarRotinas
       .filter(r => r.date && r.date > selectedDateStr)
       .sort((a, b) => {
         const dateCompare = a.date.localeCompare(b.date);
@@ -369,7 +399,7 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
       time: r.time,
       category: ((r as any).category || 'Trabalho') as 'Trabalho' | 'Pessoal' | 'Estudos'
     }));
-  }, [rotinas, selectedDateStr]);
+  }, [calendarRotinas, selectedDateStr]);
 
   // Helper para formatar a data dos próximos compromissos (ex: 'Sex, 18')
   const formatUpcomingDate = (dateStr: string) => {
