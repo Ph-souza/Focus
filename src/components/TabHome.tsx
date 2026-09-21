@@ -163,9 +163,9 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
 
   const todayStr = new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 
-  // Card Otimizado: Resumo de Hoje com metade da largura (do tamanho do Saldo Disponível) e 2 colunas internas
+  // Card Resumo de Hoje (usado apenas no mobile via renderResumoDeHojeCards)
   const renderResumoDeHojeCards = () => (
-    <div className="glass-card p-5 w-full lg:max-w-[calc(50%-12px)] mb-6">
+    <div className="glass-card p-5 w-full mb-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
         
         {/* Coluna 1 (Esquerda) — Progresso */}
@@ -173,11 +173,9 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
           <div>
             <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-3">Resumo de Hoje</h3>
             <div className="flex items-center gap-4 mb-2">
-              {/* Timer Circular de Progresso Compacto */}
               <div className="w-14 h-14 rounded-full border-[3.5px] border-blue-500 flex items-center justify-center font-bold text-sm text-slate-700 dark:text-slate-200 shadow-inner shrink-0">
                 {progressPercent}%
               </div>
-              {/* Legendas */}
               <div className="flex flex-col gap-1 text-[11px] text-slate-600 dark:text-slate-300">
                 <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div> {completedTasks} concluídas</span>
                 <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-400"></div> {pendingTasks} pendentes</span>
@@ -194,7 +192,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
           </button>
         </div>
 
-        {/* Coluna 2 (Direita) — Avisos de Hoje (com borda divisória sutil) */}
+        {/* Coluna 2 (Direita) — Avisos de Hoje */}
         <div className="flex flex-col border-t sm:border-t-0 sm:border-l border-slate-200 dark:border-slate-700 pt-3 sm:pt-0 sm:pl-4 justify-between">
           <div>
             <div className="flex justify-between items-center mb-2.5">
@@ -211,8 +209,6 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                 <Plus size={15} />
               </button>
             </div>
-
-            {/* Input inline para novo aviso rápido */}
             {isAddingNotice && (
               <form onSubmit={handleAddNotice} className="mb-2 flex items-center gap-1">
                 <input 
@@ -232,7 +228,6 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                 </button>
               </form>
             )}
-
             {todayNotes.length > 0 ? (
               <ul className="space-y-1">
                 {todayNotes.map((nota) => (
@@ -530,14 +525,104 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
           </div>
         </div>
 
-        {/* Grid Resumo de Hoje & Avisos de Hoje (Dois Cards Separados) */}
-        {renderResumoDeHojeCards()}
+        {/* ============================================================ */}
+        {/* Grelha de 3 colunas: Resumo | Saldo | Mentor               */}
+        {/* ============================================================ */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full mb-8">
 
-        {/* Grid: Saldo disponível & Insight do Mentor */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Coluna 1: Resumo de Hoje + Avisos */}
+          <div className="glass-card p-6 h-full flex flex-col">
+            {/* Resumo de Hoje */}
+            <h2 className="font-bold text-sm text-slate-700 dark:text-slate-300 mb-4">Resumo de Hoje</h2>
+            <div className="flex items-center gap-4 mb-5">
+              <div className="w-16 h-16 rounded-full border-[3.5px] border-blue-500 flex items-center justify-center font-black text-base text-slate-800 dark:text-slate-100 shadow-inner shrink-0">
+                {progressPercent}%
+              </div>
+              <div className="flex flex-col gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div> {completedTasks} concluídas</span>
+                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-400"></div> {pendingTasks} pendentes</span>
+                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-red-500"></div> 0 em atraso</span>
+              </div>
+            </div>
 
-          {/* Card 2: Saldo disponível */}
-          <div className="glass-card p-6 relative overflow-hidden group">
+            {/* Divider */}
+            <div className="border-t border-slate-200 dark:border-slate-700 my-3" />
+
+            {/* Avisos de Hoje */}
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                <span className="text-yellow-500 text-xs">📌</span> Avisos de Hoje
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setIsAddingNotice(prev => !prev)}
+                className="bg-blue-50 dark:bg-blue-500/10 text-blue-500 p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors cursor-pointer"
+                title="Adicionar aviso"
+                aria-label="Adicionar aviso"
+              >
+                <Plus size={15} />
+              </button>
+            </div>
+            {isAddingNotice && (
+              <form onSubmit={handleAddNotice} className="mb-3 flex items-center gap-1">
+                <input 
+                  type="text"
+                  value={newNoticeText}
+                  onChange={(e) => setNewNoticeText(e.target.value)}
+                  placeholder="Novo aviso rápido..."
+                  autoFocus
+                  className="flex-1 text-xs px-2.5 py-1.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-blue-500/40 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button 
+                  type="submit"
+                  disabled={!newNoticeText.trim()}
+                  className="px-2.5 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-lg disabled:opacity-50 transition-opacity cursor-pointer"
+                >
+                  Salvar
+                </button>
+              </form>
+            )}
+            <div className="flex-1">
+              {todayNotes.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {todayNotes.map((nota) => (
+                    <li 
+                      key={nota.id}
+                      className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-slate-200/50 dark:border-slate-700/50 text-xs text-slate-700 dark:text-slate-300 group"
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"></span>
+                        <span className="truncate leading-tight font-medium">{nota.texto}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteNotice(nota.id)}
+                        className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer"
+                        title="Apagar aviso"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="h-full min-h-[64px] flex items-center justify-center text-slate-400 italic text-xs text-center bg-slate-50/50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 px-3 py-3">
+                  Nenhum aviso para hoje
+                </div>
+              )}
+            </div>
+
+            <button 
+              type="button"
+              onClick={() => onTabChange('calendar')}
+              className="text-blue-500 text-xs font-medium hover:text-blue-600 flex items-center gap-1 mt-4 transition-colors cursor-pointer w-max"
+            >
+              Ver agenda <span>→</span>
+            </button>
+          </div>
+
+          {/* Coluna 2: Saldo disponível */}
+          <div className="glass-card p-6 h-full relative overflow-hidden group flex flex-col">
             <div className="flex justify-between items-start mb-2 relative z-10">
               <h2 className="font-bold text-sm text-slate-700 dark:text-slate-300">Saldo disponível</h2>
               <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-500/20">
@@ -576,7 +661,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
             </div>
             
             {/* Sparkline Graph */}
-            <div className="h-16 mt-4 flex items-end gap-1.5 relative z-10 opacity-90">
+            <div className="h-16 mt-4 flex items-end gap-1.5 relative z-10 opacity-90 flex-1">
               {[30, 45, 25, 60, 40, 75, 50, 85, 65, 95].map((h, i) => (
                 <div key={i} className="flex-1 bg-blue-500/20 dark:bg-blue-500/30 hover:bg-blue-500 dark:hover:bg-blue-400 rounded-t-sm transition-all shadow-[0_0_8px_rgba(59,130,246,0.2)]" style={{ height: `${h}%` }}></div>
               ))}
@@ -589,8 +674,8 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
             </div>
           </div>
 
-          {/* Card 3: Insight do Mentor */}
-          <div className="glass-card p-6 relative overflow-hidden group flex flex-col justify-between">
+          {/* Coluna 3: Insight do Mentor */}
+          <div className="glass-card p-6 h-full relative overflow-hidden group flex flex-col justify-between">
             <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
             
             <div>
@@ -615,6 +700,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
               </button>
             </div>
           </div>
+
         </div>
 
         {/* Bottom Grid (2 columns) */}
