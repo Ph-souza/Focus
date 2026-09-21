@@ -236,6 +236,63 @@ const GEMINI_MAIN_MODEL = "gemini-3.6-flash";
 const CANDIDATE_MODELS = [GEMINI_MAIN_MODEL];
 
 /**
+ * Verifica se um erro retornado pela API do Gemini representa indisponibilidade transitória (503 / 429).
+ */
+function isTransientGeminiError(err: any): boolean {
+  if (!err) return false;
+  if (err.isCapacityExhausted) return true;
+  const status = err?.status || err?.response?.status || err?.code || err?.statusCode;
+  if (status === 503 || status === 429) return true;
+
+  const msg = (typeof err?.message === 'string' ? err.message : '').toLowerCase();
+  const details = (typeof err?.response?.data === 'object' ? JSON.stringify(err.response.data) : (err?.response?.data || '')).toString().toLowerCase();
+
+  return (
+    status === 503 ||
+    status === 429 ||
+    msg.includes('503') ||
+    msg.includes('429') ||
+    msg.includes('unavailable') ||
+    msg.includes('high demand') ||
+    msg.includes('overloaded') ||
+    msg.includes('resource_exhausted') ||
+    details.includes('503') ||
+    details.includes('429') ||
+    details.includes('unavailable') ||
+    details.includes('high demand') ||
+    details.includes('overloaded') ||
+    details.includes('resource_exhausted')
+  );
+}
+
+/**
+ * Wrapper em torno de ai.models.generateContent com Retry e Exponential Backoff.
+ * Limite de 3 tentativas para erros transitórios (503 Service Unavailable / 429 High Demand / Too Many Requests).
+ * Espera 2s na primeira falha, 4s na segunda falha, de forma silenciosa.
+ */
+async function generateContentWithRetry(aiClient: any, params: any, maxRetries = 3): Promise<any> {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      attempt++;
+      return await aiClient.models.generateContent(params);
+    } catch (err: any) {
+      const isTransient = isTransientGeminiError(err);
+      if (isTransient && attempt < maxRetries) {
+        // Atraso de 2s na primeira falha (attempt === 1), 4s na segunda falha (attempt === 2) de forma silenciosa
+        const delayMs = attempt === 1 ? 2000 : 4000;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+      if (isTransient) {
+        (err as any).isCapacityExhausted = true;
+      }
+      throw err;
+    }
+  }
+}
+
+/**
  * Sanitiza o histórico de mensagens para o padrão estrito exigido pelo Google Gemini:
  * 1. Papéis (roles) mapeados exclusivamente para 'user' e 'model'.
  * 2. O primeiro turno no histórico OBRIGATORIAMENTE deve ser com role 'user'.
@@ -1805,17 +1862,17 @@ Data e hora atual: ${new Date().toISOString()}`;
           });
         }
 
-        // 3. Execução multimodal direta com o modelo suportado (gemini-3.6-flash)
+        // 3. Execução multimodal direta com o modelo suportado (gemini-3.6-flash) e retry com exponential backoff
         let response: any = null;
         try {
-          response = await ai.models.generateContent({
+          response = await generateContentWithRetry(ai, {
             model: GEMINI_MAIN_MODEL,
             contents: [{ role: 'user', parts }],
             config: {
               temperature: 0.4,
               tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
             }
-          });
+          }, 3);
         } catch (modelErr: any) {
           console.error(`ERRO GEMINI/WHATSAPP: Falha no modelo ${GEMINI_MAIN_MODEL}:`, modelErr.response?.data || modelErr.message || modelErr);
           throw modelErr;
@@ -1887,9 +1944,13 @@ Data e hora atual: ${new Date().toISOString()}`;
         await sendWhatsAppTextMessage(from, replyText, phoneId, linkedUserId);
       } catch (aiError: any) {
         console.error('ERRO GEMINI/WHATSAPP:', aiError.response?.data || aiError.message || aiError);
+        const fallbackMsg = (aiError?.isCapacityExhausted || isTransientGeminiError(aiError))
+          ? "Os meus servidores estão com um volume invulgar de processamento neste momento. Por favor, reenvie a sua imagem daqui a breves instantes."
+          : "Ops! Ocorreu uma oscilação momentânea ao processar sua solicitação. Tente enviar novamente.";
+
         await sendWhatsAppTextMessage(
           from,
-          "Ops! Ocorreu uma oscilação momentânea ao processar sua solicitação. Tente enviar novamente.",
+          fallbackMsg,
           phoneId
         );
       }
@@ -2050,14 +2111,14 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
 
       let response: any = null;
       try {
-        response = await ai.models.generateContent({
+        response = await generateContentWithRetry(ai, {
           model: GEMINI_MAIN_MODEL,
           contents: [{ role: 'user', parts }],
           config: {
             temperature: 0.4,
             tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
           }
-        });
+        }, 3);
       } catch (err: any) {
         console.error(`ERRO GEMINI/WHATSAPP: Modelo ${GEMINI_MAIN_MODEL} falhou no simulador:`, err.response?.data || err.message || err);
         throw err;
@@ -2115,9 +2176,12 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
       });
     } catch (error: any) {
       console.error('ERRO GEMINI/WHATSAPP:', error.response?.data || error.message || error);
+      const replyMsg = (error?.isCapacityExhausted || isTransientGeminiError(error))
+        ? "Os meus servidores estão com um volume invulgar de processamento neste momento. Por favor, reenvie a sua imagem daqui a breves instantes."
+        : "Ops! Não consegui processar essa mensagem agora. Tente novamente em instantes.";
       return res.status(500).json({
         error: error.message || "Erro ao processar mensagem do WhatsApp",
-        reply: "Ops! Não consegui processar essa mensagem agora. Tente novamente em instantes."
+        reply: replyMsg
       });
     }
   });
