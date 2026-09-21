@@ -532,93 +532,110 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
 
           {/* Coluna 1: Resumo de Hoje + Avisos */}
           <div className="glass-card p-6 h-full flex flex-col">
-            {/* Resumo de Hoje */}
-            <h2 className="font-bold text-sm text-slate-700 dark:text-slate-300 mb-4">Resumo de Hoje</h2>
-            <div className="flex items-center gap-4 mb-5">
-              <div className="w-16 h-16 rounded-full border-[3.5px] border-blue-500 flex items-center justify-center font-black text-base text-slate-800 dark:text-slate-100 shadow-inner shrink-0">
-                {progressPercent}%
-              </div>
-              <div className="flex flex-col gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div> {completedTasks} concluídas</span>
-                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-400"></div> {pendingTasks} pendentes</span>
-                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-red-500"></div> 0 em atraso</span>
+            {/* Bloco Superior (Progresso) */}
+            <div>
+              <h2 className="font-bold text-sm text-slate-700 dark:text-slate-300 mb-4">Resumo de Hoje</h2>
+              <div className="flex items-center gap-5">
+                <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full border-[4px] border-blue-500 flex items-center justify-center font-black text-xl text-slate-800 dark:text-slate-100 shadow-inner shrink-0">
+                  {progressPercent}%
+                </div>
+                <div className="flex flex-col gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                  <span className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0"></span>
+                    <span>{completedTasks} concluídas</span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-orange-400 shrink-0"></span>
+                    <span>{pendingTasks} pendentes</span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"></span>
+                    <span>0 em atraso</span>
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* Divider */}
-            <div className="border-t border-slate-200 dark:border-slate-700 my-3" />
+            {/* Separador sutil */}
+            <div className="h-px bg-slate-200 dark:bg-slate-700 w-full my-4"></div>
 
-            {/* Avisos de Hoje */}
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                <span className="text-yellow-500 text-xs">📌</span> Avisos de Hoje
-              </h3>
-              <button 
-                type="button"
-                onClick={() => setIsAddingNotice(prev => !prev)}
-                className="bg-blue-50 dark:bg-blue-500/10 text-blue-500 p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors cursor-pointer"
-                title="Adicionar aviso"
-                aria-label="Adicionar aviso"
-              >
-                <Plus size={15} />
-              </button>
-            </div>
-            {isAddingNotice && (
-              <form onSubmit={handleAddNotice} className="mb-3 flex items-center gap-1">
-                <input 
-                  type="text"
-                  value={newNoticeText}
-                  onChange={(e) => setNewNoticeText(e.target.value)}
-                  placeholder="Novo aviso rápido..."
-                  autoFocus
-                  className="flex-1 text-xs px-2.5 py-1.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-blue-500/40 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+            {/* Bloco Inferior (Avisos / Próxima Ação) */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                  <span className="text-yellow-500 text-xs">📌</span> Avisos
+                </h3>
                 <button 
-                  type="submit"
-                  disabled={!newNoticeText.trim()}
-                  className="px-2.5 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-lg disabled:opacity-50 transition-opacity cursor-pointer"
+                  type="button"
+                  onClick={() => setIsAddingNotice(prev => !prev)}
+                  className="bg-blue-50 dark:bg-blue-500/10 text-blue-500 p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors cursor-pointer"
+                  title="Adicionar aviso"
+                  aria-label="Adicionar aviso"
                 >
-                  Salvar
+                  <Plus size={15} />
                 </button>
-              </form>
-            )}
-            <div className="flex-1">
+              </div>
+
+              {isAddingNotice && (
+                <form onSubmit={handleAddNotice} className="mb-3 flex items-center gap-1.5">
+                  <input 
+                    type="text"
+                    value={newNoticeText}
+                    onChange={(e) => setNewNoticeText(e.target.value)}
+                    placeholder="Novo aviso rápido..."
+                    autoFocus
+                    className="flex-1 text-xs px-2.5 py-1.5 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-blue-500/40 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button 
+                    type="submit"
+                    disabled={!newNoticeText.trim()}
+                    className="px-2.5 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-lg disabled:opacity-50 transition-opacity cursor-pointer"
+                  >
+                    Salvar
+                  </button>
+                </form>
+              )}
+
               {todayNotes.length > 0 ? (
-                <ul className="space-y-1.5">
-                  {todayNotes.map((nota) => (
-                    <li 
-                      key={nota.id}
-                      className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-slate-200/50 dark:border-slate-700/50 text-xs text-slate-700 dark:text-slate-300 group"
-                    >
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"></span>
-                        <span className="truncate leading-tight font-medium">{nota.texto}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteNotice(nota.id)}
-                        className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer"
-                        title="Apagar aviso"
+                <div className="flex-1 overflow-y-auto pr-1">
+                  <ul className="space-y-2">
+                    {todayNotes.map((nota) => (
+                      <li 
+                        key={nota.id}
+                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 text-xs text-slate-700 dark:text-slate-200 group"
                       >
-                        <Trash2 size={12} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"></span>
+                          <span className="truncate leading-tight font-medium">{nota.texto}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteNotice(nota.id)}
+                          className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer"
+                          title="Apagar aviso"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : (
-                <div className="h-full min-h-[64px] flex items-center justify-center text-slate-400 italic text-xs text-center bg-slate-50/50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 px-3 py-3">
-                  Nenhum aviso para hoje
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 italic text-xs text-center bg-slate-50/50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-700/80 p-4">
+                  <span>Nenhum aviso pendente</span>
                 </div>
               )}
-            </div>
 
-            <button 
-              type="button"
-              onClick={() => onTabChange('calendar')}
-              className="text-blue-500 text-xs font-medium hover:text-blue-600 flex items-center gap-1 mt-4 transition-colors cursor-pointer w-max"
-            >
-              Ver agenda <span>→</span>
-            </button>
+              <div className="mt-4 pt-1">
+                <button 
+                  type="button"
+                  onClick={() => onTabChange('calendar')}
+                  className="text-blue-500 text-xs font-medium hover:text-blue-600 flex items-center gap-1 transition-colors cursor-pointer w-max"
+                >
+                  Ver agenda <span>→</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Coluna 2: Saldo disponível */}
