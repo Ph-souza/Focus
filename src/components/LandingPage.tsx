@@ -115,9 +115,8 @@ export function LandingPage() {
 
   return (
     <div
-      className={`min-h-screen font-sans antialiased text-slate-900 dark:text-slate-100 transition-colors duration-300 relative overflow-x-hidden selection:bg-blue-500/30 selection:text-blue-500 ${
-        isDarkMode ? 'dark bg-[#030712]' : 'bg-[#f4f4f1]'
-      }`}
+      className={`min-h-screen font-sans antialiased text-slate-900 dark:text-slate-100 transition-colors duration-300 relative overflow-x-hidden selection:bg-blue-500/30 selection:text-blue-500 ${isDarkMode ? 'dark bg-[#030712]' : 'bg-[#f4f4f1]'
+        }`}
       style={{
         backgroundImage: isDarkMode
           ? "radial-gradient(ellipse 80% 80% at 50% -20%, rgba(59,130,246,0.15), rgba(255,255,255,0)), url('/assets/bg-dark.jpg')"
@@ -132,7 +131,7 @@ export function LandingPage() {
       {/* ================= HEADER / NAVBAR ================= */}
       <header className="sticky top-0 z-50 w-full backdrop-blur-xl bg-white/70 dark:bg-slate-950/70 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-          
+
           {/* Logo & Brand */}
           <Link to="/page" className="flex items-center gap-3 group cursor-pointer">
             <div className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
@@ -195,7 +194,7 @@ export function LandingPage() {
       {/* ================= HERO SECTION ================= */}
       <section className="relative pt-12 pb-20 sm:pt-20 sm:pb-28 overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center text-center relative z-10">
-          
+
           {/* Badge */}
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -279,7 +278,7 @@ export function LandingPage() {
         {/* ================= INTERACTIVE MOCKUP SHOWCASE ================= */}
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-14 sm:mt-20">
           <div className="glass-card p-4 sm:p-6 rounded-[32px] border border-white/60 dark:border-slate-800/80 shadow-[0_24px_70px_rgba(0,0,0,0.12)]">
-            
+
             {/* Mockup Header Bar */}
             <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-200/80 dark:border-slate-800/80">
               <div className="flex items-center gap-3">
@@ -298,7 +297,7 @@ export function LandingPage() {
 
             {/* Inner Dashboard Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              
+
               {/* Card 1: Resumo de Hoje */}
               <div className="glass-card p-5 rounded-2xl flex flex-col justify-between min-h-[190px]">
                 <div>
@@ -376,7 +375,7 @@ export function LandingPage() {
       {/* ================= BENEFÍCIOS SECTION ================= */}
       <section id="beneficios" className="py-20 sm:py-28 relative">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          
+
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="text-xs font-bold tracking-[0.25em] text-blue-600 dark:text-blue-400 uppercase block mb-3">
               RECURSOS COMPLETOS
@@ -470,7 +469,7 @@ export function LandingPage() {
       {/* ================= PRICING (PLANOS) ================= */}
       <section id="planos" className="py-20 sm:py-28 relative">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          
+
           <div className="text-center max-w-2xl mx-auto mb-14">
             <span className="text-xs font-bold tracking-[0.25em] text-blue-600 dark:text-blue-400 uppercase block mb-3">
               TRANSPARÊNCIA TOTAL
@@ -485,7 +484,7 @@ export function LandingPage() {
 
           {/* Pricing Highlight Card */}
           <div className="glass-card p-8 sm:p-12 rounded-[36px] border-2 border-blue-500/50 shadow-[0_24px_70px_rgba(37,99,235,0.15)] relative overflow-hidden">
-            
+
             {/* Ribbon Badge */}
             <div className="absolute top-6 right-6 bg-blue-600 text-white text-[11px] font-extrabold px-3.5 py-1.5 rounded-full tracking-wider uppercase shadow-sm">
               Mais Popular • Acesso Total
@@ -571,9 +570,8 @@ export function LandingPage() {
                 <span>{faq.q}</span>
                 <ChevronDown
                   size={18}
-                  className={`text-slate-400 transition-transform duration-200 shrink-0 ${
-                    openFaq === index ? 'rotate-180 text-blue-500' : ''
-                  }`}
+                  className={`text-slate-400 transition-transform duration-200 shrink-0 ${openFaq === index ? 'rotate-180 text-blue-500' : ''
+                    }`}
                 />
               </button>
 
@@ -590,7 +588,7 @@ export function LandingPage() {
       {/* ================= FOOTER ================= */}
       <footer className="w-full border-t border-slate-200/80 dark:border-slate-800/80 py-10 text-center relative z-10 bg-white/40 dark:bg-slate-950/40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center">
-          
+
           <div className="flex items-center gap-2.5 mb-4">
             <NexusFocusLogo className="w-6 h-6" variant={isDarkMode ? 'light' : 'dark'} />
             <span className="text-sm font-extrabold tracking-widest uppercase text-slate-900 dark:text-white">

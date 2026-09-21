@@ -1061,6 +1061,279 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
     }
   });
 
+  const getMetaAccessToken = () =>
+    process.env.WHATSAPP_TOKEN?.trim() ||
+    process.env.WHATSAPP_ACCESS_TOKEN?.trim() ||
+    process.env.META_ACCESS_TOKEN?.trim() ||
+    process.env.META_USER_ACCESS_TOKEN?.trim() ||
+    process.env.WHATSAPP_API_TOKEN?.trim() ||
+    process.env.META_TOKEN?.trim() ||
+    process.env.FACEBOOK_ACCESS_TOKEN?.trim() ||
+    "";
+
+  interface MediaDownloadResult {
+    buffer: Buffer;
+    base64: string;
+    mimeType: string;
+  }
+
+  /**
+   * Helper para download de mídia do WhatsApp (Meta Cloud API ou URLs diretas)
+   * Suporta o fluxo de duas etapas da Meta (Graph API -> lookaside CDN)
+   */
+  async function downloadWhatsAppMedia(
+    mediaObj: { id?: string; url?: string; mime_type?: string } | undefined,
+    customToken?: string
+  ): Promise<MediaDownloadResult | null> {
+    try {
+      if (!mediaObj) return null;
+      const metaToken = customToken || getMetaAccessToken();
+      let downloadUrl = mediaObj.url;
+      let mimeType = mediaObj.mime_type || "";
+
+      // 1. Caso possua o ID da Meta WhatsApp Cloud API:
+      if (!downloadUrl && mediaObj.id) {
+        if (!metaToken) {
+          console.error("ERRO GEMINI/WHATSAPP: Token do WhatsApp não configurado para download de mídia (META_ACCESS_TOKEN / WHATSAPP_ACCESS_TOKEN / WHATSAPP_TOKEN).");
+          return null;
+        }
+
+        console.log(`[WhatsApp Media] Consultando Graph API para obter URL da mídia ID: ${mediaObj.id}...`);
+        const metaMediaRes = await fetch(`https://graph.facebook.com/v21.0/${mediaObj.id}`, {
+          headers: {
+            Authorization: `Bearer ${metaToken}`
+          }
+        });
+
+        if (!metaMediaRes.ok) {
+          const errText = await metaMediaRes.text();
+          console.error(`ERRO GEMINI/WHATSAPP: Erro ao consultar Graph API (${metaMediaRes.status}):`, errText);
+          return null;
+        }
+
+        const mediaMetadata: any = await metaMediaRes.json();
+        downloadUrl = mediaMetadata.url;
+        if (mediaMetadata.mime_type) {
+          mimeType = mediaMetadata.mime_type;
+        }
+      }
+
+      if (!downloadUrl) {
+        console.error("ERRO GEMINI/WHATSAPP: Nenhum URL de download obtido para a mídia.");
+        return null;
+      }
+
+      console.log(`[WhatsApp Media] Baixando binário da mídia em memória...`);
+      const headers: Record<string, string> = {
+        "User-Agent": "curl/7.64.1"
+      };
+      if (metaToken && (downloadUrl.includes("fbsbx.com") || downloadUrl.includes("facebook.com") || downloadUrl.includes("whatsapp.net"))) {
+        headers["Authorization"] = `Bearer ${metaToken}`;
+      }
+
+      let fileRes = await fetch(downloadUrl, { headers });
+      if (!fileRes.ok) {
+        const fallbackHeaders: Record<string, string> = {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+        };
+        if (metaToken) fallbackHeaders["Authorization"] = `Bearer ${metaToken}`;
+        fileRes = await fetch(downloadUrl, { headers: fallbackHeaders });
+
+        if (!fileRes.ok) {
+          fileRes = await fetch(downloadUrl);
+        }
+      }
+
+      if (!fileRes.ok) {
+        const errBody = await fileRes.text();
+        console.error(`ERRO GEMINI/WHATSAPP: Falha ao baixar o arquivo (${fileRes.status}):`, errBody);
+        return null;
+      }
+
+      const contentType = fileRes.headers.get("content-type");
+      if (contentType && (!mimeType || mimeType === "application/octet-stream")) {
+        mimeType = contentType;
+      }
+
+      const arrayBuffer = await fileRes.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64 = buffer.toString("base64");
+
+      // Limpa extensões de codec (ex: "audio/ogg; codecs=opus" -> "audio/ogg")
+      let cleanMimeType = mimeType ? mimeType.split(";")[0].trim() : "";
+      if (!cleanMimeType) {
+        cleanMimeType = "image/jpeg";
+      }
+
+      console.log(`[WhatsApp Media] Mídia baixada com sucesso! Tamanho: ${buffer.length} bytes, MimeType: ${cleanMimeType}`);
+
+      return {
+        buffer,
+        base64,
+        mimeType: cleanMimeType
+      };
+    } catch (err: any) {
+      console.error("ERRO GEMINI/WHATSAPP: Falha na função downloadWhatsAppMedia:", err.response?.data || err.message || err);
+      return null;
+    }
+  }
+
+  /**
+   * Helpers para gravação direta no Firestore dos lançamentos extraídos pela IA
+   */
+  async function saveTransactionToFirestore(userId: string, tx: {
+    title?: string;
+    amount: number | string;
+    type?: string;
+    category?: string;
+    date?: string;
+  }) {
+    const newTxId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+    let parsedAmount = 0;
+    if (typeof tx.amount === "number") {
+      parsedAmount = tx.amount;
+    } else if (typeof tx.amount === "string") {
+      const cleaned = tx.amount.replace(/[R$\s]/g, "").replace(",", ".");
+      parsedAmount = parseFloat(cleaned) || 0;
+    }
+
+    const transactionData = {
+      id: newTxId,
+      title: tx.title || "Lançamento WhatsApp",
+      amount: parsedAmount,
+      type: tx.type === "income" ? "income" : "expense",
+      category: tx.category || "Outros",
+      date: tx.date || new Date().toISOString().split("T")[0],
+      createdAt: FieldValue.serverTimestamp()
+    };
+
+    await withTimeout(
+      adminDb.collection("users").doc(userId).collection("transactions").doc(newTxId).set(transactionData),
+      10000,
+      `Salvar transação ${newTxId}`
+    );
+    console.log(`💰 [WhatsApp AI] Transação de R$ ${transactionData.amount} (${transactionData.title}) salva para o usuário ${userId}.`);
+    return transactionData;
+  }
+
+  async function saveTaskToFirestore(userId: string, task: {
+    title?: string;
+    deadline?: string;
+    description?: string;
+  }) {
+    const newTaskId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+    const taskData = {
+      id: newTaskId,
+      title: task.title || "Tarefa WhatsApp",
+      description: task.description || "Criada via WhatsApp",
+      completed: false,
+      dueDate: task.deadline || new Date().toISOString().split("T")[0],
+      createdAt: FieldValue.serverTimestamp()
+    };
+
+    await withTimeout(
+      adminDb.collection("users").doc(userId).collection("tasks").doc(newTaskId).set(taskData),
+      10000,
+      `Salvar tarefa ${newTaskId}`
+    );
+    console.log(`📋 [WhatsApp AI] Tarefa '${taskData.title}' criada para o usuário ${userId}.`);
+    return taskData;
+  }
+
+  async function saveAppointmentToFirestore(userId: string, appt: {
+    titulo?: string;
+    data?: string;
+    horario?: string;
+  }) {
+    const newAgendaId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+    const apptData = {
+      id: newAgendaId,
+      title: appt.titulo || "Compromisso WhatsApp",
+      date: appt.data || new Date().toISOString().split("T")[0],
+      time: appt.horario || "00:00",
+      completed: false,
+      createdAt: FieldValue.serverTimestamp()
+    };
+
+    await withTimeout(
+      adminDb.collection("users").doc(userId).collection("rotinas").doc(newAgendaId).set(apptData),
+      10000,
+      `Salvar compromisso ${newAgendaId}`
+    );
+    console.log(`📅 [WhatsApp AI] Compromisso '${apptData.title}' criado para o usuário ${userId}.`);
+    return apptData;
+  }
+
+  async function completeTaskInFirestore(userId: string, taskTitle: string) {
+    const tasksSnap = await withTimeout(
+      adminDb.collection("users").doc(userId).collection("tasks").where("title", "==", taskTitle).limit(1).get(),
+      10000,
+      `Buscar tarefa ${taskTitle}`
+    );
+    if (!tasksSnap.empty) {
+      await withTimeout(
+        tasksSnap.docs[0].ref.update({
+          completed: true,
+          completedAt: FieldValue.serverTimestamp()
+        }),
+        10000,
+        `Completar tarefa ${taskTitle}`
+      );
+      console.log(`✅ [WhatsApp AI] Tarefa '${taskTitle}' concluída para o usuário ${userId}.`);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Tenta extrair ações financeiras ou tarefas caso a IA tenha respondido em JSON
+   */
+  function tryParseJsonActions(text: string): any[] {
+    const actions: any[] = [];
+    if (!text) return actions;
+
+    const jsonBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
+    let match: RegExpExecArray | null;
+    const rawCandidateStrings: string[] = [];
+
+    while ((match = jsonBlockRegex.exec(text)) !== null) {
+      if (match[1]?.trim()) {
+        rawCandidateStrings.push(match[1].trim());
+      }
+    }
+
+    if (rawCandidateStrings.length === 0) {
+      const trimmed = text.trim();
+      if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+        rawCandidateStrings.push(trimmed);
+      } else {
+        const curlyMatch = text.match(/\{[\s\S]*\}/);
+        if (curlyMatch) rawCandidateStrings.push(curlyMatch[0]);
+      }
+    }
+
+    for (const candidate of rawCandidateStrings) {
+      try {
+        const parsed = JSON.parse(candidate);
+        if (Array.isArray(parsed)) {
+          actions.push(...parsed);
+        } else if (parsed && typeof parsed === "object") {
+          if (Array.isArray(parsed.transactions)) {
+            actions.push(...parsed.transactions);
+          } else if (Array.isArray(parsed.tasks)) {
+            actions.push(...parsed.tasks);
+          } else {
+            actions.push(parsed);
+          }
+        }
+      } catch {
+        // Ignora erro de parsing
+      }
+    }
+
+    return actions;
+  }
+
   /**
    * Helper para envio de mensagens de saída para o WhatsApp via Meta Cloud API.
    * Implementa a Trava de Segurança (Circuit Breaker) para respeitar a Janela de 24h da Meta.
@@ -1072,7 +1345,7 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
     userId?: string,
     skipWindowCheck: boolean = false
   ): Promise<any> {
-    const token = process.env.META_ACCESS_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_USER_ACCESS_TOKEN;
+    const token = getMetaAccessToken();
     const phoneId = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || "1262215520309953";
 
     if (!token) {
@@ -1214,103 +1487,117 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
 
       console.log('Tipo detectado:', messageType);
 
-      // 4. Validação de mensagem de texto e extração de message.text.body
-      let text = "";
-      if (messageType === 'text') {
-        text = message.text?.body || "";
-      } else {
-        console.log(`[WhatsApp Webhook] Mensagem de tipo '${messageType}' recebida. Apenas mensagens de texto são processadas no momento.`);
+      // 4. Validação dos tipos de mensagem suportados (texto, imagem, áudio/voz/ptt)
+      const isText = messageType === 'text';
+      const isImage = messageType === 'image' || (messageType === 'document' && (message.document?.mime_type?.startsWith('image/') || message.document?.mime_type === 'application/pdf'));
+      const isAudio = messageType === 'audio' || messageType === 'voice' || messageType === 'ptt';
+
+      if (!isText && !isImage && !isAudio) {
+        console.log(`[WhatsApp Webhook] Mensagem de tipo '${messageType}' recebida. Tipos suportados: texto, imagem e áudio.`);
         return;
+      }
+
+      let text = "";
+      if (isText) {
+        text = message.text?.body || "";
+      } else if (isImage) {
+        const imageObj = message.image || message.document;
+        text = imageObj?.caption || message.caption || "";
+      } else if (isAudio) {
+        const audioObj = message.audio || message.voice;
+        text = audioObj?.caption || message.caption || "";
       }
 
       const from = message.from;
 
-      if (!from || !text) {
-        console.warn(`[WhatsApp Webhook] Mensagem vazia ou remetente não identificado: from=${from}, text=${text}`);
+      if (!from) {
+        console.warn(`[WhatsApp Webhook] Remetente não identificado no payload.`);
         return;
       }
 
       // 5. Log de Sucesso formatado para monitoramento na Render
-      console.log(`Mensagem recebida de [${from}]: [${text}]`);
+      console.log(`Mensagem recebida de [${from}] (Tipo: ${messageType}): [${text}]`);
 
-      // 6. Lógica do Token Mágico de Ativação (Handshake) com Try/Catch Blindado e Rastreamento Linha a Linha
-      const tokenMatch = text.match(/NEXUS-[A-Z0-9]+/i);
-      if (tokenMatch) {
-        const tokenStr = tokenMatch[0].toUpperCase();
-        console.log(`🔍 [WhatsApp Webhook] Token de ativação detectado: ${tokenStr}. Validando no Firestore...`);
+      // 6. Lógica do Token Mágico de Ativação (Handshake)
+      if (text) {
+        const tokenMatch = text.match(/NEXUS-[A-Z0-9]+/i);
+        if (tokenMatch) {
+          const tokenStr = tokenMatch[0].toUpperCase();
+          console.log(`🔍 [WhatsApp Webhook] Token de ativação detectado: ${tokenStr}. Validando no Firestore...`);
 
-        try {
-          console.log(`1. Buscando documento na coleção whatsapp_tokens (${tokenStr})...`);
-          const tokenRef = adminDb.collection("whatsapp_tokens").doc(tokenStr);
-          const tokenSnap = await withTimeout(tokenRef.get(), 10000, `Buscar token ${tokenStr}`);
-          console.log(`2. Resultado da busca do token: exists = ${tokenSnap.exists}`);
+          try {
+            console.log(`1. Buscando documento na coleção whatsapp_tokens (${tokenStr})...`);
+            const tokenRef = adminDb.collection("whatsapp_tokens").doc(tokenStr);
+            const tokenSnap = await withTimeout(tokenRef.get(), 10000, `Buscar token ${tokenStr}`);
+            console.log(`2. Resultado da busca do token: exists = ${tokenSnap.exists}`);
 
-          if (tokenSnap.exists) {
-            const tokenData = tokenSnap.data();
-            console.log(`3. Dados recuperados do token:`, {
-              userId: tokenData?.userId,
-              hasExpiresAt: Boolean(tokenData?.expiresAt)
-            });
+            if (tokenSnap.exists) {
+              const tokenData = tokenSnap.data();
+              console.log(`3. Dados recuperados do token:`, {
+                userId: tokenData?.userId,
+                hasExpiresAt: Boolean(tokenData?.expiresAt)
+              });
 
-            let isValid = true;
-            if (tokenData?.expiresAt) {
-              const expiresDate = tokenData.expiresAt.toDate ? tokenData.expiresAt.toDate() : new Date(tokenData.expiresAt);
-              if (new Date() > expiresDate) {
-                isValid = false;
+              let isValid = true;
+              if (tokenData?.expiresAt) {
+                const expiresDate = tokenData.expiresAt.toDate ? tokenData.expiresAt.toDate() : new Date(tokenData.expiresAt);
+                if (new Date() > expiresDate) {
+                  isValid = false;
+                }
               }
-            }
 
-            if (isValid) {
-              const uId = tokenData?.userId;
-              if (uId) {
-                console.log(`4. Atualizando documento do usuário users/${uId}...`);
-                await withTimeout(
-                  adminDb.collection("users").doc(uId).set({
-                    whatsappNumber: from,
-                    whatsappVerified: true,
-                    lastWaInteraction: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
-                  }, { merge: true }),
-                  10000,
-                  `Atualizar users/${uId}`
-                );
-                console.log(`5. Documento do usuário users/${uId} atualizado com sucesso no Firestore!`);
+              if (isValid) {
+                const uId = tokenData?.userId;
+                if (uId) {
+                  console.log(`4. Atualizando documento do usuário users/${uId}...`);
+                  await withTimeout(
+                    adminDb.collection("users").doc(uId).set({
+                      whatsappNumber: from,
+                      whatsappVerified: true,
+                      lastWaInteraction: FieldValue.serverTimestamp(),
+                      updatedAt: FieldValue.serverTimestamp()
+                    }, { merge: true }),
+                    10000,
+                    `Atualizar users/${uId}`
+                  );
+                  console.log(`5. Documento do usuário users/${uId} atualizado com sucesso no Firestore!`);
 
-                console.log(`6. Deletando token de uso único (${tokenStr})...`);
-                await withTimeout(tokenRef.delete(), 10000, `Deletar token ${tokenStr}`).catch((delErr) => {
-                  console.warn("Aviso ao deletar token já utilizado:", delErr?.message);
-                });
-                console.log(`7. Token '${tokenStr}' deletado com sucesso.`);
+                  console.log(`6. Deletando token de uso único (${tokenStr})...`);
+                  await withTimeout(tokenRef.delete(), 10000, `Deletar token ${tokenStr}`).catch((delErr) => {
+                    console.warn("Aviso ao deletar token já utilizado:", delErr?.message);
+                  });
+                  console.log(`7. Token '${tokenStr}' deletado com sucesso.`);
 
-                console.log(`8. Enviando mensagem de confirmação de ativação para [${from}] via Meta API...`);
+                  console.log(`8. Enviando mensagem de confirmação de ativação para [${from}] via Meta API...`);
+                  await sendWhatsAppTextMessage(
+                    from,
+                    "Conexão estabelecida com sucesso! O Mentor Focus está ativo e pronto para organizar sua rotina.",
+                    phoneId,
+                    uId,
+                    true // skipWindowCheck já que acabou de ativar
+                  );
+                  console.log(`9. Mensagem de ativação despachada com sucesso para [${from}]!`);
+                  return;
+                } else {
+                  console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} não possui userId associado.`);
+                }
+              } else {
+                console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} já está expirado.`);
                 await sendWhatsAppTextMessage(
                   from,
-                  "Conexão estabelecida com sucesso! O Mentor Focus está ativo e pronto para organizar sua rotina.",
-                  phoneId,
-                  uId,
-                  true // skipWindowCheck já que acabou de ativar
+                  "Este código de ativação já expirou. Por favor, gere um novo código no Dashboard do Nexus Focus.",
+                  phoneId
                 );
-                console.log(`9. Mensagem de ativação despachada com sucesso para [${from}]!`);
                 return;
-              } else {
-                console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} não possui userId associado.`);
               }
             } else {
-              console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} já está expirado.`);
-              await sendWhatsAppTextMessage(
-                from,
-                "Este código de ativação já expirou. Por favor, gere um novo código no Dashboard do Nexus Focus.",
-                phoneId
-              );
-              return;
+              console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} não localizado no Firestore.`);
             }
-          } else {
-            console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} não localizado no Firestore.`);
+          } catch (error: any) {
+            console.error("Erro CRÍTICO na validação:", error);
           }
-        } catch (error: any) {
-          console.error("Erro CRÍTICO na validação:", error);
+          return;
         }
-        return;
       }
 
       // 7. Mensagem regular do usuário: Processar com a IA (Mentor Focus)
@@ -1350,106 +1637,261 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
 
         const apiKey = getGeminiApiKey();
         if (!apiKey) {
-          console.error("❌ [WhatsApp Webhook] GEMINI_API_KEY não configurada.");
+          console.error("ERRO GEMINI/WHATSAPP: GEMINI_API_KEY não configurada.");
           return;
         }
 
         const ai = new GoogleGenAI({ apiKey });
-        const systemInstruction = `${GLOBAL_SYSTEM_PROMPT}
+        const baseInstruction = `${GLOBAL_SYSTEM_PROMPT}
 
-Sua missão no WhatsApp é entender o texto enviado pelo usuário. Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário mencionar palavras como agenda, compromisso, reunião ou especificar um horário exato no dia (ex: às 14h), você deve OBRIGATORIAMENTE usar a ferramenta criarCompromissoRotina. Para lançamentos financeiros use add_transaction e para marcar tarefas como concluídas use complete_task. Confirme de forma direta, clara e curta o que foi registrado no aplicativo Nexus.
+Sua missão no WhatsApp é entender mensagens do usuário enviadas em texto, imagem (recibos, cupons fiscais, comprovantes PIX, pagamentos ou anotações) ou áudio (mensagens de voz relatando gastos ou tarefas).
+- Ao receber comprovantes PIX, recibos, notas fiscais, cupons ou áudios relatando gastos: extraia os dados financeiros com precisão: valor (amount), título/estabelecimento (title), categoria ('Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Moradia', 'Lazer', 'Serviços', 'Outros') e data no formato YYYY-MM-DD. Acione OBRIGATORIAMENTE a ferramenta add_transaction ou retorne um JSON estruturado com esses campos.
+- Se o usuário relatar um afazer ou compromisso solto, use add_task.
+- Se o usuário especificar um horário exato no dia ou reunião (ex: às 14h), use criarCompromissoRotina.
+- Para marcar tarefas como concluídas, use complete_task.
+- Retorne SEMPRE uma confirmação em texto direta, clara, motivadora e assertiva sobre o que foi registrado no aplicativo Nexus Focus.
 Data e hora atual: ${new Date().toISOString()}`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.5-flash',
-          contents: [{ role: 'user', parts: [{ text }] }],
-          config: {
-            systemInstruction,
-            temperature: 0.5,
-            tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
+        // 1. Array Dinâmico de 'Parts' (API Gemini):
+        // Inicie o array parts da requisição do Gemini apenas com o prompt do sistema/instrução base.
+        const parts: any[] = [
+          { text: baseInstruction }
+        ];
+
+        // 2. Parseamento Condicional do Payload (WhatsApp):
+        // Se type === 'text': Faça o push apenas do { text: message.text.body } para o array parts. Não inclua propriedades de mídia.
+        // Se type === 'image' ou type === 'audio' (ou 'ptt'):
+        // Pegue o ID da mídia e faça uma requisição GET autenticada (usando o Token do WhatsApp) para baixar o arquivo binário.
+        // Converta o buffer em base64.
+        // Faça o push do texto descritivo (se houver caption) E do objeto { inlineData: { mimeType: '...', data: base64_string } } para o array parts.
+        if (messageType === 'text') {
+          const bodyText = message.text?.body || text || "";
+          parts.push({ text: bodyText });
+        } else if (messageType === 'image') {
+          const mediaId = message.image?.id;
+          if (!mediaId && !message.image?.url) {
+            console.error("ERRO GEMINI/WHATSAPP: Mensagem de imagem sem ID:", message.image);
+            return;
           }
-        });
 
-        const replyText = response.text || "Lançamento processado com sucesso.";
+          const metaToken = getMetaAccessToken();
+          if (!metaToken) {
+            console.error("ERRO GEMINI/WHATSAPP: Token do WhatsApp não configurado (META_ACCESS_TOKEN / WHATSAPP_ACCESS_TOKEN / WHATSAPP_TOKEN).");
+            await sendWhatsAppTextMessage(from, "Configuração de token do WhatsApp ausente no servidor.", phoneId, linkedUserId);
+            return;
+          }
+
+          console.log(`[WhatsApp Media] Processando imagem ID: ${mediaId}...`);
+          let downloadUrl = message.image?.url;
+          let mimeType = message.image?.mime_type || "image/jpeg";
+
+          // 1. GET para a API do WhatsApp (v17.0) para obter a url de download
+          if (!downloadUrl && mediaId) {
+            const metaRes = await fetch(`https://graph.facebook.com/v17.0/${mediaId}`, {
+              headers: { Authorization: `Bearer ${metaToken}` }
+            });
+            if (!metaRes.ok) {
+              const errBody = await metaRes.text();
+              console.error(`ERRO GEMINI/WHATSAPP: Erro ao obter URL da imagem no Graph API (${metaRes.status}):`, errBody);
+              await sendWhatsAppTextMessage(from, "Não consegui obter o link da imagem pelo WhatsApp. Tente enviar novamente.", phoneId, linkedUserId);
+              return;
+            }
+            const mediaData: any = await metaRes.json();
+            downloadUrl = mediaData.url;
+            if (mediaData.mime_type) {
+              mimeType = mediaData.mime_type;
+            }
+          }
+
+          if (!downloadUrl) {
+            console.error("ERRO GEMINI/WHATSAPP: URL de download da imagem não encontrada.");
+            return;
+          }
+
+          // 2. GET para a url obtida passando o Bearer Token nos Headers com arraybuffer
+          const fileRes = await fetch(downloadUrl, {
+            headers: {
+              Authorization: `Bearer ${metaToken}`,
+              "User-Agent": "curl/7.64.1"
+            }
+          });
+
+          if (!fileRes.ok) {
+            const errBody = await fileRes.text();
+            console.error(`ERRO GEMINI/WHATSAPP: Falha ao baixar binário da imagem (${fileRes.status}):`, errBody);
+            await sendWhatsAppTextMessage(from, "Falha ao baixar a imagem dos servidores do WhatsApp. Tente enviar novamente.", phoneId, linkedUserId);
+            return;
+          }
+
+          const arrayBuffer = await fileRes.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString('base64');
+          const cleanMime = mimeType ? mimeType.split(';')[0].trim() : "image/jpeg";
+
+          // 3. Injeção no Gemini:
+          if (message.image?.caption) {
+            parts.push({ text: message.image.caption });
+          }
+          parts.push({
+            inlineData: {
+              mimeType: cleanMime,
+              data: base64
+            }
+          });
+        } else if (messageType === 'audio' || messageType === 'ptt' || messageType === 'voice') {
+          const audioObj = message.audio || message.voice;
+          const mediaId = audioObj?.id;
+          if (!mediaId && !audioObj?.url) {
+            console.error("ERRO GEMINI/WHATSAPP: Mensagem de áudio sem ID:", audioObj);
+            return;
+          }
+
+          const metaToken = getMetaAccessToken();
+          if (!metaToken) {
+            console.error("ERRO GEMINI/WHATSAPP: Token do WhatsApp não configurado.");
+            return;
+          }
+
+          console.log(`[WhatsApp Media] Processando áudio ID: ${mediaId}...`);
+          let downloadUrl = audioObj?.url;
+          let mimeType = audioObj?.mime_type || "audio/ogg";
+
+          if (!downloadUrl && mediaId) {
+            const metaRes = await fetch(`https://graph.facebook.com/v17.0/${mediaId}`, {
+              headers: { Authorization: `Bearer ${metaToken}` }
+            });
+            if (!metaRes.ok) {
+              const errBody = await metaRes.text();
+              console.error(`ERRO GEMINI/WHATSAPP: Erro ao obter URL do áudio no Graph API (${metaRes.status}):`, errBody);
+              return;
+            }
+            const mediaData: any = await metaRes.json();
+            downloadUrl = mediaData.url;
+            if (mediaData.mime_type) {
+              mimeType = mediaData.mime_type;
+            }
+          }
+
+          if (!downloadUrl) {
+            console.error("ERRO GEMINI/WHATSAPP: URL de download do áudio não encontrada.");
+            return;
+          }
+
+          const fileRes = await fetch(downloadUrl, {
+            headers: {
+              Authorization: `Bearer ${metaToken}`,
+              "User-Agent": "curl/7.64.1"
+            }
+          });
+
+          if (!fileRes.ok) {
+            const errBody = await fileRes.text();
+            console.error(`ERRO GEMINI/WHATSAPP: Falha ao baixar binário do áudio (${fileRes.status}):`, errBody);
+            return;
+          }
+
+          const arrayBuffer = await fileRes.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString('base64');
+          const cleanMime = mimeType ? mimeType.split(';')[0].trim() : "audio/ogg";
+
+          if (audioObj?.caption) {
+            parts.push({ text: audioObj.caption });
+          }
+          parts.push({
+            inlineData: {
+              mimeType: cleanMime,
+              data: base64
+            }
+          });
+        }
+
+        // 3. Execução multimodal com modelo configurado e fallback resiliente
+        const MULTIMODAL_MODELS = ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-3.5-flash"];
+        let response: any = null;
+        let lastAiError: any = null;
+
+        for (const modelName of MULTIMODAL_MODELS) {
+          try {
+            response = await ai.models.generateContent({
+              model: modelName,
+              contents: [{ role: 'user', parts }],
+              config: {
+                temperature: 0.4,
+                tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
+              }
+            });
+            if (response) break;
+          } catch (modelErr: any) {
+            lastAiError = modelErr;
+            console.error(`ERRO GEMINI/WHATSAPP: Falha no modelo ${modelName}:`, modelErr.response?.data || modelErr.message || modelErr);
+          }
+        }
+
+        if (!response) {
+          throw lastAiError || new Error("Falha ao comunicar com os modelos do Gemini.");
+        }
+
         const functionCalls = response.functionCalls || [];
+        let replyText = response.text || "";
+        const actionsPerformed: string[] = [];
 
-        // Gravar ações decididas pela IA no Firestore do usuário
+        // 4. Persistência no Firestore: Processa functionCalls invocadas pela IA
         if (functionCalls.length > 0) {
           for (const call of functionCalls) {
             if (call.name === "add_transaction") {
-              const { title, amount, type, category, date } = call.args as any;
-              const newTxId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
-              await withTimeout(
-                adminDb.collection("users").doc(linkedUserId).collection("transactions").doc(newTxId).set({
-                  id: newTxId,
-                  title: title || "Lançamento WhatsApp",
-                  amount: Number(amount) || 0,
-                  type: (type === "income" ? "income" : "expense"),
-                  category: category || "Outros",
-                  date: date || new Date().toISOString().split("T")[0],
-                  createdAt: FieldValue.serverTimestamp()
-                }),
-                10000,
-                `Salvar transação ${newTxId}`
-              );
-              console.log(`💰 [WhatsApp AI] Transação de R$ ${amount} salva para o usuário ${linkedUserId}.`);
+              const tx = await saveTransactionToFirestore(linkedUserId, call.args as any);
+              actionsPerformed.push(`💰 Transação de R$ ${Number(tx.amount).toFixed(2)} (${tx.title})`);
             } else if (call.name === "add_task") {
-              const { title, deadline } = call.args as any;
-              const newTaskId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
-              await withTimeout(
-                adminDb.collection("users").doc(linkedUserId).collection("tasks").doc(newTaskId).set({
-                  id: newTaskId,
-                  title: title || "Tarefa WhatsApp",
-                  completed: false,
-                  dueDate: deadline || new Date().toISOString().split("T")[0],
-                  createdAt: FieldValue.serverTimestamp()
-                }),
-                10000,
-                `Salvar tarefa ${newTaskId}`
-              );
-              console.log(`📋 [WhatsApp AI] Tarefa '${title}' criada para o usuário ${linkedUserId}.`);
+              const task = await saveTaskToFirestore(linkedUserId, call.args as any);
+              actionsPerformed.push(`📋 Tarefa '${task.title}'`);
             } else if (call.name === "criarCompromissoRotina") {
-              const { titulo, data, horario } = call.args as any;
-              const newAgendaId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
-              await withTimeout(
-                adminDb.collection("users").doc(linkedUserId).collection("rotinas").doc(newAgendaId).set({
-                  id: newAgendaId,
-                  title: titulo || "Compromisso WhatsApp",
-                  date: data || new Date().toISOString().split("T")[0],
-                  time: horario || "00:00",
-                  completed: false,
-                  createdAt: FieldValue.serverTimestamp()
-                }),
-                10000,
-                `Salvar compromisso ${newAgendaId}`
-              );
-              console.log(`📅 [WhatsApp AI] Compromisso '${titulo}' criado para o usuário ${linkedUserId}.`);
+              const appt = await saveAppointmentToFirestore(linkedUserId, call.args as any);
+              actionsPerformed.push(`📅 Compromisso '${appt.title}'`);
             } else if (call.name === "complete_task") {
               const { taskTitle } = call.args as any;
-              const tasksSnap = await withTimeout(
-                adminDb.collection("users").doc(linkedUserId).collection("tasks").where("title", "==", taskTitle).limit(1).get(),
-                10000,
-                `Buscar tarefa ${taskTitle}`
-              );
-              if (!tasksSnap.empty) {
-                await withTimeout(
-                  tasksSnap.docs[0].ref.update({
-                    completed: true,
-                    completedAt: FieldValue.serverTimestamp()
-                  }),
-                  10000,
-                  `Completar tarefa ${taskTitle}`
-                );
-                console.log(`✅ [WhatsApp AI] Tarefa '${taskTitle}' concluída para o usuário ${linkedUserId}.`);
-              }
+              await completeTaskInFirestore(linkedUserId, taskTitle);
+              actionsPerformed.push(`✅ Tarefa '${taskTitle}' concluída`);
             }
           }
+        }
+
+        // 5. Persistência no Firestore: Se nenhuma functionCall foi acionada, verifica se a IA devolveu JSON estruturado
+        if (functionCalls.length === 0) {
+          const parsedActions = tryParseJsonActions(replyText);
+          for (const item of parsedActions) {
+            if (item.amount !== undefined || item.valor !== undefined) {
+              const tx = await saveTransactionToFirestore(linkedUserId, {
+                title: item.title || item.titulo || item.estabelecimento || item.description || "Lançamento WhatsApp",
+                amount: item.amount || item.valor,
+                type: item.type || item.tipo || "expense",
+                category: item.category || item.categoria || "Outros",
+                date: item.date || item.data
+              });
+              actionsPerformed.push(`💰 Transação de R$ ${Number(tx.amount).toFixed(2)} (${tx.title})`);
+            } else if (item.title || item.titulo || item.tarefa) {
+              const task = await saveTaskToFirestore(linkedUserId, {
+                title: item.title || item.titulo || item.tarefa,
+                deadline: item.deadline || item.data || item.dueDate,
+                description: item.description || item.descricao
+              });
+              actionsPerformed.push(`📋 Tarefa '${task.title}'`);
+            }
+          }
+        }
+
+        // 6. Formatação da resposta ao usuário
+        if (actionsPerformed.length > 0) {
+          const isRawJson = replyText.trim().startsWith("{") || replyText.trim().startsWith("[") || replyText.trim().startsWith("```");
+          if (!replyText || isRawJson) {
+            replyText = `Lançamento registrado com sucesso no Nexus Focus:\n${actionsPerformed.join("\n")}`;
+          }
+        } else if (!replyText) {
+          replyText = "Lançamento processado com sucesso no Nexus Focus.";
         }
 
         // Envia a resposta final para o usuário no WhatsApp validando a janela de 24h
         await sendWhatsAppTextMessage(from, replyText, phoneId, linkedUserId);
       } catch (aiError: any) {
-        console.error("❌ [WhatsApp Webhook] Erro no processamento de IA:", aiError?.message || aiError);
+        console.error('ERRO GEMINI/WHATSAPP:', aiError.response?.data || aiError.message || aiError);
         await sendWhatsAppTextMessage(
           from,
           "Ops! Ocorreu uma oscilação momentânea ao processar sua solicitação. Tente enviar novamente.",
@@ -1497,7 +1939,7 @@ Data e hora atual: ${new Date().toISOString()}`;
     try {
       let text = "";
       let from = "whatsapp_user";
-      let userId = body.userId;
+      const userId = body.userId;
 
       // Suporte a formatos de simulador ou provedores secundários
       if (body.data?.message) {
@@ -1511,11 +1953,30 @@ Data e hora atual: ${new Date().toISOString()}`;
         from = body.from || body.sender || body.phone || from;
       }
 
-      if (!text || typeof text !== "string") {
-        return res.status(400).json({ error: "Nenhuma mensagem de texto válida encontrada na requisição do WhatsApp" });
+      // Suporte a mídia vinda do simulador ou de testes diretos
+      const mediaBase64 = body.imageBase64 || body.audioBase64 || body.mediaBase64 || "";
+      let mediaMimeType = body.imageMimeType || body.audioMimeType || body.mimeType || "";
+      const mediaUrl = body.mediaUrl || body.imageUrl || body.audioUrl || "";
+      const msgType = body.type || (body.audioBase64 ? "audio" : body.imageBase64 ? "image" : "text");
+
+      let resolvedMedia: { base64: string; mimeType: string } | null = null;
+      if (mediaBase64) {
+        if (!mediaMimeType) {
+          mediaMimeType = msgType === "audio" ? "audio/ogg" : "image/jpeg";
+        }
+        resolvedMedia = { base64: mediaBase64, mimeType: mediaMimeType.split(";")[0].trim() };
+      } else if (mediaUrl) {
+        const downloaded = await downloadWhatsAppMedia({ url: mediaUrl, mime_type: mediaMimeType });
+        if (downloaded) {
+          resolvedMedia = { base64: downloaded.base64, mimeType: downloaded.mimeType };
+        }
       }
 
-      console.log(`Mensagem recebida de [${from}]: [${text}]`);
+      if (!text && !resolvedMedia) {
+        return res.status(400).json({ error: "Nenhuma mensagem de texto ou mídia válida encontrada na requisição do WhatsApp" });
+      }
+
+      console.log(`Mensagem recebida de [${from}]: [${text || (resolvedMedia ? 'MÍDIA' : '')}]`);
 
       // Verificação de Handshake (Ativação de Token)
       const tokenMatch = text.match(/NEXUS-[A-Z0-9]+/i);
@@ -1562,32 +2023,109 @@ Data e hora atual: ${new Date().toISOString()}`;
       }
 
       const ai = new GoogleGenAI({ apiKey });
-      const systemInstruction = `${GLOBAL_SYSTEM_PROMPT}
+      const baseInstruction = `${GLOBAL_SYSTEM_PROMPT}
 
-Sua missão no WhatsApp é entender o texto enviado pelo usuário. Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário mencionar palavras como agenda, compromisso, reunião ou especificar um horário exato no dia (ex: às 14h), você deve OBRIGATORIAMENTE usar a ferramenta criarCompromissoRotina. Para lançamentos financeiros use add_transaction e para marcar tarefas como concluídas use complete_task. Confirme de forma direta, clara e curta o que foi registrado no aplicativo Nexus.
+Sua missão no WhatsApp é entender mensagens do usuário enviadas em texto, imagem (recibos, cupons fiscais, comprovantes PIX, pagamentos ou anotações) ou áudio (mensagens de voz relatando gastos ou tarefas).
+- Ao receber comprovantes PIX, recibos, notas fiscais, cupons ou áudios relatando gastos: extraia os dados financeiros com precisão: valor (amount), título/estabelecimento (title), categoria ('Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Moradia', 'Lazer', 'Serviços', 'Outros') e data no formato YYYY-MM-DD. Acione OBRIGATORIAMENTE a ferramenta add_transaction ou retorne um JSON estruturado com esses campos.
+- Se o usuário relatar um afazer solto, use add_task.
+- Se o usuário mencionar palavras como agenda, compromisso, reunião ou especificar um horário exato no dia (ex: às 14h), você deve OBRIGATORIAMENTE usar a ferramenta criarCompromissoRotina.
+- Para lançamentos financeiros use add_transaction e para marcar tarefas como concluídas use complete_task.
+- Confirme de forma direta, clara e curta o que foi registrado no aplicativo Nexus.
 Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents: [{ role: 'user', parts: [{ text }] }],
-        config: {
-          systemInstruction,
-          temperature: 0.5,
-          tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
-        }
-      });
+      // 1. Inicia o array parts apenas com a instrução base
+      const parts: any[] = [
+        { text: baseInstruction }
+      ];
 
-      const mentorReply = response.text || "Lançamento processado com sucesso.";
+      // 2. Parseamento condicional
+      if (resolvedMedia) {
+        if (text) {
+          parts.push({ text });
+        }
+        parts.push({
+          inlineData: {
+            mimeType: resolvedMedia.mimeType,
+            data: resolvedMedia.base64
+          }
+        });
+      } else {
+        parts.push({ text });
+      }
+
+      const MULTIMODAL_MODELS = ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-3.5-flash"];
+      let response: any = null;
+      let lastErr: any = null;
+
+      for (const modelName of MULTIMODAL_MODELS) {
+        try {
+          response = await ai.models.generateContent({
+            model: modelName,
+            contents: [{ role: 'user', parts }],
+            config: {
+              temperature: 0.4,
+              tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
+            }
+          });
+          if (response) break;
+        } catch (err: any) {
+          lastErr = err;
+          console.error(`ERRO GEMINI/WHATSAPP: Modelo ${modelName} falhou no simulador:`, err.response?.data || err.message || err);
+        }
+      }
+
+      if (!response) {
+        throw lastErr || new Error("Falha na chamada aos modelos Gemini.");
+      }
+
+      const functionCalls = response.functionCalls || [];
+      let mentorReply = response.text || "Lançamento processado com sucesso.";
+
+      // Se o usuário estiver identificado no simulador, persiste no Firestore automaticamente
+      if (userId) {
+        if (functionCalls.length > 0) {
+          for (const call of functionCalls) {
+            if (call.name === "add_transaction") {
+              await saveTransactionToFirestore(userId, call.args as any);
+            } else if (call.name === "add_task") {
+              await saveTaskToFirestore(userId, call.args as any);
+            } else if (call.name === "criarCompromissoRotina") {
+              await saveAppointmentToFirestore(userId, call.args as any);
+            } else if (call.name === "complete_task") {
+              await completeTaskInFirestore(userId, (call.args as any)?.taskTitle);
+            }
+          }
+        } else {
+          const parsedActions = tryParseJsonActions(mentorReply);
+          for (const item of parsedActions) {
+            if (item.amount !== undefined || item.valor !== undefined) {
+              await saveTransactionToFirestore(userId, {
+                title: item.title || item.titulo || item.estabelecimento || "Lançamento WhatsApp",
+                amount: item.amount || item.valor,
+                type: item.type || item.tipo || "expense",
+                category: item.category || item.categoria || "Outros",
+                date: item.date || item.data
+              });
+            } else if (item.title || item.titulo || item.tarefa) {
+              await saveTaskToFirestore(userId, {
+                title: item.title || item.titulo || item.tarefa,
+                deadline: item.deadline || item.data || item.dueDate,
+                description: item.description || item.descricao
+              });
+            }
+          }
+        }
+      }
 
       return res.json({
         success: true,
         reply: mentorReply,
-        functionCalls: response.functionCalls || [],
+        functionCalls,
         sender: from,
         timestamp: new Date().toISOString()
       });
     } catch (error: any) {
-      console.error("WhatsApp Webhook Error:", error);
+      console.error('ERRO GEMINI/WHATSAPP:', error.response?.data || error.message || error);
       return res.status(500).json({
         error: error.message || "Erro ao processar mensagem do WhatsApp",
         reply: "Ops! Não consegui processar essa mensagem agora. Tente novamente em instantes."
