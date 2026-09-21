@@ -1,6 +1,7 @@
 import { 
   Home, 
   Calendar,
+  Folder,
   Target,
   BarChart3,
   LayoutGrid,
@@ -33,6 +34,7 @@ export function Navigation({
   const navItems: { id: TabType; label: string; icon: React.ReactNode; mobileIcon: React.ReactNode }[] = [
     { id: 'home', label: 'Início', icon: <Home size={20} />, mobileIcon: <Home size={22} className={activeTab === 'home' ? 'fill-blue-500/20' : ''} /> },
     { id: 'calendar', label: 'Agenda', icon: <Calendar size={20} />, mobileIcon: <Calendar size={22} /> },
+    { id: 'projects', label: 'Projetos', icon: <Folder size={20} />, mobileIcon: <Folder size={22} /> },
     { id: 'focus', label: 'Foco', icon: <Target size={20} />, mobileIcon: <Target size={22} /> },
     { id: 'finances', label: 'Finanças', icon: <BarChart3 size={20} />, mobileIcon: <BarChart3 size={22} /> },
     { id: 'more', label: 'Mais', icon: <LayoutGrid size={20} />, mobileIcon: <MoreHorizontal size={22} /> },

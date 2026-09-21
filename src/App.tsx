@@ -10,6 +10,7 @@ import { TabTasks } from './components/TabTasks';
 import { TabChat } from './components/TabChat';
 import { TabMore } from './components/TabMore';
 import { TabCalendar } from './components/TabCalendar';
+import { TabProjetos } from './components/TabProjetos';
 import { TabFocus } from './components/TabFocus';
 import { TabFinances } from './components/TabFinances';
 import { ToastNotifications } from './components/ToastNotifications';
@@ -305,6 +306,8 @@ function Dashboard() {
         return <TabHome transactions={transactions} goals={goals} tasks={tasks} rotinas={rotinas} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
       case 'calendar':
         return <TabCalendar rotinas={rotinas} user={user} />;
+      case 'projects':
+        return <TabProjetos user={user} onTabChange={setActiveTab} />;
       case 'focus':
         return <TabFocus onTabChange={setActiveTab} />;
       case 'finances':
