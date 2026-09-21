@@ -232,7 +232,8 @@ const criarCompromissoRotinaTool: FunctionDeclaration = {
 
 const GLOBAL_SYSTEM_PROMPT = `Você é o Mentor Focus, a inteligência artificial de alta performance do aplicativo Nexus. Seu papel é atuar como um mentor implacável, porém encorajador, focado em produtividade e disciplina. Suas regras: 1. Tom de voz direto, assertivo e maduro. 2. Use frases curtas e de impacto. 3. Evite excesso de emojis. 4. Ao falar de metas ou finanças, exija constância e chame o usuário para a responsabilidade. 5. Nunca se apresente como um modelo de linguagem, você é o Mentor Focus.`;
 
-const CANDIDATE_MODELS = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"];
+const GEMINI_MAIN_MODEL = "gemini-3.6-flash";
+const CANDIDATE_MODELS = [GEMINI_MAIN_MODEL];
 
 /**
  * Sanitiza o histórico de mensagens para o padrão estrito exigido pelo Google Gemini:
@@ -824,7 +825,7 @@ Categorias disponíveis: ${categories.join(', ')}.
 Responda APENAS com o nome exato da categoria que melhor se encaixa, sem nenhuma palavra adicional ou pontuação. Se não souber, responda "Outros".`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
+        model: GEMINI_MAIN_MODEL,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: {
           temperature: 0.1, // low temperature for more deterministic output
@@ -1804,30 +1805,24 @@ Data e hora atual: ${new Date().toISOString()}`;
           });
         }
 
-        // 3. Execução multimodal com modelo configurado e fallback resiliente
-        const MULTIMODAL_MODELS = ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-3.5-flash"];
+        // 3. Execução multimodal direta com o modelo suportado (gemini-3.6-flash)
         let response: any = null;
-        let lastAiError: any = null;
-
-        for (const modelName of MULTIMODAL_MODELS) {
-          try {
-            response = await ai.models.generateContent({
-              model: modelName,
-              contents: [{ role: 'user', parts }],
-              config: {
-                temperature: 0.4,
-                tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
-              }
-            });
-            if (response) break;
-          } catch (modelErr: any) {
-            lastAiError = modelErr;
-            console.error(`ERRO GEMINI/WHATSAPP: Falha no modelo ${modelName}:`, modelErr.response?.data || modelErr.message || modelErr);
-          }
+        try {
+          response = await ai.models.generateContent({
+            model: GEMINI_MAIN_MODEL,
+            contents: [{ role: 'user', parts }],
+            config: {
+              temperature: 0.4,
+              tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
+            }
+          });
+        } catch (modelErr: any) {
+          console.error(`ERRO GEMINI/WHATSAPP: Falha no modelo ${GEMINI_MAIN_MODEL}:`, modelErr.response?.data || modelErr.message || modelErr);
+          throw modelErr;
         }
 
         if (!response) {
-          throw lastAiError || new Error("Falha ao comunicar com os modelos do Gemini.");
+          throw new Error("Falha ao comunicar com o modelo Gemini.");
         }
 
         const functionCalls = response.functionCalls || [];
@@ -2053,29 +2048,23 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
         parts.push({ text });
       }
 
-      const MULTIMODAL_MODELS = ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-3.5-flash"];
       let response: any = null;
-      let lastErr: any = null;
-
-      for (const modelName of MULTIMODAL_MODELS) {
-        try {
-          response = await ai.models.generateContent({
-            model: modelName,
-            contents: [{ role: 'user', parts }],
-            config: {
-              temperature: 0.4,
-              tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
-            }
-          });
-          if (response) break;
-        } catch (err: any) {
-          lastErr = err;
-          console.error(`ERRO GEMINI/WHATSAPP: Modelo ${modelName} falhou no simulador:`, err.response?.data || err.message || err);
-        }
+      try {
+        response = await ai.models.generateContent({
+          model: GEMINI_MAIN_MODEL,
+          contents: [{ role: 'user', parts }],
+          config: {
+            temperature: 0.4,
+            tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
+          }
+        });
+      } catch (err: any) {
+        console.error(`ERRO GEMINI/WHATSAPP: Modelo ${GEMINI_MAIN_MODEL} falhou no simulador:`, err.response?.data || err.message || err);
+        throw err;
       }
 
       if (!response) {
-        throw lastErr || new Error("Falha na chamada aos modelos Gemini.");
+        throw new Error("Falha na chamada ao modelo Gemini.");
       }
 
       const functionCalls = response.functionCalls || [];
