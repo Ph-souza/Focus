@@ -111,7 +111,7 @@ export function Navigation({
           </button>
 
           {/* Elemento 2: Novo Toggle de Tema (Fiel à referência) */}
-          <div className="flex items-center justify-between px-2 py-0.5">
+          <div className="hidden md:flex items-center justify-between px-2 py-0.5">
             <div className="flex items-center gap-2.5 text-slate-600 dark:text-slate-300">
               {isDarkMode ? (
                 <Sun size={18} className="text-slate-400" />

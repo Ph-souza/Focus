@@ -160,6 +160,16 @@ export function TabMore({
       action: onOpenProfile 
     },
     { 
+      id: 'theme', 
+      name: 'Tema', 
+      desc: isDarkMode ? 'Modo Escuro' : 'Modo Claro', 
+      icon: isDarkMode ? <Moon className="w-4 h-4 text-blue-400" /> : <Sun className="w-4 h-4 text-amber-500" />, 
+      iconBg: isDarkMode ? 'bg-blue-500/10 border-blue-500/20' : 'bg-amber-500/10 border-amber-500/20', 
+      action: onToggleDarkMode,
+      isTheme: true,
+      className: 'md:hidden'
+    },
+    { 
       id: 'privacy', 
       name: 'Privacidade', 
       desc: 'Seus dados e segurança', 
@@ -192,9 +202,10 @@ export function TabMore({
     const q = searchQuery.toLowerCase();
     return conta.filter(c => 
       c.name.toLowerCase().includes(q) || 
-      c.desc.toLowerCase().includes(q)
+      c.desc.toLowerCase().includes(q) ||
+      (c.isTheme && 'aparencia dark light escuro claro modo tema'.includes(q))
     );
-  }, [searchQuery]);
+  }, [searchQuery, isDarkMode]);
 
   const hasResults = 
     filteredFerramentas.length > 0 || 
@@ -317,7 +328,7 @@ export function TabMore({
                 key={item.id}
                 onClick={item.action}
                 type="button"
-                className="glass-card p-3.5 flex items-center justify-between shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-all text-left group w-full"
+                className={`glass-card p-3.5 flex items-center justify-between shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-all text-left group w-full ${item.className || ''}`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 transition-transform group-hover:scale-105 ${item.iconBg}`}>
@@ -333,8 +344,36 @@ export function TabMore({
                   </div>
                 </div>
 
-                {/* Seta/Chevron apontando para a direita */}
-                <ChevronRight size={16} className="text-slate-400 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                {item.isTheme ? (
+                  <div className="w-14 h-7 rounded-full p-0.5 relative border border-slate-300/60 dark:border-blue-500/40 shadow-inner overflow-hidden flex items-center transition-all bg-slate-200 dark:bg-[#0d1824] shrink-0 pointer-events-none">
+                    {/* Metade Esquerda (Claro / Thumb branco) */}
+                    <div className={`w-1/2 h-full rounded-l-full flex items-center justify-center transition-all ${
+                      !isDarkMode 
+                        ? 'bg-amber-400/20 text-amber-500' 
+                        : 'bg-white/90 dark:bg-slate-200/90 text-slate-400'
+                    }`}>
+                      <div className="w-4 h-4 rounded-full bg-white shadow-sm flex items-center justify-center">
+                        {!isDarkMode ? (
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        ) : (
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400/70"></span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Metade Direita (Escuro / Lua Azul) */}
+                    <div className={`w-1/2 h-full rounded-r-full flex items-center justify-center transition-all ${
+                      isDarkMode 
+                        ? 'bg-blue-600 text-white shadow-sm' 
+                        : 'bg-transparent text-slate-400'
+                    }`}>
+                      <Moon size={11} className={isDarkMode ? "fill-white text-white" : "text-slate-400"} />
+                    </div>
+                  </div>
+                ) : (
+                  /* Seta/Chevron apontando para a direita */
+                  <ChevronRight size={16} className="text-slate-400 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                )}
               </button>
             ))}
 
