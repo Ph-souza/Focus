@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { 
   Home, 
   Calendar,
@@ -9,12 +8,10 @@ import {
   MoreHorizontal,
   Bot,
   Sun,
-  Moon,
-  Shield
+  Moon
 } from 'lucide-react';
 import { TabType, User } from '../types';
 import { AuraLogo } from './AuraLogo';
-import { isAdmin } from '../contexts/AuthContext';
 
 interface NavigationProps {
   activeTab: TabType;
@@ -93,23 +90,6 @@ export function Navigation({
               </button>
             );
           })}
-
-          {isAdmin(user?.email) && (
-            <div className="pt-2">
-              <Link
-                to="/painel"
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl transition-all text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 group"
-              >
-                <div className="text-blue-500 transition-transform group-hover:scale-110">
-                  <Shield size={17} />
-                </div>
-                <span className="text-sm font-bold tracking-wide">Painel Admin</span>
-                <span className="ml-auto bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">
-                  Admin
-                </span>
-              </Link>
-            </div>
-          )}
         </nav>
 
         {/* Footer Area */}

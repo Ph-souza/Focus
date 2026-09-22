@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   Folder, 
   Target, 
@@ -20,6 +22,7 @@ import {
   Plus, 
   Trash2, 
   ShieldCheck,
+  Shield,
   LifeBuoy
 } from 'lucide-react';
 
@@ -192,7 +195,10 @@ export function TabMore({
     );
   }, [searchQuery]);
 
-  const hasResults = filteredFerramentas.length > 0 || filteredConta.length > 0;
+  const hasResults = 
+    filteredFerramentas.length > 0 || 
+    filteredConta.length > 0 || 
+    (Boolean(user?.email === 'phillipe.souza27@gmail.com') && searchQuery.trim() !== '' && 'painel admin administracao'.includes(searchQuery.toLowerCase().trim()));
 
   return (
     <motion.div
@@ -298,7 +304,7 @@ export function TabMore({
       {/* ========================================================= */}
       {/* 3. SEÇÃO DE CONTA (Lista Vertical Empilhada 100% largura)  */}
       {/* ========================================================= */}
-      {filteredConta.length > 0 && (
+      {(filteredConta.length > 0 || (user?.email === 'phillipe.souza27@gmail.com' && (!searchQuery || 'painel admin administracao'.includes(searchQuery.toLowerCase())))) && (
         <div className="space-y-2 pt-1">
           <h2 className="font-bold text-xs text-slate-900 dark:text-white px-1">
             Conta
@@ -330,6 +336,35 @@ export function TabMore({
                 <ChevronRight size={16} className="text-slate-400 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all shrink-0" />
               </button>
             ))}
+
+            {/* 3. Regra de Renderização Estrita (Hardcoded): SÓ insere na DOM se o email for exatamente phillipe.souza27@gmail.com */}
+            {user?.email === 'phillipe.souza27@gmail.com' && (!searchQuery || 'painel admin administracao'.includes(searchQuery.toLowerCase())) && (
+              <Link
+                to="/painel"
+                className="glass-card p-3.5 flex items-center justify-between shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-all text-left group w-full border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-500 shrink-0 group-hover:scale-105 transition-transform">
+                    <Shield size={16} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-xs text-blue-600 dark:text-blue-400 leading-none">
+                        Painel Admin
+                      </h3>
+                      <span className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">
+                        Admin
+                      </span>
+                    </div>
+                    <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mt-1 leading-none">
+                      Métricas globais e gestão do sistema
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight size={16} className="text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+              </Link>
+            )}
 
             {/* Botão Sair com alerta visual em vermelho (text-red-500) */}
             {(!searchQuery || 'sair encerrar sessao'.includes(searchQuery.toLowerCase())) && (
