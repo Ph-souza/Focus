@@ -156,14 +156,6 @@ export function TabMore({
       action: onOpenProfile 
     },
     { 
-      id: 'theme', 
-      name: 'Aparência', 
-      desc: isDarkMode ? 'Tema Escuro ativo' : 'Tema Claro ativo', 
-      icon: isDarkMode ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-500" />, 
-      iconBg: isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-amber-500/10 border-amber-500/20',
-      action: onToggleDarkMode 
-    },
-    { 
       id: 'privacy', 
       name: 'Privacidade', 
       desc: 'Seus dados e segurança', 
