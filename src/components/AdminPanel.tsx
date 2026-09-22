@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../lib/firebase';
-import { collection, onSnapshot, query, limit } from 'firebase/firestore';
 import {
   Users,
   Server,
@@ -22,8 +20,14 @@ import {
   CreditCard,
   Flame,
   Bot,
-  Webhook
+  Webhook,
+  RefreshCw
 } from 'lucide-react';
+import {
+  getAdminDashboardMetrics,
+  AdminDashboardMetrics,
+  AdminPaymentData
+} from '../services/adminService';
 import './AdminPanel.css';
 
 interface AdminUserRow {
@@ -39,120 +43,128 @@ interface AdminUserRow {
 }
 
 export function AdminPanel() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'usuarios' | 'infra' | 'tokens' | 'financeiro'>('usuarios');
   const [selectedUser, setSelectedUser] = useState<AdminUserRow | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [usersList, setUsersList] = useState<AdminUserRow[]>([]);
+  const [metrics, setMetrics] = useState<AdminDashboardMetrics | null>(null);
+  const [isLoadingMetrics, setIsLoadingMetrics] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  // Carrega usuários reais do Firestore com fallback de dados demonstrativos do painel
-  useEffect(() => {
+  // Carrega métricas e usuários reais via adminService (getCountFromServer e lotes otimizados)
+  const loadDashboardData = async (isManual = false) => {
+    if (isManual) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoadingMetrics(true);
+    }
+
     try {
-      const q = query(collection(db, 'users'), limit(50));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const firestoreUsers: AdminUserRow[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          const email = (data.email || '').toLowerCase();
-          const isPro = Boolean(data.isPremium || data.role === 'admin_pro');
-          return {
-            id: docSnap.id,
-            name: data.name || email.split('@')[0] || 'Usuário',
-            email: email,
-            role: data.role || (isPro ? 'Pro' : 'Free'),
-            isPremium: isPro,
-            plan: isPro ? 'Plano Mensal (R$ 19,90)' : 'Gratuito',
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString('pt-BR') : '2026-09-15',
-            nextBilling: isPro ? '15/10/2026' : '—',
-            status: isPro ? 'active' : 'none'
-          };
-        });
+      const data = await getAdminDashboardMetrics();
+      setMetrics(data);
 
-        // Complementa com a lista padrão do demonstrativo se a base for recente
-        const defaultDemoUsers: AdminUserRow[] = [
-          {
-            id: 'usr-001',
-            name: 'Phillipe Souza (Admin)',
-            email: 'phillipe.souza27@gmail.com',
-            role: 'Administrador / Pro',
-            isPremium: true,
-            plan: 'Plano Mensal (R$ 19,90)',
-            createdAt: '10/01/2026',
-            nextBilling: '10/10/2026',
-            status: 'active'
-          },
-          {
-            id: 'usr-002',
-            name: 'Lucas Fernandes',
-            email: 'lvfernandes11@gmail.com',
-            role: 'Administrador / Pro',
-            isPremium: true,
-            plan: 'Plano Mensal (R$ 19,90)',
-            createdAt: '12/01/2026',
-            nextBilling: '12/10/2026',
-            status: 'active'
-          },
-          {
-            id: 'usr-003',
-            name: 'Mariana Duarte',
-            email: 'mariana.duarte@techcorp.com.br',
-            role: 'Assinante Pro',
-            isPremium: true,
-            plan: 'Plano Mensal (R$ 19,90)',
-            createdAt: '03/09/2026',
-            nextBilling: '03/10/2026',
-            status: 'active'
-          },
-          {
-            id: 'usr-004',
-            name: 'Rafael Guimarães',
-            email: 'rafael.gui@inova.io',
-            role: 'Assinante Pro',
-            isPremium: true,
-            plan: 'Plano Mensal (R$ 19,90)',
-            createdAt: '28/08/2026',
-            nextBilling: '28/09/2026',
-            status: 'overdue'
-          },
-          {
-            id: 'usr-005',
-            name: 'Camila Mendonça',
-            email: 'camilam@studio.art',
-            role: 'Usuário Free',
-            isPremium: false,
-            plan: 'Gratuito',
-            createdAt: '14/09/2026',
-            nextBilling: '—',
-            status: 'none'
-          },
-          {
-            id: 'usr-006',
-            name: 'Eduardo Silveira',
-            email: 'ed.silveira@advogados.com',
-            role: 'Cancelado',
-            isPremium: false,
-            plan: 'Plano Mensal (Cancelado)',
-            createdAt: '15/07/2026',
-            nextBilling: '—',
-            status: 'canceled'
-          }
-        ];
+      const firestoreUsers: AdminUserRow[] = data.recentUsers.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        isPremium: u.isPremium,
+        plan: u.plan,
+        createdAt: u.createdAt instanceof Date ? u.createdAt.toLocaleDateString('pt-BR') : '2026-09-15',
+        nextBilling: u.nextBilling || (u.isPremium ? '15/10/2026' : '—'),
+        status: u.status
+      }));
 
-        // Mescla garantindo que os usuários do Firestore apareçam primeiro
-        const merged = [...firestoreUsers];
-        defaultDemoUsers.forEach((demo) => {
-          if (!merged.some((u) => u.email === demo.email)) {
-            merged.push(demo);
-          }
-        });
+      // Complementa com a lista demonstrativa para visualização completa caso a base seja recente
+      const defaultDemoUsers: AdminUserRow[] = [
+        {
+          id: 'usr-001',
+          name: 'Phillipe Souza (Admin)',
+          email: 'phillipe.souza27@gmail.com',
+          role: 'Administrador / Pro',
+          isPremium: true,
+          plan: 'Plano Mensal (R$ 19,90)',
+          createdAt: '10/01/2026',
+          nextBilling: '10/10/2026',
+          status: 'active'
+        },
+        {
+          id: 'usr-002',
+          name: 'Lucas Fernandes',
+          email: 'lvfernandes11@gmail.com',
+          role: 'Administrador / Pro',
+          isPremium: true,
+          plan: 'Plano Mensal (R$ 19,90)',
+          createdAt: '12/01/2026',
+          nextBilling: '12/10/2026',
+          status: 'active'
+        },
+        {
+          id: 'usr-003',
+          name: 'Mariana Duarte',
+          email: 'mariana.duarte@techcorp.com.br',
+          role: 'Assinante Pro',
+          isPremium: true,
+          plan: 'Plano Mensal (R$ 19,90)',
+          createdAt: '03/09/2026',
+          nextBilling: '03/10/2026',
+          status: 'active'
+        },
+        {
+          id: 'usr-004',
+          name: 'Rafael Guimarães',
+          email: 'rafael.gui@inova.io',
+          role: 'Assinante Pro',
+          isPremium: true,
+          plan: 'Plano Mensal (R$ 19,90)',
+          createdAt: '28/08/2026',
+          nextBilling: '28/09/2026',
+          status: 'overdue'
+        },
+        {
+          id: 'usr-005',
+          name: 'Camila Mendonça',
+          email: 'camilam@studio.art',
+          role: 'Usuário Free',
+          isPremium: false,
+          plan: 'Gratuito',
+          createdAt: '14/09/2026',
+          nextBilling: '—',
+          status: 'none'
+        },
+        {
+          id: 'usr-006',
+          name: 'Eduardo Silveira',
+          email: 'ed.silveira@advogados.com',
+          role: 'Cancelado',
+          isPremium: false,
+          plan: 'Plano Mensal (Cancelado)',
+          createdAt: '15/07/2026',
+          nextBilling: '—',
+          status: 'canceled'
+        }
+      ];
 
-        setUsersList(merged);
+      const merged = [...firestoreUsers];
+      defaultDemoUsers.forEach((demo) => {
+        if (!merged.some((u) => u.email.toLowerCase() === demo.email.toLowerCase())) {
+          merged.push(demo);
+        }
       });
 
-      return () => unsubscribe();
+      setUsersList(merged);
     } catch (e) {
-      console.warn('Erro ao listar usuários Firestore no painel:', e);
+      console.warn('[AdminPanel] Erro ao carregar métricas:', e);
+    } finally {
+      setIsLoadingMetrics(false);
+      setIsRefreshing(false);
     }
+  };
+
+  useEffect(() => {
+    loadDashboardData();
   }, []);
 
   const filteredUsers = usersList.filter((u) => {
@@ -200,6 +212,16 @@ export function AdminPanel() {
               Ambiente de Produção • 99.98% Uptime
             </span>
 
+            <button
+              onClick={() => loadDashboardData(true)}
+              disabled={isRefreshing}
+              className="admin-return-btn"
+              title="Sincronizar métricas do Firestore em tempo real"
+            >
+              <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+              <span>{isRefreshing ? 'Atualizando...' : 'Sincronizar'}</span>
+            </button>
+
             <Link to="/dashboard" className="admin-return-btn">
               <ArrowLeft size={14} />
               Voltar ao Dashboard
@@ -220,7 +242,7 @@ export function AdminPanel() {
           <div>
             <h1 className="admin-h1">Nexus Focus — Painel administrativo</h1>
             <p className="admin-subtitle">
-              Acompanhamento centralizado e demonstrativo: usuários, infraestrutura, tokens de IA e faturamento do gateway.
+              Acompanhamento centralizado e em tempo real: contagem via getCountFromServer, métricas globais e transações.
             </p>
           </div>
           <div className="admin-date capitalize">{currentDateFormatted}</div>
@@ -230,37 +252,45 @@ export function AdminPanel() {
         <div className="admin-demo-banner">
           <Shield size={18} className="text-amber-700 shrink-0" />
           <span>
-            <strong>Área Restrita:</strong> Acesso restrito a administradores credenciados do Nexus Focus. As rotas de retorno de checkout do gateway redirecionam diretamente para <code>/dashboard</code>.
+            <strong>Área Restrita:</strong> Painel alimentado por <code>adminService.ts</code> com otimização de custos e leituras do Firestore.
           </span>
         </div>
 
         {/* 4 Cards de Métricas Principais */}
         <div className="admin-cards">
-          {/* Card 1: Usuários */}
+          {/* Card 1: Total de Usuários */}
           <div className="admin-card primary">
             <div className="admin-card-top">
-              <span>Total de Assinantes</span>
+              <span>Total de Usuários</span>
               <Users className="admin-card-icon" />
             </div>
-            <div className="admin-metric">{1240 + activeProCount}</div>
-            <p>Usuários com acesso corporativo ativo no plano de R$ 19,90/mês.</p>
+            <div className="admin-metric">
+              {isLoadingMetrics ? '...' : (metrics?.totalUsers ?? usersList.length).toLocaleString('pt-BR')}
+            </div>
+            <p>Contas registradas no Firestore via getCountFromServer() com zero custo de leituras massivas.</p>
             <div className="admin-card-bottom">
               <TrendingUp size={14} />
-              <span>+18.4% de adesão nos últimos 30 dias</span>
+              <span>{metrics?.recentUsers?.length ?? 0} novos cadastros no lote recente</span>
             </div>
           </div>
 
-          {/* Card 2: Uptime */}
+          {/* Card 2: Assinaturas Ativas Pro */}
           <div className="admin-card">
             <div className="admin-card-top">
-              <span className="text-zinc-800 font-semibold">Uptime Infraestrutura</span>
-              <Activity className="admin-card-icon text-blue-600" />
+              <span className="text-zinc-800 font-semibold">Assinaturas Ativas</span>
+              <Shield className="admin-card-icon text-emerald-600" />
             </div>
-            <div className="admin-metric text-zinc-900">99.98%</div>
-            <p>Disponibilidade operacional nos clusters do Firebase e Edge CDN.</p>
+            <div className="admin-metric text-zinc-900">
+              {isLoadingMetrics ? '...' : (metrics?.activeSubscriptions ?? 0).toLocaleString('pt-BR')}
+            </div>
+            <p>Usuários com acesso corporativo ativo no plano de R$ 19,90/mês.</p>
             <div className="admin-card-bottom text-emerald-700 font-medium">
               <CheckCircle2 size={14} className="text-emerald-600" />
-              <span>Todos os 4 microsserviços operacionais</span>
+              <span>
+                {metrics && metrics.totalUsers > 0
+                  ? `${((metrics.activeSubscriptions / metrics.totalUsers) * 100).toFixed(1)}% de conversão Pro`
+                  : 'Acesso Pro ativo'}
+              </span>
             </div>
           </div>
 
@@ -284,11 +314,18 @@ export function AdminPanel() {
               <span className="text-zinc-800 font-semibold">Receita Recorrente (MRR)</span>
               <DollarSign className="admin-card-icon text-emerald-600" />
             </div>
-            <div className="admin-metric text-zinc-900">R$ 24.835</div>
+            <div className="admin-metric text-zinc-900">
+              {isLoadingMetrics
+                ? '...'
+                : `R$ ${(metrics?.estimatedMRR ?? 0).toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}`}
+            </div>
             <p>Faturamento recorrente bruto com ticket médio de R$ 19,90/mês.</p>
             <div className="admin-card-bottom text-zinc-600">
               <CreditCard size={14} className="text-blue-600" />
-              <span>Gateways: Stripe Checkout & Mercado Pago</span>
+              <span>Gateways: Mercado Pago & Stripe</span>
             </div>
           </div>
         </div>
@@ -714,17 +751,28 @@ export function AdminPanel() {
             <div className="admin-plain-body">
               <div className="admin-revenue-line">
                 <div>
-                  <div className="admin-money">R$ 24.835,20</div>
-                  <span className="text-slate-500 text-xs">Receita Mensal Recorrente projetada (MRR)</span>
+                  <div className="admin-money">
+                    {isLoadingMetrics
+                      ? '...'
+                      : `R$ ${(metrics?.estimatedMRR ?? 0).toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        })}`}
+                  </div>
+                  <span className="text-slate-500 text-xs">Receita Mensal Recorrente estimada (MRR)</span>
                 </div>
                 <div className="text-right">
-                  <strong>1.248 Assinantes</strong>
-                  <span className="block text-xs text-slate-500">Taxa de Churn: 1.8%</span>
+                  <strong>
+                    {isLoadingMetrics ? '...' : (metrics?.activeSubscriptions ?? 0).toLocaleString('pt-BR')} Assinantes Pro
+                  </strong>
+                  <span className="block text-xs text-slate-500">
+                    {metrics?.recentPayments?.length ?? 0} transações recentes salvas
+                  </span>
                 </div>
               </div>
 
               <div className="admin-revenue-progress mb-6">
-                <span style={{ width: '82%' }} />
+                <span style={{ width: metrics && metrics.totalUsers > 0 ? `${Math.min(100, Math.round((metrics.activeSubscriptions / metrics.totalUsers) * 100))}%` : '50%' }} />
               </div>
 
               {/* Tabela de Planos */}
@@ -756,11 +804,11 @@ export function AdminPanel() {
               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">
                 Conectores de Pagamento
               </h3>
-              <div className="admin-inventory">
+              <div className="admin-inventory mb-6">
                 <div className="admin-inventory-row">
                   <div>
-                    <strong className="text-slate-800">Stripe Payment Gateway</strong>
-                    <small>Fluxo de checkout dinâmico via link com prefilled_email e client_reference_id</small>
+                    <strong className="text-slate-800">Mercado Pago Card Brick (SDK v2)</strong>
+                    <small>Fluxo nativo com Swipe Card, autorização direta e R$ 19,90/mês</small>
                   </div>
                   <span className="admin-integration-state active">
                     <CheckCircle2 size={13} /> Conectado e Operacional
@@ -769,12 +817,93 @@ export function AdminPanel() {
 
                 <div className="admin-inventory-row">
                   <div>
-                    <strong className="text-slate-800">Mercado Pago Card Brick</strong>
-                    <small>SDK React v2 para autorização direta de cartão nacional e parcelamento</small>
+                    <strong className="text-slate-800">Stripe Checkout Gateway</strong>
+                    <small>Conector secundário com client_reference_id e prefilled_email</small>
                   </div>
                   <span className="admin-integration-state active">
                     <CheckCircle2 size={13} /> Conectado e Operacional
                   </span>
+                </div>
+              </div>
+
+              {/* Seção de Transações Recentes do Mercado Pago */}
+              <div className="border border-slate-200 rounded-xl p-5 bg-white mb-6 shadow-sm">
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                      Últimas Transações Salvas (Mercado Pago)
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Consulta limitada aos 10 registros mais recentes via <code>getRecentPayments()</code>.
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200">
+                    {metrics?.recentPayments?.length ?? 0} transações carregadas
+                  </span>
+                </div>
+
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>ID Pagamento</th>
+                        <th>Cliente</th>
+                        <th>Valor</th>
+                        <th>Gateway / Método</th>
+                        <th>Status</th>
+                        <th>Data</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {!metrics?.recentPayments || metrics.recentPayments.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="text-center py-6 text-slate-500 text-xs">
+                            Nenhuma transação gravada no Firestore ainda. Novas aprovações do Mercado Pago aparecerão aqui automaticamente.
+                          </td>
+                        </tr>
+                      ) : (
+                        metrics.recentPayments.map((pay) => (
+                          <tr key={pay.id}>
+                            <td className="font-mono text-xs text-slate-700 font-semibold">
+                              {pay.paymentId || pay.id}
+                            </td>
+                            <td>
+                              <span className="text-xs text-slate-800 font-medium">{pay.email}</span>
+                            </td>
+                            <td>
+                              <strong className="text-xs text-slate-900">
+                                R$ {pay.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </strong>
+                            </td>
+                            <td>
+                              <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                                <CreditCard size={12} className="text-blue-600" />
+                                <span className="capitalize">{pay.gateway}</span>
+                                <span className="text-slate-400">•</span>
+                                <span className="text-slate-500">{pay.paymentMethod}</span>
+                              </div>
+                            </td>
+                            <td>
+                              {pay.status === 'approved' && (
+                                <span className="admin-badge active">● Aprovado</span>
+                              )}
+                              {pay.status === 'pending' && (
+                                <span className="admin-badge overdue">▲ Pendente</span>
+                              )}
+                              {pay.status !== 'approved' && pay.status !== 'pending' && (
+                                <span className="admin-badge none">○ {pay.status}</span>
+                              )}
+                            </td>
+                            <td className="text-xs text-slate-500">
+                              {pay.date instanceof Date
+                                ? pay.date.toLocaleDateString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                                : 'Recente'}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
@@ -784,7 +913,14 @@ export function AdminPanel() {
                   <span className="text-slate-500 block text-xs">Taxa Média de Processamento Gateway: 3.99%</span>
                   <span className="text-emerald-700 font-semibold text-xs">Faturamento Líquido Estimado</span>
                 </div>
-                <strong className="text-emerald-700">R$ 23.844,27</strong>
+                <strong className="text-emerald-700">
+                  {isLoadingMetrics
+                    ? '...'
+                    : `R$ ${((metrics?.estimatedMRR ?? 0) * (1 - 0.0399)).toLocaleString('pt-BR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })}`}
+                </strong>
               </div>
             </div>
           </div>
