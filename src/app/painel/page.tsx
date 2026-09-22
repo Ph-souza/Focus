@@ -2,6 +2,8 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import './painel.css';
+import { useAuth } from '../../contexts/AuthContext';
+import { cleanGhostUsers } from '../../services/adminService';
 import {
   AS_OF,
   DAY,
@@ -128,11 +130,38 @@ function aggregateTelemetry(rows: TelemetryItem[]) {
 }
 
 export default function PainelPage() {
+  const { currentUser } = useAuth();
+
   // Estados principais da página reativa
   const [activeTab, setActiveTab] = useState<'users' | 'infra' | 'finance'>('users');
   const [activityWindow, setActivityWindow] = useState<number>(30);
   const [infraWindow, setInfraWindow] = useState<'today' | 'month'>('today');
   const [selectedUser, setSelectedUser] = useState<DemoUser | null>(null);
+  const [isCleaning, setIsCleaning] = useState<boolean>(false);
+  const [cleanFeedback, setCleanFeedback] = useState<string | null>(null);
+
+  // 3. Utilitário de Limpeza de Base (Dev Mode)
+  const handleCleanGhosts = async () => {
+    const confirmDelete = window.confirm(
+      'Deseja deletar todos os documentos de usuários fantasmas da coleção "users" (IDs que não sejam o seu UID de administrador ou que possuam formato inválido)?'
+    );
+    if (!confirmDelete) return;
+
+    setIsCleaning(true);
+    setCleanFeedback(null);
+    try {
+      const result = await cleanGhostUsers(currentUser?.uid);
+      setCleanFeedback(
+        `Limpeza finalizada com sucesso! ${result.deletedCount} documento(s) fantasma(s) deletado(s). ${result.keptCount} documento(s) oficial(is) mantido(s).`
+      );
+      setTimeout(() => setCleanFeedback(null), 9000);
+    } catch (err) {
+      console.error('Erro na limpeza de usuários fantasmas:', err);
+      setCleanFeedback('Falha ao executar limpeza da coleção de usuários.');
+    } finally {
+      setIsCleaning(false);
+    }
+  };
 
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -323,19 +352,45 @@ export default function PainelPage() {
             </strong>
           </div>
           <div className="header-right">
+            <button
+              type="button"
+              onClick={handleCleanGhosts}
+              disabled={isCleaning}
+              className="clean-ghost-btn"
+              title="Deleta todos os documentos na coleção users onde o ID não seja o seu UID de administrador ou que tenham tamanho diferente de 28 caracteres"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden="true"
+              >
+                <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+              </svg>
+              <span>{isCleaning ? 'Limpando...' : 'Limpar Usuários Fantasmas'}</span>
+            </button>
             <span>Painel administrativo</span>
             <div
               className="avatar"
-              title="Phillipe · Administrador"
-              aria-label="Phillipe, administrador"
+              title={currentUser?.email || 'Phillipe · Administrador'}
+              aria-label={currentUser?.email || 'Phillipe, administrador'}
             >
-              P
+              {currentUser?.email ? currentUser.email.substring(0, 2).toUpperCase() : 'P'}
             </div>
           </div>
         </div>
       </header>
 
       <main className="workspace">
+        {cleanFeedback && (
+          <div className="clean-feedback-banner" role="status">
+            <strong>Manutenção da Base:</strong> {cleanFeedback}
+          </div>
+        )}
+
         <div className="title-row">
           <div>
             <p className="eyebrow">VISÃO DO NEGÓCIO</p>

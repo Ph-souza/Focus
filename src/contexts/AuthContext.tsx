@@ -14,15 +14,22 @@ export interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// 2. Regra de Auto-Admin baseada no Email:
+export const adminEmails = [
+  'phillipe.souza27@gmail.com',
+  'eumktdigital23@gmail.com'
+];
+
 // Contas de Administrador com acesso ao Painel Administrativo (/painel) e Acesso Pro Irrestrito
 export const ADMIN_ACCOUNTS = [
-  'phillipe.souza27@gmail.com',
+  ...adminEmails,
   'lvfernandes11@gmail.com'
 ];
 
 export function isAdmin(email?: string | null): boolean {
   if (!email || typeof email !== 'string') return false;
-  return ADMIN_ACCOUNTS.includes(email.trim().toLowerCase());
+  const normalized = email.trim().toLowerCase();
+  return adminEmails.includes(normalized) || ADMIN_ACCOUNTS.includes(normalized);
 }
 
 // Contas com acesso Pro / Vitalício garantido
@@ -53,19 +60,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setCurrentUser(user);
 
         const email = (user.email || user.providerData?.[0]?.email || '').trim().toLowerCase();
-        const isPro = isWhitelistedPro(email);
+        const emailIsAdmin = adminEmails.includes(email);
+        const isPro = isWhitelistedPro(email) || emailIsAdmin;
 
-        // Se for conta Pro whitelisted, ativa imediatamente sem esperar rede
+        // Se for conta Pro whitelisted ou Admin, ativa imediatamente sem esperar rede
         if (isPro) {
           setIsPremium(true);
           setIsLoading(false);
         }
 
+        // 1. O ID do documento na coleção users tem OBRIGATORIAMENTE de ser o uid oficial do Firebase Auth
         const userDocRef = doc(db, 'users', user.uid);
 
-        // Assure document exists in Firestore and check Guest Checkout Binding
+        // Garante a existência e integridade do documento do usuário no Firestore
         try {
           const snap = await getDoc(userDocRef);
+          const isFirstLogin = !snap.exists();
+
           let userIsPremium = isPro || (snap.exists() ? Boolean(snap.data()?.isPremium) : false);
 
           // Guest Checkout Binding: se a conta ainda não for premium, verificar se há compra pelo e-mail
@@ -82,39 +93,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
 
-          if (isPro) {
+          // 2. Padronização dos dados do usuário
+          const name = user.displayName || user.providerData?.[0]?.displayName || email.split('@')[0] || 'Usuário';
+          const photoURL = user.photoURL || user.providerData?.[0]?.photoURL || '';
+
+          const userData: Record<string, any> = {
+            name,
+            email,
+            photoURL,
+            role: emailIsAdmin ? 'admin' : 'user',
+            isAdmin: emailIsAdmin
+          };
+
+          if (emailIsAdmin) {
+            userData.isPremium = true;
+            userData.plan = 'pro_unlimited';
             userIsPremium = true;
-            setIsPremium(true);
+          } else if (userIsPremium) {
+            userData.isPremium = true;
+            userData.plan = snap.data()?.plan || 'pro_unlimited';
           }
 
-          const emailIsAdmin = isAdmin(email);
-
-          if (!snap.exists()) {
-            await setDoc(userDocRef, {
-              name: user.displayName || user.providerData?.[0]?.displayName || email.split('@')[0] || 'Usuário',
-              email: email || '',
-              photoURL: user.photoURL || user.providerData?.[0]?.photoURL || '',
-              isPremium: userIsPremium,
-              isAdmin: emailIsAdmin,
-              plan: userIsPremium ? 'pro_unlimited' : 'free',
-              role: emailIsAdmin ? 'admin_pro' : 'user',
-              createdAt: serverTimestamp()
-            });
-          } else if (emailIsAdmin && (!snap.data()?.isAdmin || snap.data()?.role !== 'admin_pro')) {
-            await setDoc(userDocRef, {
-              isPremium: true,
-              isAdmin: true,
-              plan: 'pro_unlimited',
-              role: 'admin_pro'
-            }, { merge: true });
-          } else if (userIsPremium && (!snap.data()?.isPremium || snap.data()?.plan !== 'pro_unlimited')) {
-            await setDoc(userDocRef, {
-              isPremium: true,
-              isAdmin: emailIsAdmin || Boolean(snap.data()?.isAdmin),
-              plan: 'pro_unlimited',
-              role: emailIsAdmin ? 'admin_pro' : (snap.data()?.role || 'premium_user')
-            }, { merge: true });
+          // createdAt com serverTimestamp() apenas se for o primeiro login
+          if (isFirstLogin) {
+            userData.createdAt = serverTimestamp();
+            if (!emailIsAdmin && !userIsPremium) {
+              userData.isPremium = false;
+              userData.plan = 'free';
+            }
           }
+
+          // 1. Correção do Fluxo: setDoc(doc(db, 'users', user.uid), data, { merge: true })
+          await setDoc(userDocRef, userData, { merge: true });
         } catch (err) {
           console.warn('Notice ensuring user doc exists:', err);
           if (isPro) {

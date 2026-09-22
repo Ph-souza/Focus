@@ -1886,3 +1886,42 @@ button:focus-visible,select:focus-visible,a:focus-visible,.bar-item:focus-visibl
     background:#eef3fa
   }
 }
+
+/* Utilitário Temporário de Limpeza de Usuários Fantasmas */
+.clean-ghost-btn {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 7px 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.clean-ghost-btn:hover {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+}
+.clean-ghost-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.clean-feedback-banner {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  padding: 11px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+

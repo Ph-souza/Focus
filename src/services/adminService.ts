@@ -12,6 +12,8 @@ import {
   limit,
   getDocs,
   getCountFromServer,
+  deleteDoc,
+  doc,
   Timestamp
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -265,3 +267,54 @@ export async function getAdminDashboardMetrics(): Promise<AdminDashboardMetrics>
     lastUpdated: new Date()
   };
 }
+
+export interface CleanGhostUsersResult {
+  totalScanned: number;
+  deletedCount: number;
+  keptCount: number;
+  deletedIds: string[];
+}
+
+/**
+ * 3. Utilitário de Limpeza de Base (Dev Mode):
+ * Deleta todos os documentos na coleção users onde o ID não seja igual ao UID do administrador
+ * atualmente logado (ou que tenham tamanho diferente de 28 caracteres, padrão do Firebase Auth).
+ */
+export async function cleanGhostUsers(currentAdminUid?: string): Promise<CleanGhostUsersResult> {
+  const usersColl = collection(db, 'users');
+  const snap = await getDocs(usersColl);
+
+  let deletedCount = 0;
+  let keptCount = 0;
+  const deletedIds: string[] = [];
+
+  for (const docSnap of snap.docs) {
+    const docId = docSnap.id;
+    const isCurrentAdmin = Boolean(currentAdminUid && docId === currentAdminUid);
+
+    // Condição de documento fantasma/poluição:
+    // - Não é o administrador logado E (tamanho !== 28 caracteres OU ID gerado aleatório de teste)
+    const isGhost = !isCurrentAdmin && (docId.length !== 28 || (currentAdminUid && docId !== currentAdminUid));
+
+    if (isGhost) {
+      try {
+        await deleteDoc(doc(db, 'users', docId));
+        deletedCount++;
+        deletedIds.push(docId);
+        console.log(`[cleanGhostUsers] Documento fantasma removido: ${docId}`);
+      } catch (err) {
+        console.error(`[cleanGhostUsers] Erro ao deletar documento fantasma ${docId}:`, err);
+      }
+    } else {
+      keptCount++;
+    }
+  }
+
+  return {
+    totalScanned: snap.size,
+    deletedCount,
+    keptCount,
+    deletedIds
+  };
+}
+
