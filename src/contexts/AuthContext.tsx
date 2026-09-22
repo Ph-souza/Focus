@@ -87,21 +87,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setIsPremium(true);
           }
 
+          const emailIsAdmin = isAdmin(email);
+
           if (!snap.exists()) {
             await setDoc(userDocRef, {
               name: user.displayName || user.providerData?.[0]?.displayName || email.split('@')[0] || 'Usuário',
               email: email || '',
               photoURL: user.photoURL || user.providerData?.[0]?.photoURL || '',
               isPremium: userIsPremium,
+              isAdmin: emailIsAdmin,
               plan: userIsPremium ? 'pro_unlimited' : 'free',
-              role: isPro ? 'admin_pro' : 'user',
+              role: emailIsAdmin ? 'admin_pro' : 'user',
               createdAt: serverTimestamp()
             });
+          } else if (emailIsAdmin && (!snap.data()?.isAdmin || snap.data()?.role !== 'admin_pro')) {
+            await setDoc(userDocRef, {
+              isPremium: true,
+              isAdmin: true,
+              plan: 'pro_unlimited',
+              role: 'admin_pro'
+            }, { merge: true });
           } else if (userIsPremium && (!snap.data()?.isPremium || snap.data()?.plan !== 'pro_unlimited')) {
             await setDoc(userDocRef, {
               isPremium: true,
+              isAdmin: emailIsAdmin || Boolean(snap.data()?.isAdmin),
               plan: 'pro_unlimited',
-              role: isPro ? 'admin_pro' : (snap.data()?.role || 'premium_user')
+              role: emailIsAdmin ? 'admin_pro' : (snap.data()?.role || 'premium_user')
             }, { merge: true });
           }
         } catch (err) {

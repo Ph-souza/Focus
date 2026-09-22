@@ -405,6 +405,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/homepage" element={<LandingPage />} />
           <Route path="/page" element={<Navigate to="/homepage" replace />} />
           <Route path="/login" element={<LoginScreen />} />

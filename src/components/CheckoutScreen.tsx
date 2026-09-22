@@ -65,19 +65,12 @@ export function CheckoutScreen() {
     },
   };
 
-  // TODO: Inserir link final de pagamento para substituirmos depois
+  // Fluxo de Pagamento Interno (Swipe Card):
+  // Dispara o avanço nativo da interface para o card deslizante de preenchimento dos dados do cartão,
+  // sem qualquer redirecionamento externo ou window.location.href.
   const handleCheckout = () => {
-    if (!currentUser) {
-      window.location.href = '/login';
-      return;
-    }
-
-    const email = (currentUser.email || currentUser.providerData?.[0]?.email || '').trim().toLowerCase();
-    const uid = currentUser.uid;
-
-    // Redirecionamento dinâmico para o link de pagamento passando o e-mail e ID do utilizador autenticado
-    // Nota de Arquitetura: O retorno de sucesso do pagamento deve ser configurado posteriormente no gateway para enviar o utilizador de volta à aplicação (ex: /dashboard ou /), e nunca para /painel.
-    window.location.href = `https://buy.stripe.com/TODO_SEU_LINK?prefilled_email=${encodeURIComponent(email)}&client_reference_id=${encodeURIComponent(uid)}`;
+    setErrorMessage('');
+    setIsFlipped(true);
   };
 
   const onSubmit = async (formData: any) => {
@@ -424,7 +417,7 @@ export function CheckoutScreen() {
               {/* Bottom Actions of Right Card */}
               <div className="mt-auto pt-4">
                 {/* TODO: Certifique-se de substituir a chave/variável de ambiente do Stripe (ex: STRIPE_PRICE_ID / NEXT_PUBLIC_STRIPE_PRICE_ID / VITE_STRIPE_PRICE_ID) pelo novo ID correspondente ao plano de R$ 19,90 gerado no painel do Stripe */}
-                {/* Primary Action Button */}
+                {/* Primary Action Button - Avança para o Swipe Card nativo de pagamento */}
                 <button
                   onClick={handleCheckout}
                   disabled={loading}
@@ -434,16 +427,6 @@ export function CheckoutScreen() {
                   <span className="text-[14px] sm:text-base font-bold">Desbloquear Acesso Agora</span>
                   <ArrowRight size={15} className="text-white" />
                 </button>
-
-                <div className="text-center mb-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsFlipped(true)}
-                    className="text-[11px] text-zinc-400 hover:text-zinc-700 transition-colors underline cursor-pointer"
-                  >
-                    Pagar com Cartão Direto (Mercado Pago)
-                  </button>
-                </div>
 
                 {/* Security Guarantee & Status Refresh */}
                 <div className="flex flex-col items-center gap-2">
