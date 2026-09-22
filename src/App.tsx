@@ -20,7 +20,7 @@ import { QuickChat } from './components/QuickChat';
 import { SmartCaptureModal } from './components/SmartCaptureModal';
 import { WhatsAppModal } from './components/WhatsAppModal';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, onSnapshot, query, orderBy, setDoc, doc, getDoc, where, limit } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, where, limit } from 'firebase/firestore';
 import { subscribeToPushNotifications } from './lib/pushNotifications';
 import { getApiUrl } from './lib/api';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -111,38 +111,6 @@ function Dashboard() {
     }
   }, []);
 
-  // Sync Google User details to Firestore doc
-  useEffect(() => {
-    if (!currentUser) return;
-    const syncUserProfile = async () => {
-      try {
-        const docRef = doc(db, 'users', currentUser.uid);
-        const docSnap = await getDoc(docRef);
-        const googleName = currentUser.displayName || 'Usuário';
-        const googleEmail = currentUser.email || '';
-        const googlePhoto = currentUser.photoURL || '';
-
-        if (!docSnap.exists()) {
-          await setDoc(docRef, {
-            name: googleName,
-            email: googleEmail,
-            photoURL: googlePhoto,
-            dateOfBirth: ''
-          }, { merge: true });
-        } else {
-          const data = docSnap.data();
-          if (googlePhoto && data?.photoURL !== googlePhoto) {
-            await setDoc(docRef, {
-              photoURL: googlePhoto
-            }, { merge: true });
-          }
-        }
-      } catch (err) {
-        console.warn('Notice syncing user profile to Firestore:', err);
-      }
-    };
-    syncUserProfile();
-  }, [currentUser]);
 
   // Firestore Subscriptions
   useEffect(() => {

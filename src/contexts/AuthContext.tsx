@@ -75,56 +75,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Garante a existência e integridade do documento do usuário no Firestore
         try {
           const snap = await getDoc(userDocRef);
-          const isFirstLogin = !snap.exists();
 
-          let userIsPremium = isPro || (snap.exists() ? Boolean(snap.data()?.isPremium) : false);
+          // 2. Regra de Auto-Admin:
+          // Antes de salvar no Firestore, verifique estritamente: if (user.email === 'phillipe.souza27@gmail.com').
+          // Se for verdadeiro, adicione ao payload: role: 'admin' e isAdmin: true.
+          // Se for falso, adicione: role: 'user' e isAdmin: false.
+          let role = 'user';
+          let isAdmin = false;
 
-          // Guest Checkout Binding: se a conta ainda não for premium, verificar se há compra pelo e-mail
-          if (!userIsPremium && email) {
-            try {
-              const emailDocRef = doc(db, 'users', email);
-              const emailSnap = await getDoc(emailDocRef);
-              if (emailSnap.exists() && emailSnap.data()?.isPremium) {
-                userIsPremium = true;
-                console.log('[Guest Checkout Binding] Licença Premium vinculada com sucesso a partir do e-mail:', email);
-              }
-            } catch (bindingErr) {
-              console.warn('[Guest Checkout Binding] Verificação por e-mail:', bindingErr);
-            }
+          if (user.email === 'phillipe.souza27@gmail.com') {
+            role = 'admin';
+            isAdmin = true;
           }
 
-          // 2. Padronização dos dados do usuário
-          const name = user.displayName || user.providerData?.[0]?.displayName || email.split('@')[0] || 'Usuário';
+          // 3. Padronização de Dados:
+          // O payload salvo deve conter apenas: name, email, photoURL, e createdAt (utilize serverTimestamp(), garantindo que não sobrescreve se já existir).
+          const name = user.displayName || user.providerData?.[0]?.displayName || user.email?.split('@')[0] || 'Usuário';
+          const email = user.email || '';
           const photoURL = user.photoURL || user.providerData?.[0]?.photoURL || '';
 
-          const userData: Record<string, any> = {
+          const payload: Record<string, any> = {
             name,
             email,
             photoURL,
-            role: emailIsAdmin ? 'admin' : 'user',
-            isAdmin: emailIsAdmin
+            role,
+            isAdmin
           };
 
-          if (emailIsAdmin) {
-            userData.isPremium = true;
-            userData.plan = 'pro_unlimited';
-            userIsPremium = true;
-          } else if (userIsPremium) {
-            userData.isPremium = true;
-            userData.plan = snap.data()?.plan || 'pro_unlimited';
+          // createdAt (utilize serverTimestamp(), garantindo que não sobrescreve se já existir)
+          if (!snap.exists() || !snap.data()?.createdAt) {
+            payload.createdAt = serverTimestamp();
           }
 
-          // createdAt com serverTimestamp() apenas se for o primeiro login
-          if (isFirstLogin) {
-            userData.createdAt = serverTimestamp();
-            if (!emailIsAdmin && !userIsPremium) {
-              userData.isPremium = false;
-              userData.plan = 'free';
-            }
-          }
-
-          // 1. Correção do Fluxo: setDoc(doc(db, 'users', user.uid), data, { merge: true })
-          await setDoc(userDocRef, userData, { merge: true });
+          // 1. Uso Obrigatório do UID (setDoc):
+          // Substitua addDoc(collection(db, 'users')...) por setDoc(doc(db, 'users', user.uid), data, { merge: true }).
+          // O ID do documento na coleção users tem obrigatoriamente que ser o user.uid do Firebase Auth.
+          // O { merge: true } é vital para não sobrescrevermos assinaturas em logins futuros.
+          await setDoc(userDocRef, payload, { merge: true });
         } catch (err) {
           console.warn('Notice ensuring user doc exists:', err);
           if (isPro) {
