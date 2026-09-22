@@ -1,18 +1,17 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
-import { ShieldAlert } from 'lucide-react';
+import { useAuth, isAdmin } from '../contexts/AuthContext';
 
 interface AdminProtectedRouteProps {
   children: React.ReactNode;
 }
 
 export function AdminProtectedRoute({ children }: AdminProtectedRouteProps) {
-  const { currentUser, isLoading } = useAuth();
+  const { currentUser, isLoading, isAdmin: userIsAdmin } = useAuth();
   const location = useLocation();
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
-  const isAuthorizedAdmin = isWhitelistedPro(userEmail);
+  const isAuthorizedAdmin = userIsAdmin || isAdmin(userEmail);
 
   if (isLoading) {
     return (

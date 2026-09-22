@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Calendar, User as UserIcon } from 'lucide-react';
+import { X, Calendar, User as UserIcon, Shield } from 'lucide-react';
 import { User } from '../types';
 import { db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { isAdmin } from '../contexts/AuthContext';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -163,6 +165,25 @@ export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, 
                   </span>
                 </button>
               </div>
+
+              {/* Painel Administrativo (Exclusivo Administrador) */}
+              {isAdmin(user?.email) && (
+                <div className="pt-2">
+                  <Link
+                    to="/painel"
+                    onClick={onClose}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 text-blue-800 dark:text-blue-300 rounded-xl text-xs font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 font-semibold">
+                      <Shield size={16} className="text-blue-600 dark:text-blue-400" />
+                      <span>Painel Administrativo (/painel)</span>
+                    </div>
+                    <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                      Acessar
+                    </span>
+                  </Link>
+                </div>
+              )}
               
               <div className="pt-4 flex justify-between items-center mt-4 border-t border-slate-100 dark:border-slate-700/50">
                 <button
