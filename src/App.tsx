@@ -30,6 +30,8 @@ import { CheckoutScreen } from './components/CheckoutScreen';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfUse } from './components/TermsOfUse';
 import { LandingPage } from './components/LandingPage';
+import { AdminPanel } from './components/AdminPanel';
+import { AdminProtectedRoute } from './components/AdminProtectedRoute';
 
 function Dashboard() {
   const { currentUser, logout } = useAuth();
@@ -409,6 +411,14 @@ export default function App() {
           <Route path="/checkout" element={<CheckoutScreen />} />
           <Route path="/privacidade" element={<PrivacyPolicy />} />
           <Route path="/termos" element={<TermsOfUse />} />
+          <Route
+            path="/painel"
+            element={
+              <AdminProtectedRoute>
+                <AdminPanel />
+              </AdminProtectedRoute>
+            }
+          />
           <Route
             path="/dashboard/*"
             element={
