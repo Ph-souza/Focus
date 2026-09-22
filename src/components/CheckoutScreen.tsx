@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Navigate, Link } from 'react-router-dom';
-import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
+import { initMercadoPago, Payment, CardPayment } from '@mercadopago/sdk-react';
 import {
   Shield,
   ShieldCheck,
@@ -41,6 +41,8 @@ export function CheckoutScreen() {
   const { currentUser, isPremium, logout } = useAuth();
   const [isFlipped, setIsFlipped] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isBrickReady, setIsBrickReady] = useState(false);
+  const [brickError, setBrickError] = useState<string | null>(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -59,23 +61,22 @@ export function CheckoutScreen() {
 
   const initialization = {
     amount: couponApplied ? 14.90 : 19.90, // Valor da mensalidade Pro atualizado para R$ 19,90
-    auto_recurring: {
-      frequency: 1,
-      frequency_type: 'months',
-    },
   };
 
   const customization = {
     paymentMethods: {
-      creditCard: 'all',
+      creditCard: 'all' as const,
+      debitCard: 'all' as const,
       maxInstallments: 1,
     },
     visual: {
+      hideFormTitle: true,
       style: {
         theme: 'default' as const,
         customVariables: {
           baseColor: '#18181b',
           formBackgroundColor: 'transparent',
+          formPadding: '0px',
           inputBackgroundColor: '#ffffff',
           inputBorderColor: '#e4e4e7',
           inputFocusedBorderColor: '#18181b',
@@ -90,13 +91,24 @@ export function CheckoutScreen() {
   // sem qualquer redirecionamento externo ou window.location.href.
   const handleCheckout = () => {
     setErrorMessage('');
+    setIsBrickReady(false);
+    setBrickError(null);
     setIsFlipped(true);
   };
 
-  const onSubmit = async (formData: any) => {
+  const handleBack = () => {
+    setIsFlipped(false);
+    setLoading(false);
+    setErrorMessage('');
+    setIsBrickReady(false);
+    setBrickError(null);
+  };
+
+  const onSubmit = async (param: any) => {
     setLoading(true);
     setErrorMessage('');
     try {
+      const formData = param?.formData || param;
       const response = await fetch(getApiUrl('/api/subscriptions'), {
         method: 'POST',
         headers: {
@@ -106,9 +118,9 @@ export function CheckoutScreen() {
           token: formData.token,
           email: currentUser?.email || userEmail,
           userId: currentUser?.uid,
-          paymentMethodId: formData.payment_method_id,
-          issuerId: formData.issuer_id,
-          installments: formData.installments,
+          paymentMethodId: formData.payment_method_id || formData.paymentMethodId,
+          issuerId: formData.issuer_id || formData.issuerId,
+          installments: formData.installments || 1,
           coupon: couponApplied ? couponCode : undefined,
           amount: couponApplied ? 14.90 : 19.90, // R$ 19,90 mensal
         }),
@@ -493,7 +505,7 @@ export function CheckoutScreen() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setIsFlipped(false)}
+                  onClick={handleBack}
                   className="text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white text-xs font-bold bg-zinc-100 dark:bg-zinc-800/80 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shrink-0 border border-zinc-200/60 dark:border-zinc-700/60 active:scale-95"
                   title="Voltar ao resumo do plano"
                 >
@@ -511,19 +523,86 @@ export function CheckoutScreen() {
                 </span>
               </div>
 
-              {/* Brick do Cartão Mercado Pago integrado ao Glass-Card */}
-              <div className="mercado-pago-brick-container flex-1 overflow-y-auto px-1 -mx-1 pb-4">
-                <CardPayment
-                  initialization={initialization}
-                  customization={customization}
-                  onSubmit={onSubmit}
-                  onReady={() => {
-                    console.log("Mercado Pago CardPayment carregado no Swipe Card.");
-                  }}
-                  onError={(error: any) => {
-                    console.error("Erro no formulário de pagamento:", error);
-                  }}
-                />
+              {/* Mensagem de Erro de Validação/Gateway */}
+              {errorMessage && (
+                <div className="mb-3 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/50 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+                  <AlertCircle size={15} className="shrink-0 text-red-600 dark:text-red-400" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              {/* Brick do Mercado Pago integrado ao Glass-Card */}
+              <div className="mercado-pago-brick-container flex-1 overflow-y-auto px-1 -mx-1 pb-4 relative min-h-[340px]">
+                {/* Skeleton Loader elegante enquanto o Mercado Pago carrega os scripts externos */}
+                {!isBrickReady && !brickError && (
+                  <div className="w-full space-y-3 pt-2 animate-pulse" aria-label="Carregando formulário de pagamento">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-2">
+                      <Loader2 size={14} className="animate-spin text-zinc-700 dark:text-zinc-300" />
+                      <span>Carregando formulário seguro do Mercado Pago...</span>
+                    </div>
+                    {/* Campo Número do Cartão */}
+                    <div className="space-y-1.5">
+                      <div className="h-3 w-28 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                      <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
+                    </div>
+                    {/* Campos Validade e CVV lado a lado */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                        <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="h-3 w-16 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                        <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
+                      </div>
+                    </div>
+                    {/* Campo Nome do Titular */}
+                    <div className="space-y-1.5">
+                      <div className="h-3 w-32 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                      <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
+                    </div>
+                    {/* Botão de pagamento */}
+                    <div className="h-12 w-full bg-zinc-200/90 dark:bg-zinc-800 rounded-xl mt-4" />
+                  </div>
+                )}
+
+                {/* Componente Payment do SDK React do Mercado Pago */}
+                <div className={!isBrickReady ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100 transition-opacity duration-300'}>
+                  <Payment
+                    initialization={initialization}
+                    customization={customization}
+                    onSubmit={onSubmit}
+                    onReady={() => {
+                      setIsBrickReady(true);
+                      setBrickError(null);
+                    }}
+                    onError={(error: any) => {
+                      console.error('Erro no formulário de pagamento Mercado Pago:', error);
+                      setBrickError('Falha ao inicializar o conector do Mercado Pago.');
+                      setIsBrickReady(true);
+                    }}
+                  />
+                </div>
+
+                {brickError && (
+                  <div className="mt-4 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
+                    <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                    <div className="flex-1">
+                      <p className="font-semibold">{brickError}</p>
+                      <p className="mt-0.5 text-[11px] opacity-90">Verifique as chaves configuradas ou tente novamente.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBrickError(null);
+                          setIsBrickReady(false);
+                        }}
+                        className="mt-2 text-xs font-bold text-amber-900 dark:text-amber-200 underline cursor-pointer"
+                      >
+                        Recarregar formulário
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {loading && (
