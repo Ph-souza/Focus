@@ -31,6 +31,7 @@ import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfUse } from './components/TermsOfUse';
 import { LandingPage } from './components/LandingPage';
 import { AdminPanel } from './components/AdminPanel';
+import PainelPage from './app/painel/page';
 import { AdminProtectedRoute } from './components/AdminProtectedRoute';
 
 function Dashboard() {
@@ -416,7 +417,7 @@ export default function App() {
             path="/painel"
             element={
               <AdminProtectedRoute>
-                <AdminPanel />
+                <PainelPage />
               </AdminProtectedRoute>
             }
           />
