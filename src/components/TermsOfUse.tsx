@@ -56,7 +56,7 @@ export function TermsOfUse() {
 
             <h2 className="text-2xl text-zinc-900 dark:text-zinc-100">3. Assinatura, Faturamento e Cancelamento</h2>
             <ul className="list-disc pl-5 space-y-2 marker:text-emerald-500">
-              <li><strong>Processamento:</strong> O pagamento do plano Pro (R$ 29,90/mês) é processado de forma segura via Mercado Pago.</li>
+              <li><strong>Processamento:</strong> O pagamento do plano Pro (R$ 19,90/mês) é processado de forma segura via Mercado Pago.</li>
               <li><strong>Renovação Automática:</strong> A assinatura é contínua e renovada automaticamente a cada mês, a menos que seja cancelada antes do próximo ciclo de faturamento.</li>
               <li><strong>Cancelamento:</strong> Você pode cancelar a qualquer momento diretamente pelo seu painel (Dashboard), sem multas ou complicações. O acesso aos recursos Pro continuará até o fim do período já pago. Não oferecemos reembolsos proporcionais para meses parcialmente utilizados.</li>
             </ul>

@@ -47,7 +47,7 @@ export function CheckoutScreen() {
   }
 
   const initialization = {
-    amount: couponApplied ? 24.90 : 29.90, // Valor da mensalidade Pro
+    amount: couponApplied ? 14.90 : 19.90, // Valor da mensalidade Pro atualizado para R$ 19,90
     auto_recurring: {
       frequency: 1,
       frequency_type: 'months',
@@ -328,7 +328,7 @@ export function CheckoutScreen() {
                   </div>
                   <div className="text-right">
                     <span className="text-2xl sm:text-[26px] font-black text-zinc-950 tracking-tight">
-                      {couponApplied ? 'R$ 24,90' : 'R$ 29,90'}
+                      {couponApplied ? 'R$ 14,90' : 'R$ 19,90'}
                     </span>
                     <span className="text-xs text-zinc-500 font-medium">/mês</span>
                   </div>
@@ -408,6 +408,7 @@ export function CheckoutScreen() {
 
               {/* Bottom Actions of Right Card */}
               <div className="mt-auto pt-4">
+                {/* TODO: Certifique-se de substituir a chave/variável de ambiente do Stripe (ex: STRIPE_PRICE_ID / NEXT_PUBLIC_STRIPE_PRICE_ID / VITE_STRIPE_PRICE_ID) pelo novo ID correspondente ao plano de R$ 19,90 gerado no painel do Stripe */}
                 {/* Primary Action Button */}
                 <button
                   onClick={() => setIsFlipped(true)}
@@ -457,7 +458,7 @@ export function CheckoutScreen() {
                       Pagamento Seguro
                     </h3>
                     <p className="text-[11px] sm:text-xs text-zinc-500">
-                      Assinatura Nexus Focus ({couponApplied ? 'R$ 24,90' : 'R$ 29,90'}/mês)
+                      Assinatura Nexus Focus ({couponApplied ? 'R$ 14,90' : 'R$ 19,90'}/mês)
                     </p>
                   </div>
                 </div>
