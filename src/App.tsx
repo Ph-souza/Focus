@@ -403,7 +403,8 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/page" element={<LandingPage />} />
+          <Route path="/homepage" element={<LandingPage />} />
+          <Route path="/page" element={<Navigate to="/homepage" replace />} />
           <Route path="/login" element={<LoginScreen />} />
           <Route path="/checkout" element={<CheckoutScreen />} />
           <Route path="/privacidade" element={<PrivacyPolicy />} />

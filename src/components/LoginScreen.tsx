@@ -103,7 +103,7 @@ export function LoginScreen() {
         className="w-full max-w-xl flex flex-col items-center text-center relative z-10 my-auto py-2 sm:py-4"
       >
         {/* Logo Card */}
-        <Link to="/page" className="w-20 h-20 sm:w-24 sm:h-24 bg-white/95 rounded-2xl sm:rounded-3xl shadow-[0_12px_32px_rgba(0,0,0,0.07),0_2px_8px_rgba(0,0,0,0.04)] border border-white flex items-center justify-center mb-5 sm:mb-6 transition-transform duration-300 hover:scale-[1.03]">
+        <Link to="/homepage" className="w-20 h-20 sm:w-24 sm:h-24 bg-white/95 rounded-2xl sm:rounded-3xl shadow-[0_12px_32px_rgba(0,0,0,0.07),0_2px_8px_rgba(0,0,0,0.04)] border border-white flex items-center justify-center mb-5 sm:mb-6 transition-transform duration-300 hover:scale-[1.03]">
           <NexusFocusLogo className="w-12 h-12 sm:w-14 sm:h-14" variant="dark" />
         </Link>
 

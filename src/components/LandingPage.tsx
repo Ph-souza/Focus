@@ -133,7 +133,7 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
 
           {/* Logo & Brand */}
-          <Link to="/page" className="flex items-center gap-3 group cursor-pointer">
+          <Link to="/homepage" className="flex items-center gap-3 group cursor-pointer">
             <div className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
               <NexusFocusLogo className="w-7 h-7" variant={isDarkMode ? 'light' : 'dark'} />
             </div>

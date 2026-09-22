@@ -707,7 +707,7 @@ async function startServer() {
             params.append("metadata[email]", userEmail);
           }
           params.append("success_url", `${appUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}`);
-          params.append("cancel_url", `${appUrl}/page`);
+          params.append("cancel_url", `${appUrl}/homepage`);
 
           // Linha de item recorrente de R$ 19,90/mês
           const stripePriceId = process.env.STRIPE_PRICE_ID?.trim();
