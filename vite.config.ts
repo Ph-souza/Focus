@@ -17,20 +17,23 @@ export default defineConfig(() => {
         manifest: {
           name: 'Nexus Focus',
           short_name: 'Nexus Focus',
-          description: 'Nexus Focus - Powered by Nexus Flow',
-          theme_color: '#09090b',
-          background_color: '#09090b',
+          description: 'Nexus Focus • A Evolução da sua TI',
+          start_url: '/',
+          theme_color: '#1761ff',
+          background_color: '#e5ebf3',
           display: 'standalone',
           icons: [
             {
-              src: 'Nexus_Focus_Icone_Branco_Tema_Escuro.png',
+              src: '/icon-192.png',
               sizes: '192x192',
-              type: 'image/png'
+              type: 'image/png',
+              purpose: 'any maskable'
             },
             {
-              src: 'Nexus_Focus_Icone_Branco_Tema_Escuro.png',
+              src: '/icon-512.png',
               sizes: '512x512',
-              type: 'image/png'
+              type: 'image/png',
+              purpose: 'any maskable'
             }
           ]
         }

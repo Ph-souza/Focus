@@ -3,6 +3,7 @@ import React from 'react';
 export interface Metadata {
   title?: string;
   description?: string;
+  manifest?: string;
   icons?: {
     icon?: Array<{ url: string; media?: string; sizes?: string; type?: string }>;
     apple?: string | Array<{ url: string; sizes?: string; type?: string }>;
@@ -14,6 +15,7 @@ export interface Metadata {
 export const metadata: Metadata = {
   title: 'Nexus Focus • A Evolução da sua TI',
   description: 'Plataforma executiva de foco, produtividade e inteligência operacional.',
+  manifest: '/manifest.json',
   icons: {
     icon: [
       { url: '/Nexus_Focus_Icone_Preto_Tema_Claro.png', media: '(prefers-color-scheme: light)' },
@@ -31,6 +33,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <head>
+        <link rel="manifest" href="/manifest.json" />
         <link
           rel="icon"
           type="image/png"

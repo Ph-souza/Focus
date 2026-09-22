@@ -1,0 +1,23 @@
+{
+  "name": "Nexus Focus",
+  "short_name": "Nexus Focus",
+  "description": "Nexus Focus • A Evolução da sua TI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e5ebf3",
+  "theme_color": "#1761ff",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
