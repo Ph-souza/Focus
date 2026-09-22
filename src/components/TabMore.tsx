@@ -23,7 +23,8 @@ import {
   Trash2, 
   ShieldCheck,
   Shield,
-  LifeBuoy
+  LifeBuoy,
+  Database
 } from 'lucide-react';
 
 interface TabMoreProps {
@@ -521,43 +522,94 @@ export function TabMore({
         )}
       </AnimatePresence>
 
-      {/* Modal de Privacidade */}
+      {/* Modal de Privacidade & Dados */}
       <AnimatePresence>
         {isPrivacyModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-md overflow-y-auto">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="glass-card w-full max-w-sm p-5 shadow-2xl relative"
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="glass-card w-full max-w-2xl p-6 sm:p-8 md:p-10 shadow-2xl relative my-auto border border-white/20 dark:border-white/10 rounded-3xl"
             >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-500">
-                    <ShieldCheck size={18} />
+              {/* Cabeçalho do Modal */}
+              <div className="flex items-start justify-between pb-6 mb-6 border-b border-slate-200/60 dark:border-white/10">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-500 shrink-0 shadow-inner">
+                    <ShieldCheck size={28} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-slate-900 dark:text-white">Privacidade & Dados</h3>
-                    <p className="text-[10px] text-slate-400">Seus dados 100% seguros</p>
+                    <h2 className="font-black text-xl sm:text-2xl text-slate-900 dark:text-white tracking-tight leading-tight">
+                      Privacidade & Dados
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
+                      Seus dados 100% seguros
+                    </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsPrivacyModalOpen(false)}
-                  className="w-8 h-8 rounded-xl hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+                  className="w-10 h-10 rounded-2xl hover:bg-slate-100 dark:hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer shrink-0"
+                  aria-label="Fechar modal"
                 >
-                  <X size={18} />
+                  <X size={20} />
                 </button>
               </div>
 
-              <div className="space-y-2 text-[11px] text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">
-                <p>• Suas informações financeiras e tarefas são armazenadas de forma isolada na sua conta segura.</p>
-                <p>• Comunicação com o Mentor criptografada via HTTPS e Firebase Security Rules.</p>
-                <p>• Você tem total controle sobre seus dados e pode solicitar exclusão a qualquer momento.</p>
+              {/* Estrutura de Itens Explícitos de Segurança */}
+              <div className="space-y-4 mb-8">
+                {/* Item 1: Armazenamento Isolado */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/10 flex items-start gap-4 transition-all hover:border-blue-500/30">
+                  <div className="w-11 h-11 rounded-2xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-500 shrink-0 mt-0.5 shadow-sm">
+                    <Database size={22} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white leading-snug">
+                      Armazenamento Isolado
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed font-normal">
+                      Suas informações financeiras e tarefas são separadas e armazenadas em um ambiente de nuvem seguro e exclusivo para sua conta.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Item 2: Criptografia Avançada */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/10 flex items-start gap-4 transition-all hover:border-emerald-500/30">
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-500 shrink-0 mt-0.5 shadow-sm">
+                    <Lock size={22} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white leading-snug">
+                      Criptografia Avançada
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed font-normal">
+                      Toda comunicação com o Mentor IA e o envio de dados são criptografados via HTTPS de ponta a ponta, protegidos pelo Firebase Security Rules.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Item 3: Controle Total Seu */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/10 flex items-start gap-4 transition-all hover:border-indigo-500/30">
+                  <div className="w-11 h-11 rounded-2xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5 shadow-sm">
+                    <Trash2 size={22} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white leading-snug">
+                      Controle Total Seu
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed font-normal">
+                      Você é o dono dos seus dados. A qualquer momento, você pode exportar suas informações ou solicitar a exclusão permanente e irrecuperável da sua conta.
+                    </p>
+                  </div>
+                </div>
               </div>
 
+              {/* Botão Entendido de Largura Total */}
               <button
                 onClick={() => setIsPrivacyModalOpen(false)}
-                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all"
+                type="button"
+                className="w-full py-3.5 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm sm:text-base shadow-[0_4px_20px_rgba(37,99,235,0.3)] hover:shadow-[0_6px_25px_rgba(37,99,235,0.4)] transition-all cursor-pointer active:scale-[0.99] text-center"
               >
                 Entendido
               </button>
