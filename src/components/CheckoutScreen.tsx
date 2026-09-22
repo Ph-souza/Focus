@@ -21,10 +21,21 @@ import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { NexusFocusLogo } from './AuraLogo';
 import { getApiUrl } from '../lib/api';
 
-// Inicializa o SDK com a chave pública do Mercado Pago
-initMercadoPago(import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || '', {
-  locale: 'pt-BR'
-});
+// Varredura e reaproveitamento de chaves públicas configuradas do Mercado Pago
+const MP_PUBLIC_KEY =
+  (import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY as string) ||
+  (import.meta.env.NEXT_PUBLIC_MP_PUBLIC_KEY as string) ||
+  (import.meta.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY as string) ||
+  (import.meta.env.VITE_MP_PUBLIC_KEY as string) ||
+  (import.meta.env.MP_PUBLIC_KEY as string) ||
+  '';
+
+// Inicializa o SDK do Mercado Pago com a chave pública existente
+if (MP_PUBLIC_KEY) {
+  initMercadoPago(MP_PUBLIC_KEY, {
+    locale: 'pt-BR'
+  });
+}
 
 export function CheckoutScreen() {
   const { currentUser, isPremium, logout } = useAuth();
@@ -57,10 +68,19 @@ export function CheckoutScreen() {
   const customization = {
     paymentMethods: {
       creditCard: 'all',
+      maxInstallments: 1,
     },
     visual: {
       style: {
-        theme: 'default',
+        theme: 'default' as const,
+        customVariables: {
+          baseColor: '#18181b',
+          formBackgroundColor: 'transparent',
+          inputBackgroundColor: '#ffffff',
+          inputBorderColor: '#e4e4e7',
+          inputFocusedBorderColor: '#18181b',
+          borderRadius: '14px',
+        },
       },
     },
   };
@@ -84,12 +104,13 @@ export function CheckoutScreen() {
         },
         body: JSON.stringify({
           token: formData.token,
-          email: currentUser?.email,
+          email: currentUser?.email || userEmail,
           userId: currentUser?.uid,
           paymentMethodId: formData.payment_method_id,
           issuerId: formData.issuer_id,
           installments: formData.installments,
           coupon: couponApplied ? couponCode : undefined,
+          amount: couponApplied ? 14.90 : 19.90, // R$ 19,90 mensal
         }),
       });
 
@@ -99,7 +120,8 @@ export function CheckoutScreen() {
         throw new Error(data.error || 'Erro ao processar a assinatura.');
       }
 
-      // Sucesso! Redireciona para o dashboard
+      // Sucesso: fecha o swipe card e libera o acesso redirecionando para o dashboard
+      setIsFlipped(false);
       window.location.href = '/dashboard';
     } catch (err: any) {
       console.error('Erro no pagamento:', err);
@@ -452,52 +474,62 @@ export function CheckoutScreen() {
               </div>
             </section>
 
-            {/* ================= BACK FACE ================= */}
-            <section className="[backface-visibility:hidden] [transform:rotateY(180deg)] absolute inset-0 bg-white border border-zinc-200/80 rounded-[32px] p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col h-full z-20">
+            {/* ================= BACK FACE: Swipe Card de Pagamento Mercado Pago ================= */}
+            <section className="[backface-visibility:hidden] [transform:rotateY(180deg)] absolute inset-0 glass-card bg-white/95 dark:bg-zinc-950/90 backdrop-blur-2xl border border-white/90 dark:border-zinc-800/80 rounded-[32px] p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col h-full z-20 overflow-hidden">
               
               {/* Header with Back Button */}
-              <div className="flex justify-between items-center mb-5 pb-3 border-b border-zinc-100 shrink-0">
+              <div className="flex justify-between items-center mb-4 pb-3 border-b border-zinc-200/80 dark:border-zinc-800/80 shrink-0">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center text-white shrink-0">
+                  <div className="w-8 h-8 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 flex items-center justify-center shadow-sm shrink-0">
                     <Lock size={14} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm sm:text-base text-zinc-900 leading-tight">
+                    <h3 className="font-bold text-sm sm:text-base text-zinc-900 dark:text-white leading-tight">
                       Pagamento Seguro
                     </h3>
-                    <p className="text-[11px] sm:text-xs text-zinc-500">
-                      Assinatura Nexus Focus ({couponApplied ? 'R$ 14,90' : 'R$ 19,90'}/mês)
+                    <p className="text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400">
+                      Plano Mensal • {couponApplied ? 'R$ 14,90' : 'R$ 19,90'}/mês
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsFlipped(false)}
-                  className="text-zinc-500 hover:text-zinc-900 text-xs font-bold bg-zinc-100 hover:bg-zinc-200 px-3 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                  className="text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white text-xs font-bold bg-zinc-100 dark:bg-zinc-800/80 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shrink-0 border border-zinc-200/60 dark:border-zinc-700/60 active:scale-95"
+                  title="Voltar ao resumo do plano"
                 >
                   <ArrowRight size={14} className="rotate-180" />
                   <span>Voltar</span>
                 </button>
               </div>
 
-              {/* Brick do Cartão */}
+              {/* Resumo do Pedido / Badge do Swipe Card */}
+              <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-zinc-50/80 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/80 flex items-center justify-between text-xs shrink-0">
+                <span className="text-zinc-500 font-medium">Total da assinatura:</span>
+                <span className="text-zinc-950 dark:text-white font-extrabold text-sm">
+                  {couponApplied ? 'R$ 14,90' : 'R$ 19,90'}
+                  <span className="text-[10px] font-normal text-zinc-400 ml-1">/ mês</span>
+                </span>
+              </div>
+
+              {/* Brick do Cartão Mercado Pago integrado ao Glass-Card */}
               <div className="mercado-pago-brick-container flex-1 overflow-y-auto px-1 -mx-1 pb-4">
                 <CardPayment
                   initialization={initialization}
                   customization={customization}
                   onSubmit={onSubmit}
                   onReady={() => {
-                    console.log("Brick de Cartão carregado com sucesso na face de trás.");
+                    console.log("Mercado Pago CardPayment carregado no Swipe Card.");
                   }}
                   onError={(error: any) => {
-                    console.error("Erro no Brick:", error);
+                    console.error("Erro no formulário de pagamento:", error);
                   }}
                 />
               </div>
 
               {loading && (
-                <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-[32px] gap-3 z-30">
-                  <Loader2 size={32} className="animate-spin text-zinc-900" />
-                  <p className="text-sm font-semibold text-zinc-900">Processando assinatura segura...</p>
+                <div className="absolute inset-0 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-[32px] gap-3 z-30">
+                  <Loader2 size={32} className="animate-spin text-zinc-900 dark:text-white" />
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">Processando assinatura segura...</p>
                 </div>
               )}
             </section>

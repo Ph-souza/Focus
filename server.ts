@@ -562,7 +562,7 @@ async function startServer() {
       }
 
       const selectedPlanId = planId || process.env.MERCADOPAGO_PLAN_ID;
-      const amount = Number(process.env.SUBSCRIPTION_AMOUNT || 29.90);
+      const amount = Number(process.env.SUBSCRIPTION_AMOUNT || 19.90);
       const appUrl = process.env.APP_URL || "https://nexusfocus.web.app";
 
       // Montar corpo da requisição de PreApproval

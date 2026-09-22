@@ -90,3 +90,14 @@ body.dark {
   background: rgba(59, 130, 246, 0.5);
 }
 
+/* Mercado Pago Brick & Swipe Card Glass Integration */
+.mercado-pago-brick-container {
+  border-radius: 1.25rem;
+  transition: all 0.3s ease;
+}
+
+.mercado-pago-brick-container iframe {
+  border-radius: 1rem !important;
+  background: transparent !important;
+}
+
