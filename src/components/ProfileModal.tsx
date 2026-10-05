@@ -55,7 +55,6 @@ export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, 
 
       await setDoc(doc(db, 'users', user.id), {
         name: name.trim(),
-        email: user.email || '',
         dateOfBirth: cleanDate
       }, { merge: true });
 

@@ -89,18 +89,8 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
         ? cleanDigits 
         : `55${cleanDigits}`;
 
-      // a) Gravar no perfil do utilizador no Firestore
-      if (user?.id) {
-        const userRef = doc(db, 'users', user.id);
-        await setDoc(userRef, {
-          whatsappNumber: standardizedNumber,
-          whatsappFormatted: phoneNumber.trim(),
-          whatsappConnected: true,
-          whatsappUpdatedAt: new Date().toISOString()
-        }, { merge: true });
-      }
-
-      // Salvar no localStorage local para rapidez
+      // a) A vinculação do WhatsApp no Firestore é realizada exclusivamente pelo Admin SDK via handshake (QA security).
+      // Salvar no localStorage local para rapidez e consistência visual da interface
       localStorage.setItem('nexus_whatsapp_number', phoneNumber.trim());
 
       setIsSuccess(true);

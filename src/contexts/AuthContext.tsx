@@ -85,12 +85,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           const payload: Record<string, any> = {
             name,
-            email,
             photoURL
           };
 
-          // createdAt (utilize serverTimestamp(), garantindo que não sobrescreve se já existir)
-          if (!snap.exists() || !snap.data()?.createdAt) {
+          // email só é enviado na criação inicial do documento (!snap.exists())
+          // Isso respeita a regra de segurança do Firestore que proíbe a edição de email pelo próprio utilizador
+          if (!snap.exists()) {
+            payload.email = email;
             payload.createdAt = serverTimestamp();
           }
 

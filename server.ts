@@ -2571,36 +2571,95 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
 
 
 
-  // Auto-seed Pro Admin Account into Cloud Firestore (only if Admin SDK credentials are provided)
+  // Auto-seed Pro Admin Account into Cloud Firestore (Validação rigorosa de Auth e Claims contra Spoofing)
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
     try {
-      const adminEmail = "phillipe.souza27@gmail.com";
-      const emailRef = adminDb.collection("users").doc(adminEmail);
-      await emailRef.set({
-        email: adminEmail,
-        isPremium: true,
-        role: "admin_pro",
-        plan: "pro_unlimited",
-        updatedAt: FieldValue.serverTimestamp()
-      }, { merge: true });
+      const adminEmail = (process.env.ADMIN_EMAIL || "phillipe.souza27@gmail.com").trim().toLowerCase();
 
-      const matchingUsersSnap = await adminDb.collection("users").where("email", "==", adminEmail).get();
-      const batch = adminDb.batch();
-      matchingUsersSnap.forEach((docSnap) => {
-        batch.set(docSnap.ref, {
-          isPremium: true,
-          role: "admin_pro",
-          plan: "pro_unlimited",
-          updatedAt: FieldValue.serverTimestamp()
-        }, { merge: true });
-      });
-      await batch.commit();
-      console.log(`[Auto-Seed Pro] Conta ${adminEmail} garantida com sucesso como Pro no Firestore.`);
+      // 1. Consulta o usuário real no serviço de autenticação oficial do Firebase (Firebase Auth)
+      let authUser: any = null;
+      try {
+        authUser = await adminAuth.getUserByEmail(adminEmail);
+      } catch (authErr: any) {
+        if (authErr.code === "auth/user-not-found") {
+          console.warn(`[Auto-Seed Admin] Conta ${adminEmail} não encontrada no Firebase Auth. Nenhum privilégio administrativo concedido.`);
+        } else {
+          console.error(`[Auto-Seed Admin] Erro ao consultar Firebase Auth para ${adminEmail}:`, authErr?.message);
+        }
+      }
+
+      if (authUser) {
+        // 2. Valida se a conta foi devidamente verificada no Auth
+        if (!authUser.emailVerified) {
+          console.warn(`⚠️ [Auto-Seed Admin SEGURANÇA] Conta ${adminEmail} (UID: ${authUser.uid}) existe no Auth, mas NÃO é verificada (emailVerified = false). Acesso 'admin_pro' recusado categoricamente para evitar escalada.`);
+        } else {
+          // 3. Valida e sincroniza as Custom Claims de administrador no Auth
+          const currentClaims = authUser.customClaims || {};
+          const isVerifiedAdmin = Boolean(
+            currentClaims.admin === true ||
+            currentClaims.isAdmin === true ||
+            currentClaims.role === "admin_pro" ||
+            currentClaims.role === "admin"
+          );
+
+          if (!isVerifiedAdmin) {
+            console.log(`[Auto-Seed Admin] Aplicando custom claims de administrador para UID verificado: ${authUser.uid}...`);
+            await adminAuth.setCustomUserClaims(authUser.uid, {
+              ...currentClaims,
+              admin: true,
+              isAdmin: true,
+              role: "admin_pro",
+              isPremium: true
+            });
+          }
+
+          // 4. Concede privilégios no Firestore EXCLUSIVAMENTE para o documento cujo ID é o UID verificado do Auth
+          const verifiedUserRef = adminDb.collection("users").doc(authUser.uid);
+          await verifiedUserRef.set({
+            email: adminEmail,
+            isPremium: true,
+            role: "admin_pro",
+            plan: "pro_unlimited",
+            emailVerified: true,
+            verified: true,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+
+          // 5. Validação de integridade: pesquisa se existem outros documentos com o mesmo e-mail
+          // Se houver algum documento com esse e-mail cujo ID NÃO SEJA o UID verificado, NÃO concede privilégios!
+          const matchingUsersSnap = await adminDb.collection("users").where("email", "==", adminEmail).get();
+          const batch = adminDb.batch();
+
+          matchingUsersSnap.forEach((docSnap) => {
+            if (docSnap.id === authUser.uid) {
+              batch.set(docSnap.ref, {
+                isPremium: true,
+                role: "admin_pro",
+                plan: "pro_unlimited",
+                emailVerified: true,
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+            } else {
+              console.warn(`🚨 [Auto-Seed Admin SEGURANÇA] Documento não verificado detectado com e-mail administrativo (ID: ${docSnap.id} !== UID: ${authUser.uid}). Removendo privilégios indevidos.`);
+              batch.set(docSnap.ref, {
+                role: "user",
+                isPremium: false,
+                plan: "gratuito",
+                securityAlert: "unverified_admin_email_mismatch",
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+            }
+          });
+
+          await batch.commit();
+          console.log(`[Auto-Seed Admin] Administrador ${adminEmail} (UID: ${authUser.uid}) verificado e sincronizado com sucesso.`);
+        }
+      }
     } catch (seedErr: any) {
-      console.warn("[Auto-Seed Pro] Aviso ao inicializar conta Pro:", seedErr?.message);
+      console.warn("[Auto-Seed Admin] Aviso ao validar conta Pro:", seedErr?.message);
     }
   } else {
-    console.log("[Auto-Seed Pro] Ambiente sem FIREBASE_SERVICE_ACCOUNT_KEY. Seed ignorado localmente.");
+    console.log("[Auto-Seed Admin] Ambiente sem FIREBASE_SERVICE_ACCOUNT_KEY. Seed ignorado localmente.");
   }
 
   // WhatsApp - Handshake Token Generation (obtenção estrita de UID via Firebase Auth - QA-04)
@@ -2630,7 +2689,7 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
     }
   });
 
-  // Admin Route to ensure Pro status on demand (validação estrita de ID token e custom claim de admin - QA-01)
+  // Admin Route to ensure Pro status on demand (validação estrita de ID token, custom claims e registro de auditoria)
   app.post('/api/admin/activate-pro', async (req: express.Request, res: express.Response) => {
     if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
       return res.status(503).json({ success: false, error: "FIREBASE_SERVICE_ACCOUNT_KEY not configured" });
@@ -2687,6 +2746,39 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
       const { email } = req.body || {};
       const targetEmail = (email || decodedToken.email || "phillipe.souza27@gmail.com").trim().toLowerCase();
 
+      // Busca dados do usuário alvo no Firebase Auth para associar o UID alvo real
+      let targetUid: string | null = null;
+      let targetUserRecord: any = null;
+      try {
+        targetUserRecord = await adminAuth.getUserByEmail(targetEmail);
+        targetUid = targetUserRecord?.uid || null;
+      } catch (lookupErr: any) {
+        console.warn(`[Admin Route] Usuário alvo ${targetEmail} não localizado no Firebase Auth:`, lookupErr?.message);
+      }
+
+      // Se encontrado no Auth, atribui custom claims ao usuário alvo
+      if (targetUid) {
+        const currentTargetClaims = targetUserRecord.customClaims || {};
+        await adminAuth.setCustomUserClaims(targetUid, {
+          ...currentTargetClaims,
+          admin: true,
+          isAdmin: true,
+          role: "admin_pro",
+          isPremium: true
+        });
+
+        // Atualiza documento do Firestore indexado pelo UID do usuário alvo
+        const targetDocRef = adminDb.collection("users").doc(targetUid);
+        await targetDocRef.set({
+          email: targetEmail,
+          isPremium: true,
+          role: "admin_pro",
+          plan: "pro_unlimited",
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+
+      // Atualiza também documento pelo targetEmail para compatibilidade
       const emailRef = adminDb.collection("users").doc(targetEmail);
       await emailRef.set({
         email: targetEmail,
@@ -2696,20 +2788,47 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
 
-      const matchingUsersSnap = await adminDb.collection("users").where("email", "==", targetEmail).get();
-      const batch = adminDb.batch();
-      matchingUsersSnap.forEach((docSnap) => {
-        batch.set(docSnap.ref, {
-          isPremium: true,
-          role: "admin_pro",
-          plan: "pro_unlimited",
-          updatedAt: FieldValue.serverTimestamp()
-        }, { merge: true });
-      });
-      await batch.commit();
+      // REGISTRO DE AUDITORIA (Audit Log) - Ação 3:
+      // Guarda: UID de quem solicitou a ação, data/timestamp e alvo da operação
+      const auditLogData = {
+        action: "ACTIVATE_PRO_ADMIN",
+        requestedByUid: decodedToken.uid,
+        requestedByEmail: decodedToken.email || null,
+        targetEmail: targetEmail,
+        targetUid: targetUid,
+        date: new Date().toISOString(),
+        timestamp: FieldValue.serverTimestamp(),
+        ip: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || null,
+        userAgent: req.headers["user-agent"] || null,
+        status: "SUCCESS"
+      };
 
-      return res.json({ success: true, email: targetEmail, isPremium: true });
+      const auditRef = await adminDb.collection("audit_logs").add(auditLogData);
+      console.log(`🛡️ [AUDIT LOG] Ação 'ACTIVATE_PRO_ADMIN' registrada com sucesso (ID: ${auditRef.id}). Solicitado por UID: ${decodedToken.uid} | Data: ${auditLogData.date} | Alvo: ${targetEmail}`);
+
+      return res.json({
+        success: true,
+        email: targetEmail,
+        targetUid,
+        isPremium: true,
+        auditLogId: auditRef.id
+      });
     } catch (err: any) {
+      // Registra tentativa com erro no log de auditoria
+      try {
+        await adminDb.collection("audit_logs").add({
+          action: "ACTIVATE_PRO_ADMIN_FAILED",
+          requestedByUid: decodedToken?.uid || "unknown",
+          requestedByEmail: decodedToken?.email || null,
+          targetEmail: req.body?.email || null,
+          date: new Date().toISOString(),
+          timestamp: FieldValue.serverTimestamp(),
+          error: err?.message,
+          status: "FAILED"
+        });
+      } catch (logErr) {
+        console.error("[Audit Log] Falha ao registrar log de erro:", logErr);
+      }
       return res.status(500).json({ success: false, error: err?.message });
     }
   });
