@@ -19,7 +19,7 @@ import { FocusModeModal } from './components/FocusModeModal';
 import { QuickChat } from './components/QuickChat';
 import { SmartCaptureModal } from './components/SmartCaptureModal';
 import { WhatsAppModal } from './components/WhatsAppModal';
-import { db, handleFirestoreError, OperationType } from './lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from './lib/firebase';
 import { collection, onSnapshot, query, orderBy, doc, where, limit } from 'firebase/firestore';
 import { subscribeToPushNotifications } from './lib/pushNotifications';
 import { getApiUrl } from './lib/api';
@@ -192,9 +192,13 @@ function Dashboard() {
 
     const triggerWebPush = async (title: string, body: string, url: string = '/') => {
       try {
+        const token = await auth.currentUser?.getIdToken();
         await fetch(getApiUrl('/api/notifications/send'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({ title, body, url })
         });
       } catch (err) {

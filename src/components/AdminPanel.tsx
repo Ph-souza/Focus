@@ -21,14 +21,12 @@ import {
   Flame,
   Bot,
   Webhook,
-  RefreshCw,
-  Trash2
+  RefreshCw
 } from 'lucide-react';
 import {
   getAdminDashboardMetrics,
   AdminDashboardMetrics,
-  AdminPaymentData,
-  cleanGhostUsers
+  AdminPaymentData
 } from '../services/adminService';
 import './AdminPanel.css';
 
@@ -54,32 +52,7 @@ export function AdminPanel() {
   const [metrics, setMetrics] = useState<AdminDashboardMetrics | null>(null);
   const [isLoadingMetrics, setIsLoadingMetrics] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [isCleaning, setIsCleaning] = useState<boolean>(false);
-  const [cleanFeedback, setCleanFeedback] = useState<string | null>(null);
-
-  // 3. Utilitário de Limpeza de Base (Dev Mode)
-  const handleCleanGhosts = async () => {
-    const confirmDelete = window.confirm(
-      'Deseja deletar todos os documentos de usuários fantasmas da coleção "users" (IDs que não sejam o seu UID de administrador ou que possuam formato inválido)?'
-    );
-    if (!confirmDelete) return;
-
-    setIsCleaning(true);
-    setCleanFeedback(null);
-    try {
-      const result = await cleanGhostUsers(currentUser?.uid);
-      setCleanFeedback(
-        `Limpeza finalizada com sucesso! ${result.deletedCount} documento(s) fantasma(s) deletado(s). ${result.keptCount} documento(s) oficial(is) mantido(s).`
-      );
-      await loadDashboardData(true);
-      setTimeout(() => setCleanFeedback(null), 9000);
-    } catch (err) {
-      console.error('[AdminPanel] Erro ao limpar usuários fantasmas:', err);
-      setCleanFeedback('Falha ao executar limpeza da coleção de usuários.');
-    } finally {
-      setIsCleaning(false);
-    }
-  };
+  // [DESATIVADO POR SEGURANÇA - QA-06] Rotina de limpeza de usuários suspensa até reescrita segura na Sprint 3
 
   // Carrega métricas e usuários reais via adminService (getCountFromServer e lotes otimizados)
   const loadDashboardData = async (isManual = false) => {
@@ -240,16 +213,7 @@ export function AdminPanel() {
               Ambiente de Produção • 99.98% Uptime
             </span>
 
-            <button
-              onClick={handleCleanGhosts}
-              disabled={isCleaning}
-              className="admin-return-btn"
-              style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#fca5a5' }}
-              title="Deleta todos os documentos na coleção users onde o ID não seja o seu UID de administrador ou que tenham tamanho diferente de 28 caracteres"
-            >
-              <Trash2 size={14} className={isCleaning ? 'animate-spin' : ''} />
-              <span>{isCleaning ? 'Limpando...' : 'Limpar Usuários Fantasmas'}</span>
-            </button>
+            {/* [DESATIVADO POR SEGURANÇA - QA-06] Botão de limpeza de usuários removido da interface até reescrita segura na Sprint 3 */}
 
             <button
               onClick={() => loadDashboardData(true)}
@@ -275,26 +239,6 @@ export function AdminPanel() {
 
       {/* Workspace Principal */}
       <main className="admin-workspace">
-        {cleanFeedback && (
-          <div
-            style={{
-              marginBottom: '1rem',
-              padding: '0.75rem 1rem',
-              borderRadius: '0.5rem',
-              backgroundColor: 'rgba(16, 185, 129, 0.15)',
-              border: '1px solid rgba(16, 185, 129, 0.4)',
-              color: '#6ee7b7',
-              fontSize: '0.875rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}
-            role="status"
-          >
-            <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
-            <span>{cleanFeedback}</span>
-          </div>
-        )}
 
         <p className="admin-eyebrow">PAINEL DE CONTROLE EXECUTIVO</p>
 

@@ -276,10 +276,13 @@ export interface CleanGhostUsersResult {
 }
 
 /**
- * 3. Utilitário de Limpeza de Base (Dev Mode):
- * Deleta todos os documentos na coleção users onde o ID não seja igual ao UID do administrador
- * atualmente logado (ou que tenham tamanho diferente de 28 caracteres, padrão do Firebase Auth).
+ * [DESATIVADO POR SEGURANÇA - QA-06]
+ * Utilitário de Limpeza de Base desativado categoricamente para evitar exclusão acidental da base de usuários.
+ * A lógica anterior considerava como alvo qualquer usuário com UID diferente do admin atual (`docId !== currentAdminUid`),
+ * arriscando apagar toda a base de clientes do Firestore.
+ * Esta rotina está inativada até ser reescrita de forma segura na Sprint 3 com validação via Admin SDK.
  */
+/*
 export async function cleanGhostUsers(currentAdminUid?: string): Promise<CleanGhostUsersResult> {
   const usersColl = collection(db, 'users');
   const snap = await getDocs(usersColl);
@@ -292,8 +295,7 @@ export async function cleanGhostUsers(currentAdminUid?: string): Promise<CleanGh
     const docId = docSnap.id;
     const isCurrentAdmin = Boolean(currentAdminUid && docId === currentAdminUid);
 
-    // Condição de documento fantasma/poluição:
-    // - Não é o administrador logado E (tamanho !== 28 caracteres OU ID gerado aleatório de teste)
+    // Condição vulnerável identificada no QA-06:
     const isGhost = !isCurrentAdmin && (docId.length !== 28 || (currentAdminUid && docId !== currentAdminUid));
 
     if (isGhost) {
@@ -317,4 +319,5 @@ export async function cleanGhostUsers(currentAdminUid?: string): Promise<CleanGh
     deletedIds
   };
 }
+*/
 

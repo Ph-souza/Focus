@@ -30,13 +30,49 @@ service cloud.firestore {
     }
 
     // --- Entity Validators ---
-    function isValidUser(data) {
+    function isValidUserCreate(data) {
       return data.keys().hasAll(['name', 'email'])
-        && data.name is string && data.name.size() <= 100
+        && !data.keys().hasAny([
+          'role',
+          'isAdmin',
+          'isPremium',
+          'plan',
+          'stripeSubscriptionId',
+          'stripeCustomerId',
+          'subscriptionId',
+          'subscriptionStatus',
+          'subscribedAt',
+          'lastPaymentId',
+          'paymentMethod',
+          'transactionAmount',
+          'approvedAt',
+          'nextBilling',
+          'whatsappVerified',
+          'emailVerified',
+          'verified',
+          'lastWaInteraction'
+        ])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
         && data.email is string && data.email.size() <= 200
         && (!data.keys().hasAny(['dateOfBirth']) || (data.dateOfBirth is string && data.dateOfBirth.size() <= 20))
         && (!data.keys().hasAny(['photoURL']) || (data.photoURL is string && data.photoURL.size() <= 2000))
-        && (!data.keys().hasAny(['isPremium']) || data.isPremium is bool);
+        && (!data.keys().hasAny(['monthlyBudget']) || (data.monthlyBudget is number && data.monthlyBudget >= 0))
+        && (!data.keys().hasAny(['whatsappNumber']) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 30))
+        && (!data.keys().hasAny(['whatsappFormatted']) || (data.whatsappFormatted is string && data.whatsappFormatted.size() <= 30))
+        && (!data.keys().hasAny(['whatsappConnected']) || data.whatsappConnected is bool)
+        && (!data.keys().hasAny(['whatsappUpdatedAt']) || (data.whatsappUpdatedAt is string && data.whatsappUpdatedAt.size() <= 40));
+    }
+
+    function isValidUserCommonData(data) {
+      return (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() > 0 && data.name.size() <= 100))
+        && (!data.keys().hasAny(['email']) || (data.email is string && data.email.size() <= 200))
+        && (!data.keys().hasAny(['dateOfBirth']) || (data.dateOfBirth is string && data.dateOfBirth.size() <= 20))
+        && (!data.keys().hasAny(['photoURL']) || (data.photoURL is string && data.photoURL.size() <= 2000))
+        && (!data.keys().hasAny(['monthlyBudget']) || (data.monthlyBudget is number && data.monthlyBudget >= 0))
+        && (!data.keys().hasAny(['whatsappNumber']) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 30))
+        && (!data.keys().hasAny(['whatsappFormatted']) || (data.whatsappFormatted is string && data.whatsappFormatted.size() <= 30))
+        && (!data.keys().hasAny(['whatsappConnected']) || data.whatsappConnected is bool)
+        && (!data.keys().hasAny(['whatsappUpdatedAt']) || (data.whatsappUpdatedAt is string && data.whatsappUpdatedAt.size() <= 40));
     }
 
     function isValidTransaction(data, userId) {
@@ -100,8 +136,37 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if (isOwner(userId) && isValidId(userId)) || (isSignedIn() && request.auth.token.email == userId);
-      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
-      allow update: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
+      
+      // Criação de perfil via Client SDK: proíbe categoricamente privilégios e dados de faturamento
+      allow create: if isOwner(userId) && isValidId(userId)
+                    && isValidUserCreate(incoming());
+
+      // Atualização de perfil via Client SDK: proíbe categoricamente alteração de autorização,
+      // faturamento/cobrança e vínculos verificados (QA-02).
+      // Esses campos só podem ser gravados via Firebase Admin SDK (backend).
+      allow update: if isOwner(userId) && isValidId(userId)
+                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+                      'role',
+                      'isAdmin',
+                      'isPremium',
+                      'plan',
+                      'stripeSubscriptionId',
+                      'stripeCustomerId',
+                      'subscriptionId',
+                      'subscriptionStatus',
+                      'subscribedAt',
+                      'lastPaymentId',
+                      'paymentMethod',
+                      'transactionAmount',
+                      'approvedAt',
+                      'nextBilling',
+                      'whatsappVerified',
+                      'emailVerified',
+                      'verified',
+                      'lastWaInteraction',
+                      'createdAt'
+                    ])
+                    && isValidUserCommonData(incoming());
 
       match /appointments/{appointmentId} {
         allow list: if isOwner(userId) && isValidId(userId);

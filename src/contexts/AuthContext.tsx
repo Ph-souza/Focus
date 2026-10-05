@@ -76,20 +76,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const snap = await getDoc(userDocRef);
 
-          // 2. Regra de Auto-Admin:
-          // Antes de salvar no Firestore, verifique estritamente: if (user.email === 'phillipe.souza27@gmail.com').
-          // Se for verdadeiro, adicione ao payload: role: 'admin' e isAdmin: true.
-          // Se for falso, adicione: role: 'user' e isAdmin: false.
-          let role = 'user';
-          let isAdmin = false;
-
-          if (user.email === 'phillipe.souza27@gmail.com') {
-            role = 'admin';
-            isAdmin = true;
-          }
-
-          // 3. Padronização de Dados:
-          // O payload salvo deve conter apenas: name, email, photoURL, e createdAt (utilize serverTimestamp(), garantindo que não sobrescreve se já existir).
+          // Padronização de Dados:
+          // O payload salvo pelo cliente deve conter apenas dados comuns: name, email, photoURL e createdAt.
+          // Campos sensíveis de autorização (role, isAdmin, isPremium) são restritos ao Admin SDK no backend (QA-02).
           const name = user.displayName || user.providerData?.[0]?.displayName || user.email?.split('@')[0] || 'Usuário';
           const email = user.email || '';
           const photoURL = user.photoURL || user.providerData?.[0]?.photoURL || '';
@@ -97,9 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const payload: Record<string, any> = {
             name,
             email,
-            photoURL,
-            role,
-            isAdmin
+            photoURL
           };
 
           // createdAt (utilize serverTimestamp(), garantindo que não sobrescreve se já existir)

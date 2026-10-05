@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, ArrowUpRight, ArrowDownRight, Coffee, Monitor, Home, Briefcase, Trash2, Sparkles, Receipt, ChevronDown } from 'lucide-react';
 import { Transaction, User } from '../types';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, setDoc, deleteDoc, serverTimestamp, collection, query, orderBy, limit, startAfter, getDocs, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { getApiUrl } from '../lib/api';
 
@@ -116,13 +116,15 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
     if (!newTitle.trim()) return;
     setIsSuggestingCategory(true);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const response = await fetch(getApiUrl('/api/categorize'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
-          title: newTitle,
+          title: newTitle.trim(),
           type: newType
         })
       });

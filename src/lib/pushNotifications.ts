@@ -1,4 +1,5 @@
 import { getApiUrl } from './api';
+import { auth } from './firebase';
 
 export async function subscribeToPushNotifications() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -31,10 +32,15 @@ export async function subscribeToPushNotifications() {
       applicationServerKey: convertedVapidKey
     });
 
-    // Send the subscription to the backend
+    const token = await auth.currentUser?.getIdToken();
+
+    // Send the subscription to the backend vinculando ao UID autenticado
     await fetch(getApiUrl('/api/notifications/subscribe'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
       body: JSON.stringify(subscription)
     });
 

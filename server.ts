@@ -7,11 +7,13 @@ import path from "path";
 import crypto from "crypto";
 import { initializeApp, getApps, cert, App } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import { MercadoPagoConfig, Payment, PreApproval } from "mercadopago";
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import webpush from "web-push";
+import Stripe from "stripe";
 
 // Firebase Admin SDK initialization (Singleton)
 let adminApp: App;
@@ -84,6 +86,49 @@ try {
   adminDb.settings({ ignoreUndefinedProperties: true });
 } catch {
   // Ignora se já inicializado com settings
+}
+
+const adminAuth = getAuth(adminApp);
+
+/**
+ * Interface estendida do Express Request com dados do usuário autenticado via Firebase Auth
+ */
+interface AuthenticatedRequest extends express.Request {
+  user?: any;
+}
+
+/**
+ * Middleware para exigir autenticação obrigatória via Firebase Auth (ID Token no header Authorization)
+ */
+async function requireAuth(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({
+      error: "Não autorizado: Header Authorization com Bearer token é obrigatório",
+      code: "UNAUTHORIZED"
+    });
+  }
+
+  const idToken = authHeader.split("Bearer ")[1]?.trim();
+  if (!idToken) {
+    return res.status(401).json({
+      error: "Não autorizado: Token de autenticação não fornecido",
+      code: "EMPTY_TOKEN"
+    });
+  }
+
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    req.user = decodedToken;
+    next();
+  } catch (error: any) {
+    console.warn("[Auth Middleware] Falha na validação do token Firebase Auth:", error?.message || error);
+    return res.status(401).json({
+      error: "Token de autenticação inválido ou expirado",
+      code: "INVALID_TOKEN",
+      details: error?.message
+    });
+  }
 }
 
 /**
@@ -169,8 +214,53 @@ webpush.setVapidDetails(
   vapidPrivateKey
 );
 
-// In-memory store for subscriptions (in production, use Firestore)
-const subscriptions: any[] = [];
+// Armazenamento em memória de inscrições WebPush indexadas por UID do usuário autenticado (QA-01 e QA-07)
+const userSubscriptions = new Map<string, any[]>();
+
+// Cliente Stripe para validação de webhooks e checkout (QA-03)
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || "dummy_key", {
+  apiVersion: "2025-02-24.acacia" as any
+});
+
+// Cache em memória para deduplicação rápida de eventos de webhook do Stripe (QA-03)
+const processedStripeEvents = new Set<string>();
+
+/**
+ * Validação criptográfica do cabeçalho X-Hub-Signature-256 da Meta / WhatsApp (QA-04)
+ */
+function isValidMetaSignature(rawBody: Buffer | string | undefined, signatureHeader: string | string[] | undefined, appSecret: string): boolean {
+  if (!signatureHeader || typeof signatureHeader !== 'string') {
+    return false;
+  }
+
+  const parts = signatureHeader.split('sha256=');
+  if (parts.length !== 2) {
+    return false;
+  }
+
+  const signatureHash = parts[1]?.trim();
+  if (!signatureHash) {
+    return false;
+  }
+
+  const bodyBuffer = Buffer.isBuffer(rawBody) 
+    ? rawBody 
+    : Buffer.from(typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody || {}));
+
+  const expectedHash = crypto
+    .createHmac('sha256', appSecret)
+    .update(bodyBuffer)
+    .digest('hex');
+
+  const expectedBuffer = Buffer.from(expectedHash, 'hex');
+  const signatureBuffer = Buffer.from(signatureHash, 'hex');
+
+  if (expectedBuffer.length !== signatureBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
+}
 
 // Tools for Gemini
 const addTaskTool: FunctionDeclaration = {
@@ -375,7 +465,12 @@ async function startServer() {
   const PORT = process.env.PORT || 3000;
 
   app.use(cors({ origin: true, credentials: true }));
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({
+    limit: '10mb',
+    verify: (req: any, res, buf) => {
+      req.rawBody = buf;
+    }
+  }));
 
   // =========================================================================
   // Rota Mercado Pago: Guest Checkout Binding Webhook
@@ -772,17 +867,66 @@ async function startServer() {
     }
   });
 
-  // Webhook Stripe para ativação automática sem assinaturas órfãs
+  // Webhook Stripe com validação de assinatura criptográfica e deduplicação por event.id (QA-03)
   app.post("/api/webhooks/stripe", async (req, res) => {
-    res.status(200).json({ received: true });
+    const sig = req.headers["stripe-signature"] as string | undefined;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+    const rawBody = (req as any).rawBody || (Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {})));
+
+    if (!webhookSecret) {
+      console.error("❌ [Stripe Webhook] Erro crítico: STRIPE_WEBHOOK_SECRET não configurada no ambiente.");
+      return res.status(500).json({ error: "STRIPE_WEBHOOK_SECRET is not configured on server" });
+    }
+
+    if (!sig) {
+      console.warn("⚠️ [Stripe Webhook] Cabeçalho Stripe-Signature ausente. Requisição forjada rejeitada.");
+      return res.status(400).json({ error: "Missing Stripe-Signature header" });
+    }
+
+    let event: Stripe.Event;
 
     try {
-      const event = req.body || {};
-      const eventType = event.type;
-      const dataObj = event.data?.object || {};
+      event = stripeClient.webhooks.constructEvent(rawBody, sig, webhookSecret);
+    } catch (err: any) {
+      console.warn(`❌ [Stripe Webhook] Falha na validação da assinatura criptográfica: ${err?.message}`);
+      return res.status(400).json({ error: `Webhook signature verification failed: ${err?.message}` });
+    }
 
-      console.log(`[Stripe Webhook] Evento recebido: ${eventType}`);
+    const eventId = event.id;
 
+    // Deduplicação por event.id (QA-03):
+    // 1. Checagem em memória
+    if (processedStripeEvents.has(eventId)) {
+      console.log(`[Stripe Webhook] Evento ${eventId} já processado anteriormente (in-memory). Ignorando duplicação.`);
+      return res.status(200).json({ received: true, deduplicated: true });
+    }
+
+    // 2. Checagem e registro persistente no Firestore
+    try {
+      const eventDocRef = adminDb.collection("processed_events").doc(eventId);
+      const eventSnap = await eventDocRef.get();
+      if (eventSnap.exists) {
+        processedStripeEvents.add(eventId);
+        console.log(`[Stripe Webhook] Evento ${eventId} já registrado no Firestore. Ignorando duplicação.`);
+        return res.status(200).json({ received: true, deduplicated: true });
+      }
+
+      await eventDocRef.set({
+        eventId,
+        type: event.type,
+        processedAt: FieldValue.serverTimestamp()
+      });
+      processedStripeEvents.add(eventId);
+    } catch (dedupErr: any) {
+      console.warn(`[Stripe Webhook] Aviso ao persistir deduplicação para o evento ${eventId}:`, dedupErr?.message);
+    }
+
+    const eventType = event.type;
+    const dataObj = event.data?.object as any || {};
+
+    console.log(`[Stripe Webhook] Evento validado com sucesso: ${eventType} (ID: ${eventId})`);
+
+    try {
       if (eventType === "checkout.session.completed" || eventType === "invoice.payment_succeeded") {
         const userId = dataObj.client_reference_id || dataObj.metadata?.userId;
         const email = (dataObj.customer_details?.email || dataObj.customer_email || dataObj.metadata?.email || "").trim().toLowerCase();
@@ -817,8 +961,11 @@ async function startServer() {
           }, { merge: true });
         }
       }
-    } catch (whErr: any) {
-      console.error("[Stripe Webhook] Erro ao processar webhook:", whErr);
+
+      return res.status(200).json({ received: true, eventId });
+    } catch (processErr: any) {
+      console.error("[Stripe Webhook] Erro ao processar payload do evento:", processErr);
+      return res.status(500).json({ error: "Failed to process stripe event", details: processErr?.message });
     }
   });
 
@@ -827,40 +974,91 @@ async function startServer() {
     res.json({ publicKey: vapidPublicKey });
   });
 
-  app.post("/api/notifications/subscribe", (req, res) => {
+  app.post(["/api/notifications/subscribe", "/notifications/subscribe"], requireAuth, (req: AuthenticatedRequest, res) => {
     const subscription = req.body;
-    subscriptions.push(subscription);
-    res.status(201).json({ success: true });
+    const uid = req.user?.uid;
+
+    if (!uid) {
+      return res.status(401).json({ error: "UID do usuário não identificado no token" });
+    }
+
+    if (!subscription || !subscription.endpoint) {
+      return res.status(400).json({ error: "Dados de assinatura Push inválidos" });
+    }
+
+    const currentSubs = userSubscriptions.get(uid) || [];
+    if (!currentSubs.some(s => s.endpoint === subscription.endpoint)) {
+      currentSubs.push(subscription);
+    }
+    userSubscriptions.set(uid, currentSubs);
+
+    res.status(201).json({ success: true, message: "Inscrição vinculada ao UID com sucesso" });
   });
 
-  app.post("/api/notifications/send", async (req, res) => {
-    const { title, body, url } = req.body;
+  app.post(["/api/notifications/send", "/notifications/send"], requireAuth, async (req: AuthenticatedRequest, res) => {
+    const { title, body, url } = req.body || {};
+    const uid = req.user?.uid;
+
+    if (!uid) {
+      return res.status(401).json({ error: "UID do usuário não identificado no token" });
+    }
+
+    // A notificação não deve disparar para todas as inscrições em memória;
+    // Dispara apenas para as assinaturas vinculadas ao UID autenticado (QA-01 e QA-07).
+    const userSubs = userSubscriptions.get(uid) || [];
+
+    if (userSubs.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Nenhuma assinatura de notificação ativa encontrada para o usuário autenticado",
+        sentCount: 0
+      });
+    }
 
     const notificationPayload = JSON.stringify({
-      title,
-      body,
+      title: title || "Nexus Focus",
+      body: body || "",
       url: url || "/",
     });
 
     try {
-      const promises = subscriptions.map((sub) =>
-        webpush.sendNotification(sub, notificationPayload).catch((error) => {
-          console.error("Error sending notification:", error);
-        })
-      );
+      const activeSubs: any[] = [];
+      const promises = userSubs.map(async (sub) => {
+        try {
+          await webpush.sendNotification(sub, notificationPayload);
+          activeSubs.push(sub);
+        } catch (error: any) {
+          if (error.statusCode === 404 || error.statusCode === 410) {
+            console.log(`[WebPush] Inscrição expirada/removida para UID ${uid}`);
+          } else {
+            console.error("[WebPush] Erro ao enviar notificação:", error);
+            activeSubs.push(sub);
+          }
+        }
+      });
+
       await Promise.all(promises);
-      res.status(200).json({ success: true, message: "Notifications sent" });
-    } catch (err) {
-      res.status(500).json({ error: "Failed to send notifications" });
+      userSubscriptions.set(uid, activeSubs);
+
+      res.status(200).json({
+        success: true,
+        message: `Notificações enviadas apenas para as assinaturas vinculadas ao UID ${uid}`,
+        sentCount: activeSubs.length
+      });
+    } catch (err: any) {
+      console.error("[WebPush] Falha ao enviar notificações:", err);
+      res.status(500).json({ error: "Falha ao enviar notificações", details: err?.message });
     }
   });
 
-  // API route for categorization
-  app.post("/api/categorize", async (req, res) => {
+  // API route for categorization (autenticação obrigatória e bloqueio de payload vazio)
+  app.post("/api/categorize", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
-      const { title, type } = req.body;
+      const { title, type } = req.body || {};
+      const cleanTitle = typeof title === 'string' ? title.trim() : '';
 
-      if (!title) {
+      // Bloqueio rigoroso de payload vazio antes de consumir cotas de IA (QA-07)
+      if (!cleanTitle) {
         return res.status(400).json({ error: "No title provided" });
       }
 
@@ -876,7 +1074,7 @@ async function startServer() {
 
       const categories = type === 'income' ? incomeCategories : expenseCategories;
 
-      const prompt = `Classifique a seguinte transação: "${title}".
+      const prompt = `Classifique a seguinte transação: "${cleanTitle}".
 Tipo da transação: ${type === 'income' ? 'Receita' : 'Despesa'}.
 Categorias disponíveis: ${categories.join(', ')}.
 Responda APENAS com o nome exato da categoria que melhor se encaixa, sem nenhuma palavra adicional ou pontuação. Se não souber, responda "Outros".`;
@@ -906,7 +1104,19 @@ Responda APENAS com o nome exato da categoria que melhor se encaixa, sem nenhuma
     console.log('Payload Recebido no Chat:', req.body);
     try {
       const { text, message, focusTime, history = [], userAgeContext, userDataContext, imageBase64, imageMimeType, currentDate } = req.body || {};
-      const userText = (text || message || '').trim();
+      const userText = (typeof text === 'string' ? text : typeof message === 'string' ? message : '').trim();
+
+      // Bloqueio rigoroso de payload vazio/inválido antes de consumir cotas de IA (QA-07)
+      const hasFocusTime = focusTime !== undefined && focusTime !== null;
+      const parsedFocus = hasFocusTime ? Number(focusTime) : null;
+
+      if (hasFocusTime) {
+        if (isNaN(parsedFocus!) || parsedFocus! <= 0) {
+          return res.status(400).json({ error: "Parâmetro focusTime inválido. Deve ser um número positivo." });
+        }
+      } else if (!userText && !imageBase64) {
+        return res.status(400).json({ error: "No text or image provided" });
+      }
 
       const apiKey = process.env.GEMINI_API_KEY?.trim() || process.env.VITE_GEMINI_API_KEY?.trim();
 
@@ -918,7 +1128,7 @@ Responda APENAS com o nome exato da categoria que melhor se encaixa, sem nenhuma
       const genAI = new GoogleGenerativeAI(apiKey);
 
       // Tratamento especial para requisições de avaliação de foco (Focus Mode)
-      if (focusTime !== undefined && focusTime !== null) {
+      if (hasFocusTime && parsedFocus) {
         let feedback = "";
         let lastFocusErr: any = null;
 
@@ -929,7 +1139,7 @@ Responda APENAS com o nome exato da categoria que melhor se encaixa, sem nenhuma
               systemInstruction: "Você é o Mentor Focus, uma IA de alta performance e mentoria do aplicativo Nexus Focus. Tom direto, assertivo, maduro, sem emojis. Exalte a disciplina do usuário por cumprir o tempo de foco e cobre a próxima meta em no máximo 2 frases curtas. Nunca diga que é uma IA."
             });
 
-            const promptText = `O usuário finalizou um foco ininterrupto de ${focusTime} minutos. Gere o feedback imediato.`;
+            const promptText = `O usuário finalizou um foco ininterrupto de ${parsedFocus} minutos. Gere o feedback imediato.`;
             const result = await mentorModel.generateContent(promptText);
             const response = await result.response;
             feedback = response.text()?.trim() || "";
@@ -945,10 +1155,6 @@ Responda APENAS com o nome exato da categoria que melhor se encaixa, sem nenhuma
         }
 
         return res.json({ text: feedback, feedback: feedback, reply: feedback });
-      }
-
-      if (!userText && !imageBase64) {
-        return res.status(400).json({ error: "No text or image provided" });
       }
 
       let systemInstruction = `${GLOBAL_SYSTEM_PROMPT}
@@ -1068,10 +1274,12 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
     console.log('Payload Recebido no Mentor Feedback:', req.body);
     try {
       const { focusTime } = req.body || {};
+      const parsedFocus = Number(focusTime);
 
-      if (focusTime === undefined || focusTime === null) {
-        console.warn("⚠️ [API /api/mentor/feedback] Requisição recebida sem o parâmetro 'focusTime'.");
-        return res.status(400).json({ error: "O campo focusTime (em minutos) é obrigatório." });
+      // Bloqueio rigoroso de payload vazio ou inválido antes de consumir cotas de IA (QA-07)
+      if (focusTime === undefined || focusTime === null || isNaN(parsedFocus) || parsedFocus <= 0) {
+        console.warn("⚠️ [API /api/mentor/feedback] Requisição recebida com parâmetro 'focusTime' ausente ou inválido.");
+        return res.status(400).json({ error: "O campo focusTime (em minutos positivos) é obrigatório." });
       }
 
       const apiKey = process.env.GEMINI_API_KEY?.trim() || process.env.VITE_GEMINI_API_KEY?.trim();
@@ -1136,8 +1344,109 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
   }
 
   /**
+   * Allowlist de domínios confiáveis da Meta / WhatsApp para prevenção de SSRF e vazamento de token (QA-05)
+   */
+  const META_TRUSTED_HOSTS = new Set([
+    "graph.facebook.com",
+    "lookaside.fbsbx.com"
+  ]);
+
+  const META_TRUSTED_BASE_DOMAINS = [
+    "facebook.com",
+    "fbsbx.com",
+    "fbcdn.net",
+    "whatsapp.net",
+    "whatsapp.com"
+  ];
+
+  /**
+   * Valida categoricamente se um host pertence exclusivamente à infraestrutura confiável da Meta,
+   * bloqueando requisições para hosts arbitrários, domínios desconhecidos, loopback e redes privadas (QA-05).
+   */
+  function isAllowedMetaHost(hostname: string): boolean {
+    if (!hostname || typeof hostname !== "string") {
+      return false;
+    }
+
+    const host = hostname.trim().toLowerCase();
+
+    // 1. Bloqueio explícito de loopback, links locais e faixas de IP privadas/internas
+    if (
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host === "0.0.0.0" ||
+      host.startsWith("10.") ||
+      host.startsWith("192.168.") ||
+      host.startsWith("169.254.") || // Cloud Metadata (AWS, GCP, Azure, DigitalOcean)
+      host.startsWith("127.") ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
+      host.endsWith(".local") ||
+      host.endsWith(".internal") ||
+      host.endsWith(".lan") ||
+      host.endsWith(".corp") ||
+      host.endsWith(".home")
+    ) {
+      return false;
+    }
+
+    // 2. Bloqueio categórico de qualquer endereço IP direto (IPv4, IPv6, numérico ou hexadecimal)
+    if (
+      /^(\d{1,3}\.){3}\d{1,3}$/.test(host) ||
+      host.includes(":") ||
+      /^0x[0-9a-f]+$/i.test(host) ||
+      /^\d+$/.test(host)
+    ) {
+      return false;
+    }
+
+    // 3. Validação estrita contra a allowlist aprovada da Meta
+    if (META_TRUSTED_HOSTS.has(host)) {
+      return true;
+    }
+
+    return META_TRUSTED_BASE_DOMAINS.some((domain) => host === domain || host.endsWith("." + domain));
+  }
+
+  /**
+   * Valida a URL completa para download de mídia antes do fetch: protocolo HTTPS + Host na allowlist (QA-05)
+   */
+  function validateMetaMediaUrl(urlStr: string): { valid: boolean; error?: string; url?: URL } {
+    if (!urlStr || typeof urlStr !== "string") {
+      return { valid: false, error: "URL de mídia ausente ou em formato inválido" };
+    }
+
+    try {
+      const parsed = new URL(urlStr.trim());
+
+      // 1. Exige exclusivamente protocolo seguro HTTPS (bloqueia http://, file://, gopher://, etc.)
+      if (parsed.protocol !== "https:") {
+        return { valid: false, error: "Apenas o protocolo seguro HTTPS é permitido para download de mídia (protocolos inseguros como HTTP são rejeitados)" };
+      }
+
+      // 2. Rejeita credenciais embutidas na URL (ex: https://user:pass@evil.com)
+      if (parsed.username || parsed.password) {
+        return { valid: false, error: "Credenciais de autenticação embutidas na URL não são permitidas" };
+      }
+
+      // 3. Validação estrita contra a allowlist da Meta e bloqueio de SSRF
+      if (!isAllowedMetaHost(parsed.hostname)) {
+        return {
+          valid: false,
+          error: `Host não autorizado para download de mídia (${parsed.hostname}). Apenas domínios oficiais da Meta são permitidos.`
+        };
+      }
+
+      return { valid: true, url: parsed };
+    } catch (err: any) {
+      return { valid: false, error: "URL de mídia inválida ou malformada" };
+    }
+  }
+
+  /**
    * Helper para download de mídia do WhatsApp (Meta Cloud API ou URLs diretas)
-   * Suporta o fluxo de duas etapas da Meta (Graph API -> lookaside CDN)
+   * Suporta o fluxo de duas etapas da Meta (Graph API -> lookaside CDN) com proteção estrita contra SSRF (QA-05)
    */
   async function downloadWhatsAppMedia(
     mediaObj: { id?: string; url?: string; mime_type?: string } | undefined,
@@ -1181,11 +1490,33 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
         return null;
       }
 
-      console.log(`[WhatsApp Media] Baixando binário da mídia em memória...`);
+      // Validação estrita de SSRF e allowlist antes de qualquer fetch (QA-05)
+      const urlValidation = validateMetaMediaUrl(downloadUrl);
+      if (!urlValidation.valid || !urlValidation.url) {
+        console.error(`[SSRF Blocked] URL de download rejeitada: ${urlValidation.error} (URL: ${downloadUrl})`);
+        const ssrfError: any = new Error(urlValidation.error || "Host não autorizado para download de mídia");
+        ssrfError.status = 403;
+        ssrfError.code = "SSRF_BLOCKED";
+        throw ssrfError;
+      }
+
+      const isMetaDomain = isAllowedMetaHost(urlValidation.url.hostname);
+      if (!isMetaDomain) {
+        console.error(`[SSRF Blocked] Host não pertence à allowlist da Meta: ${urlValidation.url.hostname}`);
+        const ssrfError: any = new Error(`Host não autorizado (${urlValidation.url.hostname})`);
+        ssrfError.status = 403;
+        ssrfError.code = "SSRF_BLOCKED";
+        throw ssrfError;
+      }
+
+      console.log(`[WhatsApp Media] Baixando binário da mídia em memória do host seguro: ${urlValidation.url.hostname}...`);
       const headers: Record<string, string> = {
         "User-Agent": "curl/7.64.1"
       };
-      if (metaToken && (downloadUrl.includes("fbsbx.com") || downloadUrl.includes("facebook.com") || downloadUrl.includes("whatsapp.net"))) {
+
+      // Garante categoricamente que o token da Meta NUNCA seja inserido no cabeçalho se o domínio
+      // de destino não estiver na allowlist aprovada (QA-05)
+      if (metaToken && isMetaDomain) {
         headers["Authorization"] = `Bearer ${metaToken}`;
       }
 
@@ -1194,10 +1525,14 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
         const fallbackHeaders: Record<string, string> = {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
         };
-        if (metaToken) fallbackHeaders["Authorization"] = `Bearer ${metaToken}`;
+        // No fallback, o token da Meta NUNCA é inserido se o domínio não estiver na allowlist aprovada (QA-05)
+        if (metaToken && isMetaDomain) {
+          fallbackHeaders["Authorization"] = `Bearer ${metaToken}`;
+        }
         fileRes = await fetch(downloadUrl, { headers: fallbackHeaders });
 
         if (!fileRes.ok) {
+          // Último recurso: sem credencial alguma
           fileRes = await fetch(downloadUrl);
         }
       }
@@ -1231,6 +1566,9 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
         mimeType: cleanMimeType
       };
     } catch (err: any) {
+      if (err?.code === "SSRF_BLOCKED") {
+        throw err;
+      }
       console.error("ERRO GEMINI/WHATSAPP: Falha na função downloadWhatsAppMedia:", err.response?.data || err.message || err);
       return null;
     }
@@ -1728,7 +2066,7 @@ Data e hora atual: ${new Date().toISOString()}`;
         } else if (messageType === 'image') {
           const mediaId = message.image?.id;
           if (!mediaId && !message.image?.url) {
-            console.error("ERRO GEMINI/WHATSAPP: Mensagem de imagem sem ID:", message.image);
+            console.error("ERRO GEMINI/WHATSAPP: Mensagem de imagem sem ID nem URL:", message.image);
             return;
           }
 
@@ -1739,51 +2077,23 @@ Data e hora atual: ${new Date().toISOString()}`;
             return;
           }
 
-          console.log(`[WhatsApp Media] Processando imagem ID: ${mediaId}...`);
-          let downloadUrl = message.image?.url;
-          let mimeType = message.image?.mime_type || "image/jpeg";
+          console.log(`[WhatsApp Media] Processando imagem ID: ${mediaId || 'URL direta'}...`);
+          const downloadUrl = message.image?.url;
+          const mimeType = message.image?.mime_type || "image/jpeg";
 
-          // 1. GET para a API do WhatsApp (v17.0) para obter a url de download
-          if (!downloadUrl && mediaId) {
-            const metaRes = await fetch(`https://graph.facebook.com/v17.0/${mediaId}`, {
-              headers: { Authorization: `Bearer ${metaToken}` }
-            });
-            if (!metaRes.ok) {
-              const errBody = await metaRes.text();
-              console.error(`ERRO GEMINI/WHATSAPP: Erro ao obter URL da imagem no Graph API (${metaRes.status}):`, errBody);
-              await sendWhatsAppTextMessage(from, "Não consegui obter o link da imagem pelo WhatsApp. Tente enviar novamente.", phoneId, linkedUserId);
-              return;
-            }
-            const mediaData: any = await metaRes.json();
-            downloadUrl = mediaData.url;
-            if (mediaData.mime_type) {
-              mimeType = mediaData.mime_type;
-            }
-          }
-
-          if (!downloadUrl) {
-            console.error("ERRO GEMINI/WHATSAPP: URL de download da imagem não encontrada.");
+          let downloaded: MediaDownloadResult | null = null;
+          try {
+            downloaded = await downloadWhatsAppMedia({ id: mediaId, url: downloadUrl, mime_type: mimeType }, metaToken);
+          } catch (ssrfErr: any) {
+            console.error("[SSRF Blocked] Imagem rejeitada por política de segurança:", ssrfErr?.message);
+            await sendWhatsAppTextMessage(from, "URL de imagem não autorizada ou insegura detectada.", phoneId, linkedUserId);
             return;
           }
 
-          // 2. GET para a url obtida passando o Bearer Token nos Headers com arraybuffer
-          const fileRes = await fetch(downloadUrl, {
-            headers: {
-              Authorization: `Bearer ${metaToken}`,
-              "User-Agent": "curl/7.64.1"
-            }
-          });
-
-          if (!fileRes.ok) {
-            const errBody = await fileRes.text();
-            console.error(`ERRO GEMINI/WHATSAPP: Falha ao baixar binário da imagem (${fileRes.status}):`, errBody);
+          if (!downloaded) {
             await sendWhatsAppTextMessage(from, "Falha ao baixar a imagem dos servidores do WhatsApp. Tente enviar novamente.", phoneId, linkedUserId);
             return;
           }
-
-          const arrayBuffer = await fileRes.arrayBuffer();
-          const base64 = Buffer.from(arrayBuffer).toString('base64');
-          const cleanMime = mimeType ? mimeType.split(';')[0].trim() : "image/jpeg";
 
           // 3. Injeção no Gemini:
           if (message.image?.caption) {
@@ -1791,15 +2101,15 @@ Data e hora atual: ${new Date().toISOString()}`;
           }
           parts.push({
             inlineData: {
-              mimeType: cleanMime,
-              data: base64
+              mimeType: downloaded.mimeType,
+              data: downloaded.base64
             }
           });
         } else if (messageType === 'audio' || messageType === 'ptt' || messageType === 'voice') {
           const audioObj = message.audio || message.voice;
           const mediaId = audioObj?.id;
           if (!mediaId && !audioObj?.url) {
-            console.error("ERRO GEMINI/WHATSAPP: Mensagem de áudio sem ID:", audioObj);
+            console.error("ERRO GEMINI/WHATSAPP: Mensagem de áudio sem ID nem URL:", audioObj);
             return;
           }
 
@@ -1809,55 +2119,30 @@ Data e hora atual: ${new Date().toISOString()}`;
             return;
           }
 
-          console.log(`[WhatsApp Media] Processando áudio ID: ${mediaId}...`);
-          let downloadUrl = audioObj?.url;
-          let mimeType = audioObj?.mime_type || "audio/ogg";
+          console.log(`[WhatsApp Media] Processando áudio ID: ${mediaId || 'URL direta'}...`);
+          const downloadUrl = audioObj?.url;
+          const mimeType = audioObj?.mime_type || "audio/ogg";
 
-          if (!downloadUrl && mediaId) {
-            const metaRes = await fetch(`https://graph.facebook.com/v17.0/${mediaId}`, {
-              headers: { Authorization: `Bearer ${metaToken}` }
-            });
-            if (!metaRes.ok) {
-              const errBody = await metaRes.text();
-              console.error(`ERRO GEMINI/WHATSAPP: Erro ao obter URL do áudio no Graph API (${metaRes.status}):`, errBody);
-              return;
-            }
-            const mediaData: any = await metaRes.json();
-            downloadUrl = mediaData.url;
-            if (mediaData.mime_type) {
-              mimeType = mediaData.mime_type;
-            }
-          }
-
-          if (!downloadUrl) {
-            console.error("ERRO GEMINI/WHATSAPP: URL de download do áudio não encontrada.");
+          let downloaded: MediaDownloadResult | null = null;
+          try {
+            downloaded = await downloadWhatsAppMedia({ id: mediaId, url: downloadUrl, mime_type: mimeType }, metaToken);
+          } catch (ssrfErr: any) {
+            console.error("[SSRF Blocked] Áudio rejeitado por política de segurança:", ssrfErr?.message);
             return;
           }
 
-          const fileRes = await fetch(downloadUrl, {
-            headers: {
-              Authorization: `Bearer ${metaToken}`,
-              "User-Agent": "curl/7.64.1"
-            }
-          });
-
-          if (!fileRes.ok) {
-            const errBody = await fileRes.text();
-            console.error(`ERRO GEMINI/WHATSAPP: Falha ao baixar binário do áudio (${fileRes.status}):`, errBody);
+          if (!downloaded) {
+            console.error("ERRO GEMINI/WHATSAPP: Falha ao baixar áudio seguro do WhatsApp.");
             return;
           }
-
-          const arrayBuffer = await fileRes.arrayBuffer();
-          const base64 = Buffer.from(arrayBuffer).toString('base64');
-          const cleanMime = mimeType ? mimeType.split(';')[0].trim() : "audio/ogg";
 
           if (audioObj?.caption) {
             parts.push({ text: audioObj.caption });
           }
           parts.push({
             inlineData: {
-              mimeType: cleanMime,
-              data: base64
+              mimeType: downloaded.mimeType,
+              data: downloaded.base64
             }
           });
         }
@@ -1963,9 +2248,29 @@ Data e hora atual: ${new Date().toISOString()}`;
   // Rotas de Recebimento de Mensagens (POST)
   // =========================================================================
 
-  // 1. Rota Dedicada da Meta Cloud API:
-  // Garantia de Resposta: retorna 200 OK para a Meta IMEDIATAMENTE antes de qualquer chamada pesada
+  // 1. Rota Dedicada da Meta Cloud API (Validação de Assinatura X-Hub-Signature-256 - QA-04):
+  // Garantia de Resposta: valida assinatura criptográfica da Meta antes de processar
   app.post("/api/webhooks/whatsapp", (req, res) => {
+    const metaAppSecret = process.env.META_APP_SECRET?.trim() || process.env.WHATSAPP_APP_SECRET?.trim();
+    const signature = req.headers["x-hub-signature-256"] as string | undefined;
+    const rawBody = (req as any).rawBody || req.body;
+
+    // Se o App Secret estiver configurado, exige validação rigorosa da assinatura criptográfica
+    if (metaAppSecret) {
+      if (!signature) {
+        console.warn("⚠️ [WhatsApp Webhook] Cabeçalho X-Hub-Signature-256 ausente. Requisição forjada rejeitada.");
+        return res.status(401).json({ error: "Missing X-Hub-Signature-256 header" });
+      }
+
+      const isValid = isValidMetaSignature(rawBody, signature, metaAppSecret);
+      if (!isValid) {
+        console.warn("❌ [WhatsApp Webhook] Assinatura X-Hub-Signature-256 inválida. Payload forjado rejeitado.");
+        return res.status(401).json({ error: "Invalid X-Hub-Signature-256 signature" });
+      }
+    } else {
+      console.warn("⚠️ [WhatsApp Webhook] META_APP_SECRET não configurado no servidor. Assinatura não pôde ser validada.");
+    }
+
     res.sendStatus(200);
 
     setImmediate(() => {
@@ -1978,9 +2283,19 @@ Data e hora atual: ${new Date().toISOString()}`;
   // 2. Rota do Simulador Interno ou Fallback:
   app.post("/api/whatsapp/webhook", async (req, res) => {
     const body = req.body || {};
+    const metaAppSecret = process.env.META_APP_SECRET?.trim() || process.env.WHATSAPP_APP_SECRET?.trim();
+    const signature = req.headers["x-hub-signature-256"] as string | undefined;
+    const rawBody = (req as any).rawBody || req.body;
 
-    // Se vier payload da Meta Cloud API nesta rota por engano, garante 200 imediato
+    // Se vier payload da Meta Cloud API nesta rota por engano, valida assinatura antes de processar (QA-04)
     if (body.object === "whatsapp_business_account" || (body.entry && body.entry[0]?.changes)) {
+      if (metaAppSecret) {
+        if (!signature || !isValidMetaSignature(rawBody, signature, metaAppSecret)) {
+          console.warn("❌ [WhatsApp Webhook Fallback] Assinatura X-Hub-Signature-256 inválida ou ausente.");
+          return res.status(401).json({ error: "Invalid or missing X-Hub-Signature-256" });
+        }
+      }
+
       res.sendStatus(200);
       setImmediate(() => {
         processMetaWebhookAsync(body).catch((err) => {
@@ -2022,9 +2337,31 @@ Data e hora atual: ${new Date().toISOString()}`;
         }
         resolvedMedia = { base64: mediaBase64, mimeType: mediaMimeType.split(";")[0].trim() };
       } else if (mediaUrl) {
-        const downloaded = await downloadWhatsAppMedia({ url: mediaUrl, mime_type: mediaMimeType });
-        if (downloaded) {
-          resolvedMedia = { base64: downloaded.base64, mimeType: downloaded.mimeType };
+        // Validação imediata de SSRF e allowlist antes de qualquer fetch (QA-05)
+        const urlValidation = validateMetaMediaUrl(mediaUrl);
+        if (!urlValidation.valid) {
+          console.warn(`[SSRF Blocked] Requisição para /api/whatsapp/webhook rejeitada (URL: ${mediaUrl}): ${urlValidation.error}`);
+          return res.status(403).json({
+            error: "Acesso proibido: A URL de mídia informada não pertence à infraestrutura autorizada da Meta (SSRF bloqueado).",
+            details: urlValidation.error
+          });
+        }
+
+        try {
+          const downloaded = await downloadWhatsAppMedia({ url: mediaUrl, mime_type: mediaMimeType });
+          if (downloaded) {
+            resolvedMedia = { base64: downloaded.base64, mimeType: downloaded.mimeType };
+          } else {
+            return res.status(400).json({ error: "Falha ao baixar mídia da URL informada." });
+          }
+        } catch (downloadErr: any) {
+          if (downloadErr?.code === "SSRF_BLOCKED" || downloadErr?.status === 403) {
+            return res.status(403).json({
+              error: "Acesso proibido: A URL de mídia informada não pertence à infraestrutura autorizada da Meta.",
+              details: downloadErr.message
+            });
+          }
+          return res.status(400).json({ error: "Erro ao processar download de mídia." });
         }
       }
 
@@ -2186,6 +2523,53 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
     }
   });
 
+  // =========================================================================
+  // 3. Rota Pública de Download Seguro de Mídia (QA-05)
+  // Rejeita categoricamente hosts arbitrários/privados/loopback com HTTP 403
+  // e impede que o token da Meta seja vazado para domínios fora da allowlist
+  // =========================================================================
+  app.post(["/api/whatsapp/media", "/api/media/download"], async (req, res) => {
+    const { mediaUrl, mediaId, mimeType } = req.body || {};
+    if (!mediaUrl && !mediaId) {
+      return res.status(400).json({
+        error: "Parâmetro 'mediaUrl' ou 'mediaId' é obrigatório no corpo da requisição."
+      });
+    }
+
+    if (mediaUrl) {
+      const urlValidation = validateMetaMediaUrl(mediaUrl);
+      if (!urlValidation.valid) {
+        console.warn(`[SSRF Blocked] Endpoint /api/whatsapp/media rejeitou URL não confiável (${mediaUrl}): ${urlValidation.error}`);
+        return res.status(403).json({
+          error: "Acesso proibido: A URL informada não pertence à allowlist de domínios confiáveis da Meta (SSRF bloqueado).",
+          details: urlValidation.error
+        });
+      }
+    }
+
+    try {
+      const downloaded = await downloadWhatsAppMedia({ id: mediaId, url: mediaUrl, mime_type: mimeType });
+      if (!downloaded) {
+        return res.status(400).json({ error: "Falha ao processar download da mídia da Meta." });
+      }
+
+      return res.json({
+        success: true,
+        mimeType: downloaded.mimeType,
+        base64: downloaded.base64
+      });
+    } catch (err: any) {
+      if (err?.code === "SSRF_BLOCKED" || err?.status === 403) {
+        return res.status(403).json({
+          error: "Acesso proibido: Host não autorizado pela política de segurança da Meta (SSRF bloqueado).",
+          details: err.message
+        });
+      }
+      return res.status(500).json({ error: "Erro interno ao processar download de mídia." });
+    }
+  });
+
+
 
   // Auto-seed Pro Admin Account into Cloud Firestore (only if Admin SDK credentials are provided)
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
@@ -2219,12 +2603,13 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
     console.log("[Auto-Seed Pro] Ambiente sem FIREBASE_SERVICE_ACCOUNT_KEY. Seed ignorado localmente.");
   }
 
-  // WhatsApp - Handshake Token Generation
-  app.post('/api/whatsapp/generate-token', async (req, res) => {
+  // WhatsApp - Handshake Token Generation (obtenção estrita de UID via Firebase Auth - QA-04)
+  app.post('/api/whatsapp/generate-token', requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
-      const { userId } = req.body;
+      // O endpoint não aceita userId solto no body. O UID é obtido exclusivamente do token autenticado.
+      const userId = req.user?.uid;
       if (!userId) {
-        return res.status(400).json({ success: false, error: "userId é obrigatório" });
+        return res.status(401).json({ success: false, error: "Usuário não autenticado" });
       }
 
       const randomPart = crypto.randomBytes(2).toString('hex').toUpperCase();
@@ -2245,14 +2630,62 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
     }
   });
 
-  // Admin Route to ensure Pro status on demand
-  app.post('/api/admin/activate-pro', async (req, res) => {
+  // Admin Route to ensure Pro status on demand (validação estrita de ID token e custom claim de admin - QA-01)
+  app.post('/api/admin/activate-pro', async (req: express.Request, res: express.Response) => {
     if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
       return res.status(503).json({ success: false, error: "FIREBASE_SERVICE_ACCOUNT_KEY not configured" });
     }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        success: false,
+        error: "Não autorizado: Header Authorization com Bearer token é obrigatório",
+        code: "UNAUTHORIZED"
+      });
+    }
+
+    const idToken = authHeader.split("Bearer ")[1]?.trim();
+    if (!idToken) {
+      return res.status(401).json({
+        success: false,
+        error: "Não autorizado: Token de autenticação não fornecido",
+        code: "EMPTY_TOKEN"
+      });
+    }
+
+    let decodedToken: any;
+    try {
+      decodedToken = await adminAuth.verifyIdToken(idToken);
+    } catch (err: any) {
+      console.warn("[Admin Route] Falha ao verificar ID Token do Firebase:", err?.message);
+      return res.status(401).json({
+        success: false,
+        error: "Token de autenticação inválido ou expirado",
+        code: "INVALID_TOKEN"
+      });
+    }
+
+    // Validação estrita de custom claim de administrador (QA-01)
+    const isAdmin = Boolean(
+      decodedToken.admin === true ||
+      decodedToken.isAdmin === true ||
+      decodedToken.role === 'admin' ||
+      decodedToken.role === 'admin_pro'
+    );
+
+    if (!isAdmin) {
+      console.warn(`[Admin Route] Acesso negado para o usuário ${decodedToken.email || decodedToken.uid}: sem custom claim de administrador.`);
+      return res.status(403).json({
+        success: false,
+        error: "Acesso proibido: Token não possui privilégios de administrador (custom claim de admin necessária)",
+        code: "FORBIDDEN"
+      });
+    }
+
     try {
       const { email } = req.body || {};
-      const targetEmail = (email || "phillipe.souza27@gmail.com").trim().toLowerCase();
+      const targetEmail = (email || decodedToken.email || "phillipe.souza27@gmail.com").trim().toLowerCase();
 
       const emailRef = adminDb.collection("users").doc(targetEmail);
       await emailRef.set({
