@@ -16,7 +16,14 @@ import {
   AlertCircle,
   X,
   Loader2,
-  CreditCard
+  CreditCard,
+  Sparkles,
+  Brain,
+  Flame,
+  Target,
+  TrendingUp,
+  Zap,
+  BadgeCheck
 } from 'lucide-react';
 import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { NexusFocusLogo } from './AuraLogo';
@@ -249,102 +256,203 @@ export function CheckoutScreen() {
       <main className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 relative z-10 my-auto items-stretch">
 
         {/* ================= LEFT CARD: Feature & Value Showcase ================= */}
-        <section className="lg:col-span-7 bg-white/80 backdrop-blur-xl border border-white/90 rounded-[32px] p-6 sm:p-8 lg:p-9 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between">
-          <div>
-            {/* Left Card Header with Logo */}
-            <div className="flex items-center gap-3.5 mb-6">
-              <div className="w-13 h-13 sm:w-14 sm:h-14 bg-white/95 rounded-2xl border border-white shadow-[0_4px_16px_rgba(0,0,0,0.05)] flex items-center justify-center shrink-0">
-                <NexusFocusLogo className="w-8 h-8 sm:w-9 sm:h-9" variant="dark" />
+        <section className="lg:col-span-7 bg-white/85 backdrop-blur-2xl border border-white/90 rounded-[32px] p-6 sm:p-8 lg:p-9 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between relative overflow-hidden">
+          {/* Subtle ambient light glow inside card */}
+          <div className="absolute -top-24 -left-24 w-72 h-72 bg-gradient-to-br from-indigo-500/10 via-amber-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -right-24 w-72 h-72 bg-gradient-to-tl from-emerald-500/10 via-blue-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10">
+            {/* Top Bar: Brand + Pill Badge */}
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white rounded-2xl border border-zinc-200/80 shadow-[0_4px_16px_rgba(0,0,0,0.06)] flex items-center justify-center shrink-0">
+                  <NexusFocusLogo className="w-7 h-7" variant="dark" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black tracking-[0.25em] text-zinc-950 uppercase">
+                      NEXUS FOCUS
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 text-[10px] font-bold tracking-wide">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      PLANO PRO
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-zinc-500 font-medium tracking-wide block">
+                    Sistema Operacional de Alta Performance
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col">
-                <span className="text-xs sm:text-sm font-extrabold tracking-[0.25em] text-zinc-950 uppercase">
-                  NEXUS FOCUS
-                </span>
-                <span className="text-[11px] sm:text-xs text-zinc-500 font-medium tracking-wide">
-                  Sua Rotina mais inteligente
-                </span>
+
+              {/* Tag de Exclusividade */}
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 text-white text-[11px] font-semibold shadow-sm">
+                <Sparkles size={12} className="text-amber-400" />
+                <span>Acesso Ilimitado</span>
               </div>
             </div>
 
-            {/* Split Content: Text & Checklist on Left | Pedestal on Right */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+            {/* Headline Principal */}
+            <div className="mb-6">
+              <h1 className="text-2xl sm:text-3xl lg:text-[32px] font-extrabold text-zinc-950 tracking-tight leading-[1.18] mb-2.5">
+                Domine sua rotina com o poder do{' '}
+                <span className="bg-gradient-to-r from-zinc-950 via-zinc-800 to-zinc-600 bg-clip-text text-transparent underline decoration-amber-400/70 decoration-wavy decoration-1 underline-offset-4">
+                  Hiperfoco & IA
+                </span>
+                .
+              </h1>
+              <p className="text-zinc-600 text-xs sm:text-[13.5px] leading-relaxed max-w-xl">
+                O único ambiente integrado que une gestão de tarefas, disciplina diária, controle financeiro completo e um mentor com inteligência artificial ativo no seu WhatsApp.
+              </p>
+            </div>
 
-              {/* Text & Checklist */}
-              <div className="md:col-span-7 flex flex-col justify-center">
-                <h1 className="text-2xl sm:text-3xl lg:text-[34px] font-extrabold text-zinc-950 tracking-tight leading-[1.15] mb-3">
-                  Eleve seu Foco<br />e Gestão
-                </h1>
-                <p className="text-zinc-600 text-xs sm:text-[13px] leading-relaxed mb-6">
-                  Organize sua vida, cumpra seus objetivos e conquiste mais com a ajuda da inteligência artificial.
+            {/* Bento Grid: 4 Grandes Pilares do Nexus Focus */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5 mb-5">
+              {/* Card 1: Foco & Deep Work */}
+              <div className="p-4 rounded-2xl bg-white/70 hover:bg-white/95 border border-zinc-200/70 hover:border-amber-300/60 transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)] group">
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <Flame size={18} strokeWidth={2.2} />
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/50">
+                    Deep Work
+                  </span>
+                </div>
+                <h2 className="text-sm font-bold text-zinc-900 mb-1 group-hover:text-amber-700 transition-colors">
+                  Modo Hiperfoco & Áudios
+                </h2>
+                <p className="text-xs text-zinc-600 leading-relaxed">
+                  Timeboxing imersivo, bloqueio de distrações e frequências binaurais para fluir nas tarefas críticas.
                 </p>
+              </div>
 
-                {/* 5 Bullet Features */}
-                <div className="space-y-3">
-                  {benefits.map((b, idx) => (
-                    <div key={idx} className="flex items-start gap-2.5">
-                      <div className="w-4 h-4 rounded-full bg-zinc-300/80 flex items-center justify-center text-zinc-800 shrink-0 mt-0.5">
-                        <Check size={11} strokeWidth={3} />
-                      </div>
-                      <span className="text-zinc-700 text-xs sm:text-[13px] font-medium leading-tight">
-                        {b}
-                      </span>
-                    </div>
-                  ))}
+              {/* Card 2: Mentor IA no WhatsApp */}
+              <div className="p-4 rounded-2xl bg-white/70 hover:bg-white/95 border border-zinc-200/70 hover:border-indigo-300/60 transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)] group">
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <Brain size={18} strokeWidth={2.2} />
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200/50">
+                    24/7 Ativo
+                  </span>
+                </div>
+                <h2 className="text-sm font-bold text-zinc-900 mb-1 group-hover:text-indigo-700 transition-colors">
+                  Mentor IA no WhatsApp
+                </h2>
+                <p className="text-xs text-zinc-600 leading-relaxed">
+                  Envie áudios ou textos: sua IA agenda prioridades, registra gastos e orienta suas decisões diárias.
+                </p>
+              </div>
+
+              {/* Card 3: Inteligência Financeira */}
+              <div className="p-4 rounded-2xl bg-white/70 hover:bg-white/95 border border-zinc-200/70 hover:border-emerald-300/60 transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)] group">
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <TrendingUp size={18} strokeWidth={2.2} />
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                    Gestão 360°
+                  </span>
+                </div>
+                <h2 className="text-sm font-bold text-zinc-900 mb-1 group-hover:text-emerald-700 transition-colors">
+                  Finanças & Caixinhas
+                </h2>
+                <p className="text-xs text-zinc-600 leading-relaxed">
+                  Controle orçamentos, metas patrimoniais e gráficos de gastos com análise automática do seu padrão.
+                </p>
+              </div>
+
+              {/* Card 4: Hábitos & Consistência */}
+              <div className="p-4 rounded-2xl bg-white/70 hover:bg-white/95 border border-zinc-200/70 hover:border-blue-300/60 transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)] group">
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <Target size={18} strokeWidth={2.2} />
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/50">
+                    Evolução
+                  </span>
+                </div>
+                <h2 className="text-sm font-bold text-zinc-900 mb-1 group-hover:text-blue-700 transition-colors">
+                  Rotina & Hábitos de Sucesso
+                </h2>
+                <p className="text-xs text-zinc-600 leading-relaxed">
+                  Score de disciplina, relatórios executivos de desempenho e rastreamento contínuo de consistência.
+                </p>
+              </div>
+            </div>
+
+            {/* Social Proof Strip */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-zinc-50/90 via-white to-zinc-50/90 border border-zinc-200/70 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                {/* Overlapping User Avatars */}
+                <div className="flex -space-x-2 shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-400 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
+                    JP
+                  </div>
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
+                    ML
+                  </div>
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-600 to-emerald-400 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
+                    CS
+                  </div>
+                  <div className="w-7 h-7 rounded-full bg-zinc-900 border-2 border-white flex items-center justify-center text-[10px] font-extrabold text-amber-300 shadow-sm">
+                    +12k
+                  </div>
+                </div>
+
+                <div className="text-xs">
+                  <div className="flex items-center gap-1 text-amber-500 mb-0.5">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} size={12} className="fill-amber-400 text-amber-400" />
+                    ))}
+                    <span className="font-extrabold text-zinc-900 text-xs ml-1">4.9/5</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 font-medium">
+                    Aprovado por mais de 12.000 profissionais e líderes
+                  </p>
                 </div>
               </div>
 
-              {/* Pedestal Graphic & Motto */}
-              <div className="md:col-span-5 flex flex-col items-center justify-center text-center mt-4 md:mt-0">
-                <div className="relative w-full max-w-[240px] sm:max-w-[260px] flex items-center justify-center">
-                  <img
-                    src="/checkout-pedestal.png"
-                    alt="Nexus Focus - Mais foco, controle e resultados"
-                    className="w-full object-contain drop-shadow-sm select-none pointer-events-none"
-                  />
-                </div>
-                <div className="mt-3">
-                  <p className="text-zinc-500 text-[10px] sm:text-[11px] font-bold tracking-[0.25em] uppercase leading-relaxed">
-                    DISCIPLINA HOJE.<br />LIBERDADE SEMPRE.
-                  </p>
-                </div>
+              <div className="hidden md:flex items-center gap-1.5 text-[11px] text-zinc-500 font-medium bg-white px-2.5 py-1 rounded-lg border border-zinc-200/60 shrink-0">
+                <CheckCircle2 size={13} className="text-emerald-500" />
+                <span>Atualizado semanalmente</span>
               </div>
             </div>
           </div>
 
-          {/* Bottom Trust Metrics Row */}
-          <div className="border-t border-zinc-200/80 pt-6 mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-zinc-100/80 text-zinc-800 shrink-0">
-                <Shield size={18} strokeWidth={1.75} />
+          {/* Bottom Trust & Guarantee Row */}
+          <div className="border-t border-zinc-200/80 pt-5 mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4 relative z-10">
+            <div className="flex items-start gap-2.5">
+              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 shrink-0">
+                <ShieldCheck size={16} strokeWidth={2.2} />
               </div>
               <div>
-                <strong className="block text-xs font-bold text-zinc-900">100% seguro</strong>
-                <span className="text-[11px] text-zinc-500 leading-tight block">
-                  Seus dados protegidos com criptografia de ponta.
+                <strong className="block text-xs font-bold text-zinc-900">7 Dias de Garantia</strong>
+                <span className="text-[11px] text-zinc-500 leading-snug block">
+                  Risco zero: devolução integral sem perguntas.
                 </span>
               </div>
             </div>
 
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-zinc-100/80 text-zinc-800 shrink-0">
-                <Users size={18} strokeWidth={1.75} />
+            <div className="flex items-start gap-2.5">
+              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-700 border border-blue-500/20 shrink-0">
+                <Lock size={16} strokeWidth={2.2} />
               </div>
               <div>
-                <strong className="block text-xs font-bold text-zinc-900">+10 mil usuários</strong>
-                <span className="text-[11px] text-zinc-500 leading-tight block">
-                  Mais foco, organização e resultados todos os dias.
+                <strong className="block text-xs font-bold text-zinc-900">Segurança Bancária</strong>
+                <span className="text-[11px] text-zinc-500 leading-snug block">
+                  Criptografia 256-bit processada pelo Mercado Pago.
                 </span>
               </div>
             </div>
 
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-zinc-100/80 text-zinc-800 shrink-0">
-                <Star size={18} strokeWidth={1.75} />
+            <div className="flex items-start gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-700 border border-amber-500/20 shrink-0">
+                <Zap size={16} strokeWidth={2.2} />
               </div>
               <div>
-                <strong className="block text-xs font-bold text-zinc-900">4,9 de 5</strong>
-                <span className="text-[11px] text-zinc-500 leading-tight block">
-                  Usuários recomendam o Nexus Focus.
+                <strong className="block text-xs font-bold text-zinc-900">Ativação Imediata</strong>
+                <span className="text-[11px] text-zinc-500 leading-snug block">
+                  Acesso liberado no mesmo segundo da confirmação.
                 </span>
               </div>
             </div>
