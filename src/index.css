@@ -105,12 +105,56 @@ body.dark {
 
 .mercado-pago-brick-container [class*="form-container"],
 .mercado-pago-brick-container [class*="brick-container"],
-.mercado-pago-brick-container [class*="svelte-"],
-.mercado-pago-brick-container .mp-form-container {
+.mercado-pago-brick-container .mp-form-container,
+.mercado-pago-brick-container form {
   background: transparent !important;
   background-color: transparent !important;
   box-shadow: none !important;
   border: none !important;
+}
+
+/* Botão Oficial de Confirmar Pagamento do Mercado Pago - Destacado e Nítido */
+.mercado-pago-brick-container button[type="submit"],
+.mercado-pago-brick-container .mp-button,
+.mercado-pago-brick-container [class*="button"]:not([class*="back"]):not([class*="close"]),
+.mercado-pago-brick-container [class*="submit"],
+.mercado-pago-brick-container .svelte-1q1g787 button {
+  background-color: #18181b !important;
+  background: #18181b !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 15px !important;
+  border-radius: 14px !important;
+  min-height: 48px !important;
+  padding: 12px 20px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18) !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  opacity: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  margin-top: 1rem !important;
+}
+
+.mercado-pago-brick-container button[type="submit"]:hover,
+.mercado-pago-brick-container .mp-button:hover {
+  background-color: #27272a !important;
+  background: #27272a !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important;
+  transform: translateY(-1px);
+}
+
+.mercado-pago-brick-container button[type="submit"]:disabled,
+.mercado-pago-brick-container .mp-button:disabled {
+  background-color: #52525b !important;
+  background: #52525b !important;
+  color: #f4f4f5 !important;
+  opacity: 0.85 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
 }
 
 

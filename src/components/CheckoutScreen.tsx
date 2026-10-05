@@ -21,7 +21,6 @@ import {
 import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { NexusFocusLogo } from './AuraLogo';
 import { getApiUrl } from '../lib/api';
-import { createStripeCheckoutSession } from '../lib/stripe';
 
 // Chave pública oficial de produção da aplicação Nexus Focus no Mercado Pago (App ID: 1713752160212036)
 const PROD_MP_PUBLIC_KEY = 'APP_USR-e42fc2b0-97b3-4aaa-b0f7-60b94d19825b';
@@ -62,7 +61,6 @@ export function CheckoutScreen() {
   const [couponCode, setCouponCode] = useState('');
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponError, setCouponError] = useState('');
-  const [isStripeLoading, setIsStripeLoading] = useState(false);
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
   const hasAccess = isPremium || isWhitelistedPro(userEmail);
@@ -116,6 +114,9 @@ export function CheckoutScreen() {
           borderRadius: '14px',
         },
       },
+      texts: {
+        formSubmit: 'Confirmar Pagamento',
+      },
     },
   };
 
@@ -133,26 +134,6 @@ export function CheckoutScreen() {
     setErrorMessage('');
     setIsBrickReady(false);
     setBrickError(null);
-  };
-
-  const handleStripeCheckout = async () => {
-    try {
-      setIsStripeLoading(true);
-      setErrorMessage('');
-      const res = await createStripeCheckoutSession({
-        userId: currentUser?.uid || '',
-        email: userEmail
-      });
-      if (res.success && res.url) {
-        window.location.href = res.url;
-      } else {
-        setErrorMessage(res.error || 'Não foi possível iniciar o checkout Stripe no momento.');
-      }
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Erro ao conectar ao Stripe.');
-    } finally {
-      setIsStripeLoading(false);
-    }
   };
 
   const onSubmit = async (param: any) => {
@@ -647,44 +628,20 @@ export function CheckoutScreen() {
                     <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
                     <div className="flex-1">
                       <p className="font-semibold">{brickError}</p>
-                      <p className="mt-0.5 text-[11px] opacity-90">Você pode tentar recarregar o formulário ou optar pelo pagamento seguro via Stripe.</p>
-                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setBrickError(null);
-                            setIsBrickReady(false);
-                          }}
-                          className="text-xs font-bold text-amber-900 dark:text-amber-200 underline cursor-pointer mr-2"
-                        >
-                          Recarregar formulário
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleStripeCheckout}
-                          disabled={isStripeLoading}
-                          className="text-xs font-bold text-white bg-zinc-900 hover:bg-zinc-800 px-3 py-1.5 rounded-lg shadow-sm cursor-pointer flex items-center gap-1.5"
-                        >
-                          {isStripeLoading ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />}
-                          <span>Pagar com Stripe</span>
-                        </button>
-                      </div>
+                      <p className="mt-0.5 text-[11px] opacity-90">Verifique os dados informados ou tente recarregar o formulário.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBrickError(null);
+                          setIsBrickReady(false);
+                        }}
+                        className="mt-2 text-xs font-bold text-amber-900 dark:text-amber-200 underline cursor-pointer"
+                      >
+                        Recarregar formulário
+                      </button>
                     </div>
                   </div>
                 )}
-
-                {/* Opção alternativa de pagamento direto */}
-                <div className="mt-3 pt-3 border-t border-zinc-200/60 dark:border-zinc-800/60 text-center">
-                  <button
-                    type="button"
-                    onClick={handleStripeCheckout}
-                    disabled={isStripeLoading}
-                    className="text-[11px] text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors inline-flex items-center gap-1.5 cursor-pointer underline"
-                  >
-                    {isStripeLoading && <Loader2 size={11} className="animate-spin" />}
-                    <span>Prefere pagar via Stripe Checkout? Clique aqui</span>
-                  </button>
-                </div>
               </div>
 
               {loading && (
