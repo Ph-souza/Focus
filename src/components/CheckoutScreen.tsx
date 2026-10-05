@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigate, Link } from 'react-router-dom';
-import { initMercadoPago, Payment, CardPayment } from '@mercadopago/sdk-react';
+import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
 import {
   Shield,
   ShieldCheck,
@@ -15,26 +15,38 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
-  Loader2
+  Loader2,
+  CreditCard
 } from 'lucide-react';
 import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { NexusFocusLogo } from './AuraLogo';
 import { getApiUrl } from '../lib/api';
+import { createStripeCheckoutSession } from '../lib/stripe';
 
-// Varredura e reaproveitamento de chaves públicas configuradas do Mercado Pago
-const MP_PUBLIC_KEY =
+// Chave pública oficial de produção da aplicação Nexus Focus no Mercado Pago (App ID: 1713752160212036)
+const PROD_MP_PUBLIC_KEY = 'APP_USR-e42fc2b0-97b3-4aaa-b0f7-60b94d19825b';
+
+const rawKey = (
   (import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY as string) ||
   (import.meta.env.NEXT_PUBLIC_MP_PUBLIC_KEY as string) ||
   (import.meta.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY as string) ||
   (import.meta.env.VITE_MP_PUBLIC_KEY as string) ||
   (import.meta.env.MP_PUBLIC_KEY as string) ||
-  '';
+  ''
+).trim();
 
-// Inicializa o SDK do Mercado Pago com a chave pública existente
-if (MP_PUBLIC_KEY) {
-  initMercadoPago(MP_PUBLIC_KEY, {
-    locale: 'pt-BR'
-  });
+// Garante que chaves fictícias não quebrem a inicialização em produção
+export const MP_PUBLIC_KEY = (rawKey && !rawKey.includes('your-public-key')) ? rawKey : PROD_MP_PUBLIC_KEY;
+
+// Inicializa o SDK do Mercado Pago
+if (typeof window !== 'undefined' && MP_PUBLIC_KEY) {
+  try {
+    initMercadoPago(MP_PUBLIC_KEY, {
+      locale: 'pt-BR'
+    });
+  } catch (e) {
+    console.warn('[Mercado Pago SDK] Inicialização inicial:', e);
+  }
 }
 
 export function CheckoutScreen() {
@@ -50,23 +62,49 @@ export function CheckoutScreen() {
   const [couponCode, setCouponCode] = useState('');
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponError, setCouponError] = useState('');
+  const [isStripeLoading, setIsStripeLoading] = useState(false);
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
   const hasAccess = isPremium || isWhitelistedPro(userEmail);
+
+  // Garante que o SDK esteja devidamente configurado ao montar a tela
+  useEffect(() => {
+    if (MP_PUBLIC_KEY) {
+      try {
+        initMercadoPago(MP_PUBLIC_KEY, { locale: 'pt-BR' });
+      } catch (err) {
+        console.warn('[Mercado Pago SDK] Erro ao carregar SDK no componente:', err);
+      }
+    }
+  }, []);
+
+  // Timeout preventivo: se o script do Mercado Pago for bloqueado por adblocker ou demorar na rede
+  useEffect(() => {
+    let timer: any;
+    if (isFlipped && !isBrickReady && !brickError) {
+      timer = setTimeout(() => {
+        if (!isBrickReady) {
+          setBrickError('O formulário do Mercado Pago está demorando para responder.');
+        }
+      }, 8500);
+    }
+    return () => clearTimeout(timer);
+  }, [isFlipped, isBrickReady, brickError]);
 
   // Redirecionamento automático se já for Pro
   if (hasAccess) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const initialization = {
-    amount: couponApplied ? 14.90 : 19.90, // Valor da mensalidade Pro atualizado para R$ 19,90
+  const cardInitialization = {
+    amount: couponApplied ? 14.90 : 19.90, // Valor da mensalidade Pro (R$ 19,90 ou R$ 14,90 com cupom)
+    payer: {
+      email: userEmail || currentUser?.email || undefined
+    }
   };
 
-  const customization = {
+  const cardCustomization = {
     paymentMethods: {
-      creditCard: 'all' as const,
-      debitCard: 'all' as const,
       maxInstallments: 1,
     },
     visual: {
@@ -75,20 +113,13 @@ export function CheckoutScreen() {
         theme: 'default' as const,
         customVariables: {
           baseColor: '#18181b',
-          formBackgroundColor: 'transparent',
-          formPadding: '0px',
-          inputBackgroundColor: '#ffffff',
-          inputBorderColor: '#e4e4e7',
-          inputFocusedBorderColor: '#18181b',
           borderRadius: '14px',
         },
       },
     },
   };
 
-  // Fluxo de Pagamento Interno (Swipe Card):
-  // Dispara o avanço nativo da interface para o card deslizante de preenchimento dos dados do cartão,
-  // sem qualquer redirecionamento externo ou window.location.href.
+  // Fluxo de Pagamento Interno (Swipe Card)
   const handleCheckout = () => {
     setErrorMessage('');
     setIsBrickReady(false);
@@ -104,25 +135,51 @@ export function CheckoutScreen() {
     setBrickError(null);
   };
 
+  const handleStripeCheckout = async () => {
+    try {
+      setIsStripeLoading(true);
+      setErrorMessage('');
+      const res = await createStripeCheckoutSession({
+        userId: currentUser?.uid || '',
+        email: userEmail
+      });
+      if (res.success && res.url) {
+        window.location.href = res.url;
+      } else {
+        setErrorMessage(res.error || 'Não foi possível iniciar o checkout Stripe no momento.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Erro ao conectar ao Stripe.');
+    } finally {
+      setIsStripeLoading(false);
+    }
+  };
+
   const onSubmit = async (param: any) => {
     setLoading(true);
     setErrorMessage('');
     try {
-      const formData = param?.formData || param;
+      const formData = param?.formData || param || {};
+      const cardToken = formData.token || param?.token;
+
+      if (!cardToken) {
+        throw new Error('Não foi possível gerar o token do cartão. Revise os dados digitados.');
+      }
+
       const response = await fetch(getApiUrl('/api/subscriptions'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          token: formData.token,
-          email: currentUser?.email || userEmail,
+          token: cardToken,
+          email: currentUser?.email || userEmail || formData?.payer?.email,
           userId: currentUser?.uid,
           paymentMethodId: formData.payment_method_id || formData.paymentMethodId,
           issuerId: formData.issuer_id || formData.issuerId,
           installments: formData.installments || 1,
           coupon: couponApplied ? couponCode : undefined,
-          amount: couponApplied ? 14.90 : 19.90, // R$ 19,90 mensal
+          amount: couponApplied ? 14.90 : 19.90,
         }),
       });
 
@@ -138,6 +195,7 @@ export function CheckoutScreen() {
     } catch (err: any) {
       console.error('Erro no pagamento:', err);
       setErrorMessage(err.message || 'Falha ao autorizar o pagamento. Verifique os dados do cartão.');
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -566,11 +624,11 @@ export function CheckoutScreen() {
                   </div>
                 )}
 
-                {/* Componente Payment do SDK React do Mercado Pago */}
+                {/* Componente CardPayment do SDK React do Mercado Pago */}
                 <div className={!isBrickReady ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100 transition-opacity duration-300'}>
-                  <Payment
-                    initialization={initialization}
-                    customization={customization}
+                  <CardPayment
+                    initialization={cardInitialization}
+                    customization={cardCustomization}
                     onSubmit={onSubmit}
                     onReady={() => {
                       setIsBrickReady(true);
@@ -578,7 +636,7 @@ export function CheckoutScreen() {
                     }}
                     onError={(error: any) => {
                       console.error('Erro no formulário de pagamento Mercado Pago:', error);
-                      setBrickError('Falha ao inicializar o conector do Mercado Pago.');
+                      setBrickError('Não foi possível carregar os campos do cartão no momento.');
                       setIsBrickReady(true);
                     }}
                   />
@@ -589,20 +647,44 @@ export function CheckoutScreen() {
                     <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
                     <div className="flex-1">
                       <p className="font-semibold">{brickError}</p>
-                      <p className="mt-0.5 text-[11px] opacity-90">Verifique as chaves configuradas ou tente novamente.</p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setBrickError(null);
-                          setIsBrickReady(false);
-                        }}
-                        className="mt-2 text-xs font-bold text-amber-900 dark:text-amber-200 underline cursor-pointer"
-                      >
-                        Recarregar formulário
-                      </button>
+                      <p className="mt-0.5 text-[11px] opacity-90">Você pode tentar recarregar o formulário ou optar pelo pagamento seguro via Stripe.</p>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBrickError(null);
+                            setIsBrickReady(false);
+                          }}
+                          className="text-xs font-bold text-amber-900 dark:text-amber-200 underline cursor-pointer mr-2"
+                        >
+                          Recarregar formulário
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleStripeCheckout}
+                          disabled={isStripeLoading}
+                          className="text-xs font-bold text-white bg-zinc-900 hover:bg-zinc-800 px-3 py-1.5 rounded-lg shadow-sm cursor-pointer flex items-center gap-1.5"
+                        >
+                          {isStripeLoading ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />}
+                          <span>Pagar com Stripe</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
+
+                {/* Opção alternativa de pagamento direto */}
+                <div className="mt-3 pt-3 border-t border-zinc-200/60 dark:border-zinc-800/60 text-center">
+                  <button
+                    type="button"
+                    onClick={handleStripeCheckout}
+                    disabled={isStripeLoading}
+                    className="text-[11px] text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors inline-flex items-center gap-1.5 cursor-pointer underline"
+                  >
+                    {isStripeLoading && <Loader2 size={11} className="animate-spin" />}
+                    <span>Prefere pagar via Stripe Checkout? Clique aqui</span>
+                  </button>
+                </div>
               </div>
 
               {loading && (

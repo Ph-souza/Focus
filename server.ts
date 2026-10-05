@@ -798,8 +798,16 @@ async function startServer() {
             params.append("customer_email", userEmail);
           }
           params.append("metadata[userId]", userId);
+          params.append("metadata[plan]", "pro_unlimited");
+          params.append("metadata[planId]", "pro_unlimited");
           if (userEmail) {
             params.append("metadata[email]", userEmail);
+          }
+          params.append("subscription_data[metadata][userId]", userId);
+          params.append("subscription_data[metadata][plan]", "pro_unlimited");
+          params.append("subscription_data[metadata][planId]", "pro_unlimited");
+          if (userEmail) {
+            params.append("subscription_data[metadata][email]", userEmail);
           }
           params.append("success_url", `${appUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}`);
           params.append("cancel_url", `${appUrl}/homepage`);
@@ -867,7 +875,7 @@ async function startServer() {
     }
   });
 
-  // Webhook Stripe com validação de assinatura criptográfica e deduplicação por event.id (QA-03)
+  // Webhook Stripe com validação de assinatura criptográfica, idempotência estrita e validação de payload (QA-03)
   app.post("/api/webhooks/stripe", async (req, res) => {
     const sig = req.headers["stripe-signature"] as string | undefined;
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
@@ -893,46 +901,131 @@ async function startServer() {
     }
 
     const eventId = event.id;
+    const eventType = event.type;
+    const dataObj = (event.data?.object as any) || {};
 
-    // Deduplicação por event.id (QA-03):
-    // 1. Checagem em memória
+    console.log(`[Stripe Webhook] Evento recebido e autenticado: ${eventType} (ID: ${eventId})`);
+
+    // 1. Checagem de deduplicação prévia em memória
     if (processedStripeEvents.has(eventId)) {
-      console.log(`[Stripe Webhook] Evento ${eventId} já processado anteriormente (in-memory). Ignorando duplicação.`);
+      console.log(`[Stripe Webhook] Evento ${eventId} já processado anteriormente com sucesso (in-memory). Retornando 200 deduplicado.`);
       return res.status(200).json({ received: true, deduplicated: true });
     }
 
-    // 2. Checagem e registro persistente no Firestore
+    // 2. Checagem de deduplicação prévia no Firestore
+    const eventDocRef = adminDb.collection("processed_events").doc(eventId);
     try {
-      const eventDocRef = adminDb.collection("processed_events").doc(eventId);
       const eventSnap = await eventDocRef.get();
-      if (eventSnap.exists) {
+      if (eventSnap.exists && eventSnap.data()?.status === "completed") {
         processedStripeEvents.add(eventId);
-        console.log(`[Stripe Webhook] Evento ${eventId} já registrado no Firestore. Ignorando duplicação.`);
+        console.log(`[Stripe Webhook] Evento ${eventId} já registrado com status completed no Firestore. Retornando 200 deduplicado.`);
         return res.status(200).json({ received: true, deduplicated: true });
       }
-
-      await eventDocRef.set({
-        eventId,
-        type: event.type,
-        processedAt: FieldValue.serverTimestamp()
-      });
-      processedStripeEvents.add(eventId);
-    } catch (dedupErr: any) {
-      console.warn(`[Stripe Webhook] Aviso ao persistir deduplicação para o evento ${eventId}:`, dedupErr?.message);
+    } catch (checkErr: any) {
+      console.warn(`[Stripe Webhook] Aviso ao consultar deduplicação para o evento ${eventId}:`, checkErr?.message);
     }
-
-    const eventType = event.type;
-    const dataObj = event.data?.object as any || {};
-
-    console.log(`[Stripe Webhook] Evento validado com sucesso: ${eventType} (ID: ${eventId})`);
 
     try {
       if (eventType === "checkout.session.completed" || eventType === "invoice.payment_succeeded") {
+        // Ação 2: Validação de Payload
+        // 1. Validação estrita de payment_status === 'paid' (ou status === 'paid' / paid === true em faturas)
+        const isPaid = eventType === "checkout.session.completed"
+          ? dataObj.payment_status === "paid"
+          : (dataObj.status === "paid" || dataObj.paid === true || dataObj.payment_status === "paid");
+
+        if (!isPaid) {
+          console.warn(`⚠️ [Stripe Webhook] Evento ${eventType} (${eventId}) ignorado: payment_status '${dataObj.payment_status}' ou status '${dataObj.status}' não é 'paid'. Plano Premium NÃO será ativado.`);
+          await eventDocRef.set({
+            eventId,
+            type: eventType,
+            status: "skipped_unpaid",
+            paymentStatus: dataObj.payment_status || dataObj.status || null,
+            processedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          processedStripeEvents.add(eventId);
+          return res.status(200).json({ received: true, eventId, skipped: true, reason: "payment_status_not_paid" });
+        }
+
+        // 2. Validação estrita se o ID do produto ou preço corresponde ao plano correto
+        const expectedPriceId = process.env.STRIPE_PRICE_ID?.trim();
+        const expectedProductId = process.env.STRIPE_PRODUCT_ID?.trim();
+
+        const metadataPlan = (
+          dataObj.metadata?.plan ||
+          dataObj.metadata?.planId ||
+          dataObj.subscription_data?.metadata?.plan ||
+          dataObj.subscription_details?.metadata?.plan ||
+          ""
+        ).toLowerCase().trim();
+
+        // Obter line items da sessão ou da invoice
+        let lineItems: any[] = [];
+        if (Array.isArray(dataObj.line_items?.data) && dataObj.line_items.data.length > 0) {
+          lineItems = dataObj.line_items.data;
+        } else if (Array.isArray(dataObj.lines?.data) && dataObj.lines.data.length > 0) {
+          lineItems = dataObj.lines.data;
+        } else if (eventType === "checkout.session.completed" && dataObj.id && process.env.STRIPE_SECRET_KEY) {
+          try {
+            const listRes = await stripeClient.checkout.sessions.listLineItems(dataObj.id, { limit: 10 });
+            lineItems = listRes.data || [];
+          } catch (lineErr: any) {
+            console.warn(`[Stripe Webhook] Aviso ao buscar line_items da sessão ${dataObj.id}:`, lineErr?.message);
+          }
+        }
+
+        const linePriceIds: string[] = lineItems
+          .map((item: any) => item.price?.id)
+          .filter(Boolean);
+
+        const lineProductIds: string[] = lineItems
+          .map((item: any) => {
+            const prod = item.price?.product;
+            return typeof prod === "string" ? prod : prod?.id;
+          })
+          .filter(Boolean);
+
+        const lineDescriptions: string[] = lineItems
+          .map((item: any) => (item.description || item.price?.product_data?.name || "").toLowerCase());
+
+        let isPlanValid = false;
+
+        if (expectedPriceId && linePriceIds.includes(expectedPriceId)) {
+          isPlanValid = true;
+        } else if (expectedProductId && lineProductIds.includes(expectedProductId)) {
+          isPlanValid = true;
+        } else if (metadataPlan === "pro_unlimited" || metadataPlan === "pro" || metadataPlan === "nexus_focus_pro") {
+          isPlanValid = true;
+        } else if (!expectedPriceId && !expectedProductId) {
+          // Se não há IDs explícitos nas envs, aceita pelo nome/descrição do item ou metadata
+          const hasMatchingDescription = lineDescriptions.some((desc: string) =>
+            desc.includes("nexus focus pro") || desc.includes("focus pro") || desc.includes("pro - mensal")
+          );
+          if (hasMatchingDescription || metadataPlan.includes("pro")) {
+            isPlanValid = true;
+          }
+        }
+
+        if (!isPlanValid) {
+          console.warn(`⚠️ [Stripe Webhook] Produto/Preço rejeitado no evento ${eventId}. Não corresponde ao plano correto (PriceIds: [${linePriceIds.join(", ")}], ProductIds: [${lineProductIds.join(", ")}], metadataPlan: "${metadataPlan}").`);
+          await eventDocRef.set({
+            eventId,
+            type: eventType,
+            status: "skipped_invalid_product",
+            linePriceIds,
+            lineProductIds,
+            metadataPlan,
+            processedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          processedStripeEvents.add(eventId);
+          return res.status(200).json({ received: true, eventId, skipped: true, reason: "invalid_product_or_plan" });
+        }
+
+        // Validações concluídas com sucesso. Gravação dos dados no Firestore.
         const userId = dataObj.client_reference_id || dataObj.metadata?.userId;
         const email = (dataObj.customer_details?.email || dataObj.customer_email || dataObj.metadata?.email || "").trim().toLowerCase();
         const subscriptionId = dataObj.subscription || dataObj.id;
 
-        console.log(`[Stripe Webhook] Pagamento aprovado para userId: ${userId}, email: ${email}`);
+        console.log(`[Stripe Webhook] Validações aprovadas. Ativando Premium para userId: ${userId}, email: ${email}`);
 
         // 1. Atualizar users/{userId} no Firestore
         if (userId) {
@@ -945,7 +1038,7 @@ async function startServer() {
             stripeCustomerId: dataObj.customer || null,
             updatedAt: FieldValue.serverTimestamp()
           }, { merge: true });
-          console.log(`[Stripe Webhook] Documento users/${userId} atualizado com isPremium: true`);
+          console.log(`[Stripe Webhook] Documento users/${userId} atualizado com isPremium: true com sucesso.`);
         }
 
         // 2. Atualizar users/{email}
@@ -959,13 +1052,49 @@ async function startServer() {
             stripeSubscriptionId: subscriptionId,
             updatedAt: FieldValue.serverTimestamp()
           }, { merge: true });
+          console.log(`[Stripe Webhook] Documento users/${email} atualizado com isPremium: true com sucesso.`);
         }
-      }
 
-      return res.status(200).json({ received: true, eventId });
+        // 3. Registrar o evento como concluído com sucesso no Firestore
+        // ATENÇÃO: Esta escrita ocorre APENAS após o sucesso de gravação dos dados do usuário
+        await eventDocRef.set({
+          eventId,
+          type: eventType,
+          status: "completed",
+          userId: userId || null,
+          email: email || null,
+          paymentStatus: dataObj.payment_status || dataObj.status || "paid",
+          processedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // Adiciona no cache em memória apenas após a persistência no banco
+        processedStripeEvents.add(eventId);
+
+        // Ação 1: Retorno 200 no FINAL do bloco de execução, apenas após o sucesso da gravação no Firestore
+        console.log(`[Stripe Webhook] Evento ${eventId} processado e gravado no Firestore com sucesso. Retornando status 200.`);
+        return res.status(200).json({ received: true, eventId, status: "completed" });
+      } else {
+        // Outros eventos que não requerem ativação de conta (ex: customer.created, etc.)
+        console.log(`[Stripe Webhook] Evento ${eventType} recebido sem necessidade de ativação de conta.`);
+        await eventDocRef.set({
+          eventId,
+          type: eventType,
+          status: "ignored_event_type",
+          processedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        processedStripeEvents.add(eventId);
+        return res.status(200).json({ received: true, eventId, ignored: true });
+      }
     } catch (processErr: any) {
-      console.error("[Stripe Webhook] Erro ao processar payload do evento:", processErr);
-      return res.status(500).json({ error: "Failed to process stripe event", details: processErr?.message });
+      // Se a base de dados falhar (ou qualquer operação no processamento),
+      // o webhook NÃO deve devolver 200, permitindo que o Stripe tente novamente.
+      console.error(`❌ [Stripe Webhook] Erro crítico na base de dados/processamento para o evento ${eventId}:`, processErr);
+      // Remove do cache em memória para que o retry do Stripe não seja bloqueado
+      processedStripeEvents.delete(eventId);
+      return res.status(500).json({
+        error: "Failed to process stripe event and persist to database",
+        details: processErr?.message
+      });
     }
   });
 
