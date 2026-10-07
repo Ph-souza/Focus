@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Transaction, User, Goal } from '../types';
+import { Transaction, TransactionType, User, Goal } from '../types';
 import { db } from '../lib/firebase';
 import { collection, doc, writeBatch, increment, serverTimestamp, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { startOfMonth, endOfMonth, format } from 'date-fns';

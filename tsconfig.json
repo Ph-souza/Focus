@@ -17,13 +17,15 @@
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
+    "resolveJsonModule": true,
     "types": ["vite/client", "vite-plugin-pwa/client"],
     "paths": {
       "@/*": [
         "./*"
       ]
     },
+    "noEmit": true,
     "outDir": "dist"
   },
-  "include": ["server.ts"]
+  "include": ["src", "server.ts"]
 }

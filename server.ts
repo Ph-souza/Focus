@@ -576,7 +576,7 @@ async function startServer() {
       // 4. Extrair o e-mail do cliente (payer.email)
       const rawEmail = paymentData.payer?.email || paymentData.external_reference || paymentData.metadata?.email;
       if (!rawEmail || typeof rawEmail !== "string") {
-        console.error(`[Webhook MP] Pagamento ${paymentId} aprovado, porém sem e-mail do comprador!`, paymentData.payer);
+        console.error(`[Webhook MP] Pagamento ${paymentId} aprovado, porém sem e-mail do comprador!`);
         return;
       }
 
@@ -701,7 +701,7 @@ async function startServer() {
         }
       }
 
-      console.log("[Assinaturas MP] Resposta da criação no MP:", subscriptionResult);
+      console.log(`[Assinaturas MP] Resposta da criação no MP ID: ${subscriptionResult?.id}, Status: ${subscriptionResult?.status}`);
 
       const subscriptionId = subscriptionResult?.id;
       const status = subscriptionResult?.status; // 'authorized', 'pending', etc.

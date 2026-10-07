@@ -8,6 +8,7 @@ export interface Transaction {
   date: string;
   category?: string;
   metaId?: string; // Vincula a transação a uma meta específica
+  description?: string;
 }
 
 export type Transacao = Transaction;
@@ -65,6 +66,8 @@ export interface AppNotification {
   title: string;
   message: string;
   type: 'success' | 'warning' | 'info';
+  read?: boolean;
+  date?: string;
 }
 
 export interface User {

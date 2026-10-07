@@ -11,6 +11,9 @@ interface WhatsAppModalProps {
   user: User | null;
 }
 
+export const WHATSAPP_BOT_NUMBER = (import.meta.env.VITE_WHATSAPP_BOT_PHONE as string)?.replace(/\D/g, '') || '15553757186';
+export const WHATSAPP_BOT_DISPLAY = '+1 (555) 375-7186';
+
 export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
   const [phoneNumber, setPhoneNumber] = useState<string>(() => {
     return localStorage.getItem('nexus_whatsapp_number') || '';
@@ -41,7 +44,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
     fetchUserPhone();
   }, [isOpen, user?.id]);
 
-  // Formatação automática do telefone (+55 (XX) XXXXX-XXXX)
+  // Formatação automática do telefone (+55 BR ou +1 EUA)
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value;
     
@@ -54,9 +57,22 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
     // Apenas dígitos
     const digits = val.replace(/\D/g, '');
 
-    // Aplicar máscara brasileira se tiver 10 ou 11 dígitos (com ou sem DDI 55)
+    // Formatação internacional (+1 EUA/Canadá ou +55 Brasil)
     let formatted = val;
-    if (digits.length <= 11) {
+    if (val.startsWith('+1') || (digits.length === 11 && digits.startsWith('1'))) {
+      const area = digits.slice(1, 4);
+      const part1 = digits.slice(4, 7);
+      const part2 = digits.slice(7, 11);
+      if (digits.length <= 1) {
+        formatted = '+1';
+      } else if (digits.length <= 4) {
+        formatted = `+1 (${area}`;
+      } else if (digits.length <= 7) {
+        formatted = `+1 (${area}) ${part1}`;
+      } else {
+        formatted = `+1 (${area}) ${part1}-${part2}`;
+      }
+    } else if (digits.length <= 11) {
       if (digits.length <= 2) {
         formatted = `(${digits}`;
       } else if (digits.length <= 7) {
@@ -84,10 +100,12 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
 
     try {
       const cleanDigits = phoneNumber.replace(/\D/g, '');
-      // Padronizar número com 55 se o usuário digitou apenas DDD + número (ex: 3197568153 -> 553197568153)
-      const standardizedNumber = cleanDigits.startsWith('55') 
-        ? cleanDigits 
-        : `55${cleanDigits}`;
+      let standardizedNumber = cleanDigits;
+      if (cleanDigits.startsWith('1') && cleanDigits.length === 11) {
+        standardizedNumber = cleanDigits;
+      } else if (!cleanDigits.startsWith('55') && cleanDigits.length <= 11) {
+        standardizedNumber = `55${cleanDigits}`;
+      }
 
       // a) A vinculação do WhatsApp no Firestore é realizada exclusivamente pelo Admin SDK via handshake (QA security).
       // Salvar no localStorage local para rapidez e consistência visual da interface
@@ -96,7 +114,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
       setIsSuccess(true);
 
       // b) Redirecionamento imediato para a API oficial do WhatsApp
-      const botPhone = '553197568153';
+      const botPhone = WHATSAPP_BOT_NUMBER;
       const welcomeText = encodeURIComponent('Olá! Quero ativar o Mentor Focus');
       const waUrl = `https://wa.me/${botPhone}?text=${welcomeText}`;
 
@@ -111,7 +129,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
     } catch (error) {
       console.error('Erro ao salvar número do WhatsApp no Firestore:', error);
       // Mesmo com erro de gravação, abrir o WhatsApp para não bloquear o utilizador
-      const botPhone = '553197568153';
+      const botPhone = WHATSAPP_BOT_NUMBER;
       const welcomeText = encodeURIComponent('Olá! Quero ativar o Mentor Focus');
       window.open(`https://wa.me/${botPhone}?text=${welcomeText}`, '_blank', 'noopener,noreferrer');
       setIsLoading(false);
@@ -153,6 +171,10 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Lance gastos, tarefas e receba insights por áudio ou texto.
             </p>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold mt-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Número Oficial: {WHATSAPP_BOT_DISPLAY}</span>
+            </div>
           </div>
         </div>
 
@@ -180,7 +202,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
                 required
                 value={phoneNumber}
                 onChange={handlePhoneChange}
-                placeholder="+55 (11) 99999-9999"
+                placeholder="+1 (555) 375-7186 ou +55 (11) 99999-9999"
                 className="w-full pl-10 pr-3 py-3 text-sm font-semibold rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#25D366]/50 transition-all tracking-wide"
               />
             </div>

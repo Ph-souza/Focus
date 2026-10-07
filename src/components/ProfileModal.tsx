@@ -41,12 +41,6 @@ export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, 
     
     try {
       const cleanDate = (dateOfBirth || '').trim();
-      console.log('[ProfileModal] Salvando perfil:', {
-        userId: user.id,
-        name: name.trim(),
-        email: user.email,
-        dateOfBirth: cleanDate
-      });
 
       // Validação de formato da data caso preenchida (YYYY-MM-DD)
       if (cleanDate && !/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {

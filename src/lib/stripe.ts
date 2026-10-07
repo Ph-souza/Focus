@@ -34,7 +34,7 @@ export async function createStripeCheckoutSession({
     const data = await response.json();
 
     if (!response.ok || !data.success) {
-      console.warn('API Stripe retornou resposta não sucedida, aplicando fallback gracioso:', data);
+      console.warn('API Stripe retornou resposta não sucedida, aplicando fallback gracioso:', data?.error);
       return {
         success: false,
         url: `/checkout?userId=${encodeURIComponent(userId)}&intent=checkout`,

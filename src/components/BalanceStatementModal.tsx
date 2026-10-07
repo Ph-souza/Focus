@@ -132,7 +132,7 @@ export function BalanceStatementModal({ isOpen, onClose, transactions, balance }
                         {t.type === 'income' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{t.description}</p>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{t.description || t.title}</p>
                         <p className="text-[10px] text-slate-500 font-medium">{t.category} • {formatDate(t.date)}</p>
                       </div>
                     </div>

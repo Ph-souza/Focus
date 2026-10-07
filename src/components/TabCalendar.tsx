@@ -353,8 +353,8 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
         } else if (r.time && typeof (r.time as any).toDate === 'function') {
           const d = (r.time as any).toDate();
           displayTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-        } else if (r.time instanceof Date) {
-          displayTime = `${String(r.time.getHours()).padStart(2, '0')}:${String(r.time.getMinutes()).padStart(2, '0')}`;
+        } else if ((r.time as any) instanceof Date) {
+          displayTime = `${String((r.time as any).getHours()).padStart(2, '0')}:${String((r.time as any).getMinutes()).padStart(2, '0')}`;
         }
 
         return {
