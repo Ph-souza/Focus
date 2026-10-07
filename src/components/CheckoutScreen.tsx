@@ -1,31 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
-import {
-  Shield,
-  ShieldCheck,
-  Lock,
-  Check,
-  ArrowRight,
-  RefreshCw,
-  User,
-  Tag,
-  CheckCircle2,
-  AlertCircle,
-  X,
-  Loader2,
-  Sparkles,
-  ListTodo,
-  Wallet,
-  Calendar,
-  Bot,
-  Sun,
-  Moon,
-  Gift
-} from 'lucide-react';
 import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
-import { NexusFocusLogo } from './AuraLogo';
 import { getApiUrl } from '../lib/api';
+import { db } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import './CheckoutScreen.css';
 
 // Chave pública oficial de produção da aplicação Nexus Focus no Mercado Pago (App ID: 1713752160212036)
 const PROD_MP_PUBLIC_KEY = 'APP_USR-e42fc2b0-97b3-4aaa-b0f7-60b94d19825b';
@@ -54,47 +34,36 @@ if (typeof window !== 'undefined' && MP_PUBLIC_KEY) {
 }
 
 export function CheckoutScreen() {
-  const { currentUser, isPremium, logout } = useAuth();
+  const { currentUser, isPremium } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
   const [isBrickReady, setIsBrickReady] = useState(false);
   const [brickError, setBrickError] = useState<string | null>(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
-  const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  
+  // Cupom e valores
   const [couponCode, setCouponCode] = useState('');
-  const [couponApplied, setCouponApplied] = useState(false);
-  const [couponError, setCouponError] = useState('');
-  const [showCouponInput, setShowCouponInput] = useState(false);
-
-  // Controle de tema claro/escuro
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark') || document.body.classList.contains('dark');
-    }
-    return false;
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [couponStatus, setCouponStatus] = useState<{ message: string; type: '' | 'success' | 'error' }>({
+    message: 'Seu desconto aparece aqui após aplicar.',
+    type: ''
   });
 
-  const toggleTheme = () => {
-    const next = !isDarkMode;
-    setIsDarkMode(next);
+  // Tema
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
-      if (next) {
-        document.documentElement.classList.add('dark');
-        document.body.classList.add('dark');
-        localStorage.setItem('nexus_dark_mode', 'true');
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.body.classList.remove('dark');
-        localStorage.setItem('nexus_dark_mode', 'false');
-      }
+      return (localStorage.getItem('nexus-checkout-theme') as 'light' | 'dark') || 
+             (document.documentElement.dataset.theme as 'light' | 'dark') || 
+             'light';
     }
-  };
+    return 'light';
+  });
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
   const hasAccess = isPremium || isWhitelistedPro(userEmail);
 
-  // Garante que o SDK esteja devidamente configurado ao montar a tela
+  // Inicialização no componente
   useEffect(() => {
     if (MP_PUBLIC_KEY) {
       try {
@@ -105,7 +74,24 @@ export function CheckoutScreen() {
     }
   }, []);
 
-  // Timeout preventivo: se o script do Mercado Pago demorar na rede
+  // Efeito para sincronizar tema
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    try {
+      localStorage.setItem('nexus-checkout-theme', theme);
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) {
+        meta.setAttribute('content', theme === 'dark' ? '#10141d' : '#f8f9fb');
+      }
+    } catch (_) {}
+  }, [theme]);
+
+  // Timeout preventivo para o Brick
   useEffect(() => {
     let timer: any;
     if (step === 2 && !isBrickReady && !brickError) {
@@ -113,28 +99,26 @@ export function CheckoutScreen() {
         if (!isBrickReady) {
           setBrickError('O formulário do Mercado Pago está demorando para responder.');
         }
-      }, 8500);
+      }, 9000);
     }
     return () => clearTimeout(timer);
   }, [step, isBrickReady, brickError]);
 
-  // Redirecionamento automático se já for Pro
+  // Redirecionamento se já possuir acesso Pro
   if (hasAccess) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // Cálculo dinâmico do valor
-  const getAmount = () => {
-    if (!couponApplied) return 19.90;
-    const code = couponCode.trim().toUpperCase();
-    if (code === 'FOCUS50') return 9.95;
-    if (code === 'FOCUS10' || code === 'PROMO') return 14.90;
-    return 19.90;
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const currentAmount = getAmount();
-  const formatMoney = (val: number) =>
-    val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Cálculo de valores conforme cupom
+  const isCoupon50 = appliedCoupon === 'FOCUS50';
+  const isCoupon10 = appliedCoupon === 'FOCUS10' || appliedCoupon === 'PROMO';
+  const currentAmount = isCoupon50 ? 9.95 : (isCoupon10 ? 14.90 : 19.90);
+  const displayPrice = isCoupon50 ? '9,95' : (isCoupon10 ? '14,90' : '19,90');
+  const discountAmount = isCoupon50 ? '9,95' : (isCoupon10 ? '5,00' : '0,00');
 
   const cardInitialization = {
     amount: currentAmount,
@@ -150,29 +134,16 @@ export function CheckoutScreen() {
     visual: {
       hideFormTitle: true,
       style: {
-        theme: isDarkMode ? ('dark' as const) : ('default' as const),
+        theme: (theme === 'dark' ? 'dark' : 'default') as 'dark' | 'default',
         customVariables: {
-          baseColor: isDarkMode ? '#2563eb' : '#18181b',
-          borderRadius: '14px',
+          baseColor: theme === 'dark' ? '#ffffff' : '#18181b',
+          borderRadius: '12px',
         },
       },
       texts: {
         formSubmit: 'Confirmar Pagamento',
       },
     },
-  };
-
-  const handleGoToPayment = () => {
-    setErrorMessage('');
-    setIsBrickReady(false);
-    setBrickError(null);
-    setStep(2);
-  };
-
-  const handleBackToPlan = () => {
-    setStep(1);
-    setLoading(false);
-    setErrorMessage('');
   };
 
   const onSubmit = async (param: any) => {
@@ -198,7 +169,7 @@ export function CheckoutScreen() {
           paymentMethodId: formData.payment_method_id || formData.paymentMethodId,
           issuerId: formData.issuer_id || formData.issuerId,
           installments: formData.installments || 1,
-          coupon: couponApplied ? couponCode : undefined,
+          coupon: appliedCoupon || undefined,
           amount: currentAmount,
         }),
       });
@@ -207,6 +178,18 @@ export function CheckoutScreen() {
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Erro ao processar a assinatura.');
+      }
+
+      // Atualização de segurança no Firestore para o usuário autenticado
+      if (currentUser?.uid) {
+        try {
+          await setDoc(doc(db, 'users', currentUser.uid), {
+            isPremium: true,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } catch (fsErr) {
+          console.warn('[Firestore] Aviso ao atualizar usuário:', fsErr);
+        }
       }
 
       // Sucesso: redireciona para o dashboard
@@ -222,576 +205,394 @@ export function CheckoutScreen() {
 
   const handleApplyCoupon = (e: React.FormEvent) => {
     e.preventDefault();
-    setCouponError('');
     const code = couponCode.trim().toUpperCase();
-    if (!code) return;
+    if (!code) {
+      setCouponStatus({
+        message: 'Digite um cupom para aplicar.',
+        type: 'error'
+      });
+      return;
+    }
 
-    if (code === 'FOCUS50' || code === 'FOCUS10' || code === 'PROMO') {
-      setCouponApplied(true);
-      setCouponError('');
+    if (code === 'FOCUS50') {
+      setAppliedCoupon('FOCUS50');
+      setCouponStatus({
+        message: 'Cupom aplicado! Você economiza R$ 9,95 por mês durante 3 meses.',
+        type: 'success'
+      });
+    } else if (code === 'FOCUS10' || code === 'PROMO') {
+      setAppliedCoupon(code);
+      setCouponStatus({
+        message: 'Cupom aplicado! Desconto concedido com sucesso.',
+        type: 'success'
+      });
     } else {
-      setCouponError('Cupom inválido ou expirado.');
+      setCouponStatus({
+        message: 'Cupom não reconhecido ou expirado.',
+        type: 'error'
+      });
     }
   };
 
   const handleRemoveCoupon = () => {
-    setCouponApplied(false);
+    setAppliedCoupon(null);
     setCouponCode('');
-    setCouponError('');
+    setCouponStatus({
+      message: 'Cupom removido. Valor atualizado para R$ 19,90/mês.',
+      type: ''
+    });
   };
 
   const handleRefreshStatus = async () => {
     try {
       setIsCheckingStatus(true);
-      setStatusFeedback(null);
+      setErrorMessage('');
       await new Promise((r) => setTimeout(r, 1200));
 
       if (isWhitelistedPro(userEmail)) {
         window.location.href = '/dashboard';
         return;
       }
-
-      setStatusFeedback('Verificação concluída. Nenhum pagamento recente aprovado foi encontrado.');
+      setErrorMessage('Nenhum pagamento aprovado recente foi encontrado ainda.');
     } catch {
-      setStatusFeedback('Não foi possível verificar o status agora. Tente novamente.');
+      setErrorMessage('Não foi possível verificar o status agora.');
     } finally {
       setIsCheckingStatus(false);
     }
   };
 
-  const benefits = [
-    {
-      icon: <ListTodo className="w-5 h-5 text-[#265de4] dark:text-[#60a5fa]" />,
-      title: 'Tarefas e projetos',
-      desc: 'Tire os planos do papel com priorização clara.'
-    },
-    {
-      icon: <Wallet className="w-5 h-5 text-[#265de4] dark:text-[#60a5fa]" />,
-      title: 'Organização financeira',
-      desc: 'Saiba exatamente para onde seu dinheiro vai.'
-    },
-    {
-      icon: <Calendar className="w-5 h-5 text-[#265de4] dark:text-[#60a5fa]" />,
-      title: 'Agenda e foco',
-      desc: 'Abra espaço para o que realmente importa.'
-    },
-    {
-      icon: <Bot className="w-5 h-5 text-[#265de4] dark:text-[#60a5fa]" />,
-      title: 'Mentor IA',
-      desc: 'Ajuda inteligente para seguir em frente todos os dias.'
+  const handleCtaClick = () => {
+    if (step === 1) {
+      setStep(2);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
     }
-  ];
+
+    // Se estiver no step 2, dispara o submit do formulário do Mercado Pago
+    const submitBtn = document.querySelector('#cardPaymentBrick_container button[type="submit"]') as HTMLButtonElement | null;
+    if (submitBtn) {
+      submitBtn.click();
+    }
+  };
 
   return (
-    <div className="min-h-screen w-full relative flex flex-col justify-between overflow-x-hidden bg-[#f8f9fb] dark:bg-[#10141d] text-[#131923] dark:text-[#f2f5fa] transition-colors duration-300">
-      {/* Background Ambiente com gradientes radiais suaves e grid pontilhado */}
-      <div className="checkout-ambient" aria-hidden="true">
-        <div className="absolute w-[440px] h-[440px] -right-[200px] top-[220px] rounded-full border border-blue-200/20 dark:border-blue-500/10 shadow-[0_0_0_55px_rgba(155,177,213,0.035),0_0_0_110px_rgba(155,177,213,0.035)] pointer-events-none" />
-      </div>
+    <div className="checkout-page-wrapper">
+      {/* SVG Symbols definidos no layout oficial */}
+      <svg className="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+          <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+          <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></symbol>
+          <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="m7 9 1 1 2-2m3 1h4m-10 6 1 1 2-2m3 1h4"/></symbol>
+          <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V4H6a3 3 0 0 0 0 6h14v10H6a3 3 0 0 1-3-3V7"/><path d="M20 13h-5v4h5"/></symbol>
+          <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 10h18M7 14h3m4 0h3m-10 3h3"/></symbol>
+          <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></symbol>
+          <symbol id="i-tag" viewBox="0 0 24 24"><path d="m3 3 9 0 9 9-9 9-9-9Z"/><circle cx="8" cy="8" r="1"/></symbol>
+          <symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13"/><path d="M12 8H8a3 3 0 1 1 3-3Zm0 0h4a3 3 0 1 0-3-3Z"/></symbol>
+          <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 4-5 8-8 9-3-1-8-5-8-9V6Z"/><path d="m8 12 3 3 5-6"/></symbol>
+          <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v16"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none"/></symbol>
+          <symbol id="logo" viewBox="0 0 100 100">
+            <path fill="currentColor" d="M45.03 17.35Q50 15 54.97 17.35L81.03 29.65Q86 32 81.03 34.35L54.97 46.65Q50 49 45.03 46.65L18.97 34.35Q14 32 18.97 29.65Z"/>
+            <path fill="currentColor" opacity=".72" d="M18.55 42.58Q14 40.5 14 45.5V46.5Q14 51.5 18.55 53.58L45.45 65.92Q50 68 54.55 65.92L81.45 53.58Q86 51.5 86 46.5V45.5Q86 40.5 81.45 42.58L54.55 54.92Q50 57 45.45 54.92Z"/>
+            <path fill="currentColor" opacity=".48" d="M18.55 61.58Q14 59.5 14 64.5V65.5Q14 70.5 18.55 72.58L45.45 84.92Q50 87 54.55 84.92L81.45 72.58Q86 70.5 86 65.5V64.5Q86 59.5 81.45 61.58L54.55 73.92Q50 76 45.45 73.92Z"/>
+          </symbol>
+        </defs>
+      </svg>
 
-      <div className="w-full max-w-[1160px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex-1 flex flex-col justify-between py-5 sm:py-7">
-        
-        {/* ================= HEADER SUPERIOR ================= */}
-        <header className="flex items-center justify-between py-4 border-b border-black/[0.08] dark:border-white/[0.08] mb-6 sm:mb-8">
-          <Link to="/homepage" className="flex items-center gap-3 no-underline group cursor-pointer" aria-label="Nexus Focus, página inicial">
-            <div className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
-              <NexusFocusLogo className="w-6 h-6" variant={isDarkMode ? 'light' : 'dark'} />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[15px] sm:text-base font-extrabold tracking-tight text-zinc-950 dark:text-white leading-tight">
-                NEXUS <span className="font-light text-zinc-600 dark:text-zinc-400">FOCUS</span>
-              </span>
-              <span className="text-[10px] text-zinc-500 dark:text-zinc-400 tracking-wider">
-                Sua rotina, mais inteligente.
-              </span>
-            </div>
+      <div className="ambient" aria-hidden="true"><div className="orb"></div></div>
+      <a className="skip" href="#checkout">Ir para a assinatura</a>
+
+      <div className="wrap">
+        <header className="header">
+          <Link to="/homepage" className="brand" aria-label="Nexus Focus, página inicial">
+            <svg aria-hidden="true"><use href="#logo"/></svg>
+            <span>NEXUS <span>FOCUS</span></span>
           </Link>
-
-          <div className="flex items-center gap-3 sm:gap-5">
-            {/* Indicador de Checkout Seguro */}
-            <div className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400 font-medium">
-              <Lock size={14} className="text-[#265de4] dark:text-[#60a5fa]" />
-              <span>Checkout seguro</span>
-            </div>
-
-            {/* Sessão do Usuário */}
-            {currentUser?.email && (
-              <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.06] dark:border-white/[0.06]">
-                <User size={13} className="text-zinc-500 dark:text-zinc-400" />
-                <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300 max-w-[130px] sm:max-w-[180px] truncate">
-                  {currentUser.email}
-                </span>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="text-[10px] font-semibold text-rose-500 hover:text-rose-600 ml-1 cursor-pointer"
-                  title="Trocar de conta"
-                >
-                  Sair
-                </button>
-              </div>
-            )}
-
-            {/* Alternador de Tema */}
+          <div className="header-actions">
+            <span className="secure">
+              <svg className="icon" aria-hidden="true"><use href="#i-lock"/></svg>
+              Checkout da assinatura
+            </span>
             <button
+              className="theme"
+              id="theme"
               type="button"
               onClick={toggleTheme}
-              className="w-9 h-9 rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-white/60 dark:bg-slate-900/60 text-zinc-700 dark:text-zinc-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer"
-              aria-label={isDarkMode ? 'Ativar tema claro' : 'Ativar tema escuro'}
+              aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+              aria-pressed={theme === 'dark'}
             >
-              {isDarkMode ? <Sun size={17} /> : <Moon size={17} />}
+              <svg className="icon" aria-hidden="true"><use href="#i-theme"/></svg>
             </button>
           </div>
         </header>
 
-        {/* ================= CONTEÚDO PRINCIPAL (LAYOUT 2 COLUNAS) ================= */}
-        <main className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-start flex-1 my-auto pb-6">
-          
-          {/* ================= COLUNA DA ESQUERDA: APRESENTAÇÃO & BENEFÍCIOS ================= */}
-          <section className="lg:col-span-7 flex flex-col justify-center pt-2">
-            
-            {/* Eyebrow */}
-            <div className="flex items-center gap-2.5 text-[#265de4] dark:text-[#60a5fa] text-[10px] sm:text-[11px] font-bold tracking-[0.2em] uppercase mb-4">
-              <span className="w-5 h-0.5 bg-current" />
-              <span>Seu próximo passo</span>
-            </div>
-
-            {/* Título Principal */}
-            <h1 className="text-3xl sm:text-4xl lg:text-[46px] font-extrabold tracking-tight text-zinc-950 dark:text-white leading-[1.12] mb-4">
-              Seu próximo passo.<br />
-              <span className="text-[#265de4] dark:text-[#60a5fa]">Mais direção.</span><br />
-              Menos distração.
-            </h1>
-
-            {/* Lead */}
-            <p className="text-sm sm:text-[15px] text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-lg mb-6">
-              Tudo o que você precisa para organizar o dia e cuidar do seu dinheiro, em um só lugar.
-            </p>
-
-            {/* Palco Visual de Recursos (Visual Stage com Cards Flutuantes 3D) */}
-            <div className="visual-stage w-full max-w-[500px]" role="img" aria-label="Recursos Nexus Focus em ação">
+        <main>
+          <div className="layout">
+            {/* Lado Esquerdo: Vitrine Visual e Benefícios */}
+            <section className="intro" aria-labelledby="headline">
+              <h1 id="headline">
+                Seu próximo passo.<br/>
+                <span>Mais direção.</span><br/>
+                Menos distração.
+              </h1>
+              <p className="lead">Tudo o que você precisa para organizar o dia e cuidar do seu dinheiro, em um só lugar.</p>
               
-              {/* Arte Orbital SVG */}
-              <svg className="orbit-art" viewBox="0 0 520 320" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-                <defs>
-                  <radialGradient id="stageHalo">
-                    <stop stopColor="#82aafa" stopOpacity="0.4" />
-                    <stop offset="1" stopColor="#82aafa" stopOpacity="0" />
-                  </radialGradient>
-                </defs>
-                <ellipse cx="260" cy="161" rx="211" ry="145" fill="url(#stageHalo)" />
-                <g fill="none" stroke="currentColor" strokeWidth="0.8">
-                  <ellipse cx="260" cy="166" rx="216" ry="96" transform="rotate(-22 260 166)" />
-                  <ellipse cx="260" cy="166" rx="165" ry="121" transform="rotate(28 260 166)" strokeDasharray="3 7" />
-                  <path d="M65 166h391M260 33v262" opacity="0.25" />
-                </g>
-                <g fill="currentColor">
-                  <circle cx="85" cy="221" r="4" />
-                  <circle cx="423" cy="82" r="3" />
-                  <circle cx="324" cy="278" r="3" />
-                  <path d="m332 31 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z" />
-                </g>
-              </svg>
+              <div className="visual-stage" role="img" aria-label="Ilustração dos recursos Nexus Focus: tarefas organizadas, finanças, um temporizador de foco e o Mentor IA.">
+                <svg className="orbit-art" viewBox="0 0 520 320" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                  <defs>
+                    <radialGradient id="halo">
+                      <stop stopColor="#82aafa" stopOpacity=".4"/>
+                      <stop offset="1" stopColor="#82aafa" stopOpacity="0"/>
+                    </radialGradient>
+                  </defs>
+                  <ellipse cx="260" cy="161" rx="211" ry="145" fill="url(#halo)"/>
+                  <g fill="none" stroke="currentColor" strokeWidth=".8">
+                    <ellipse cx="260" cy="166" rx="216" ry="96" transform="rotate(-22 260 166)"/>
+                    <ellipse cx="260" cy="166" rx="165" ry="121" transform="rotate(28 260 166)" strokeDasharray="3 7"/>
+                    <path d="M65 166h391M260 33v262" opacity=".25"/>
+                  </g>
+                  <g fill="currentColor">
+                    <circle cx="85" cy="221" r="4"/>
+                    <circle cx="423" cy="82" r="3"/>
+                    <circle cx="324" cy="278" r="3"/>
+                    <path d="m332 31 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z"/>
+                  </g>
+                </svg>
 
-              {/* Nexus Core Central */}
-              <div className="nexus-core" aria-hidden="true">
-                <NexusFocusLogo className="w-16 h-16" variant={isDarkMode ? 'light' : 'dark'} />
-              </div>
-
-              {/* Float Card 1: Tarefas */}
-              <div className="float-card task-card select-none" aria-hidden="true">
-                <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
-                  <ListTodo size={13} className="text-[#265de4] dark:text-[#60a5fa]" />
-                  <span className="text-[9px] tracking-wider uppercase font-semibold">Seu dia, em ordem</span>
+                <div className="nexus-core" aria-hidden="true">
+                  <svg><use href="#logo"/></svg>
                 </div>
-                <b className="text-[11px] font-bold text-zinc-900 dark:text-white block mb-2">Uma coisa de cada vez.</b>
-                <div className="space-y-1.5 text-[10px] text-zinc-600 dark:text-zinc-300">
-                  <div className="flex items-center gap-1.5 font-medium">
-                    <span className="w-3.5 h-3.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[9px] font-bold">✓</span>
-                    <span>Organizar prioridades</span>
+
+                <div className="float-card task-card" aria-hidden="true">
+                  <div className="mini-title">
+                    <svg className="icon"><use href="#i-tasks"/></svg>
+                    <small>Seu dia, em ordem</small>
                   </div>
-                  <div className="flex items-center gap-1.5 opacity-75">
-                    <span className="w-3.5 h-3.5 rounded border border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-[9px]" />
-                    <span>Tirar planos do papel</span>
+                  <b>Uma coisa de cada vez.</b>
+                  <div className="mini-task done"><i>✓</i>Organizar as prioridades</div>
+                  <div className="mini-task"><i></i>Tirar um plano do papel</div>
+                  <div className="mini-line"></div>
+                </div>
+
+                <div className="float-card finance-card" aria-hidden="true">
+                  <div className="mini-title">
+                    <svg className="icon"><use href="#i-wallet"/></svg>
+                    <small>Finanças</small>
                   </div>
-                </div>
-                <div className="h-1 rounded-full bg-blue-100 dark:bg-blue-950 mt-3 overflow-hidden">
-                  <div className="w-[70%] h-full bg-[#366bea] rounded-full" />
-                </div>
-              </div>
-
-              {/* Float Card 2: Finanças */}
-              <div className="float-card finance-card select-none" aria-hidden="true">
-                <div className="flex items-center gap-1.5 mb-1 text-zinc-500 dark:text-zinc-400">
-                  <Wallet size={13} className="text-[#265de4] dark:text-[#60a5fa]" />
-                  <span className="text-[9px] tracking-wider uppercase font-semibold">Finanças</span>
-                </div>
-                <b className="text-[11px] font-bold text-zinc-900 dark:text-white block">Mais controle.</b>
-                <div className="finance-bars">
-                  <i style={{ height: '35%' }} />
-                  <i style={{ height: '58%' }} />
-                  <i style={{ height: '45%' }} />
-                  <i style={{ height: '77%' }} />
-                  <i style={{ height: '68%' }} />
-                  <i style={{ height: '100%' }} />
-                </div>
-              </div>
-
-              {/* Float Card 3: Foco */}
-              <div className="float-card focus-card select-none" aria-hidden="true">
-                <div className="focus-ring shrink-0">25:00</div>
-                <div>
-                  <strong className="text-xs font-bold text-zinc-900 dark:text-white block">Hora de focar.</strong>
-                  <span className="text-[9px] text-zinc-500 dark:text-zinc-400">Um passo por vez</span>
-                </div>
-              </div>
-
-              {/* Float Card 4: Mentor IA */}
-              <div className="float-card mentor-card select-none" aria-hidden="true">
-                <div className="w-8 h-8 rounded-xl bg-blue-100/80 dark:bg-blue-950/80 border border-blue-200/60 dark:border-blue-800/60 flex items-center justify-center text-[#265de4] dark:text-[#60a5fa] shrink-0">
-                  <Bot size={18} />
-                </div>
-                <div className="flex flex-col">
-                  <strong className="text-xs font-bold text-zinc-900 dark:text-white">Mentor IA</strong>
-                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400">com você</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Grade de 4 Benefícios */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-              {benefits.map((b, idx) => (
-                <div key={idx} className="flex items-start gap-3 p-2.5 rounded-2xl transition-colors">
-                  <div className="w-9 h-9 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-black/[0.06] dark:border-white/[0.08] shadow-2xs flex items-center justify-center shrink-0">
-                    {b.icon}
-                  </div>
-                  <div>
-                    <strong className="text-xs font-bold text-zinc-900 dark:text-white block leading-tight mb-0.5">
-                      {b.title}
-                    </strong>
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug">
-                      {b.desc}
-                    </p>
+                  <b>Mais controle.</b>
+                  <div className="bars">
+                    <i style={{ '--h': '35%' } as React.CSSProperties}></i>
+                    <i style={{ '--h': '58%' } as React.CSSProperties}></i>
+                    <i style={{ '--h': '45%' } as React.CSSProperties}></i>
+                    <i style={{ '--h': '77%' } as React.CSSProperties}></i>
+                    <i style={{ '--h': '68%' } as React.CSSProperties}></i>
+                    <i style={{ '--h': '100%' } as React.CSSProperties}></i>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
 
-          {/* ================= COLUNA DA DIREITA: CARTÃO DE CHECKOUT GLASSMORPHISM ================= */}
-          <section className="lg:col-span-5 w-full">
-            <div
-              id="checkout"
-              className="relative w-full rounded-[28px] p-6 sm:p-7 bg-white/75 dark:bg-[#1b2230]/75 backdrop-blur-2xl border border-white/90 dark:border-white/[0.1] shadow-[0_24px_80px_rgba(44,61,97,0.09)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.35)] overflow-hidden transition-all"
-            >
-              {/* Plan Art Header Banner */}
-              <div className="plan-art select-none">
-                <div className="w-10 h-10 rounded-xl bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 flex items-center justify-center shadow-sm shrink-0">
-                  <NexusFocusLogo className="w-6 h-6" variant={isDarkMode ? 'dark' : 'light'} />
+                <div className="float-card focus-card" aria-hidden="true">
+                  <div className="focus-ring">25:00</div>
+                  <div><strong>Hora de focar.</strong><small>Um passo por vez</small></div>
                 </div>
-                <div className="flex flex-col min-w-0">
-                  <strong className="text-xs font-extrabold tracking-wider text-zinc-950 dark:text-white uppercase truncate">
-                    NEXUS FOCUS
-                  </strong>
-                  <small className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                    Sua rotina, mais inteligente.
-                  </small>
-                </div>
-                <span className="ml-auto px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#265de4]/10 dark:bg-[#9ebaff]/15 text-[#265de4] dark:text-[#9ebaff] border border-[#265de4]/20 shrink-0">
-                  Mensal
-                </span>
-              </div>
 
-              {/* Stepper Navigation: Etapa 1 e Etapa 2 */}
-              <nav className="flex items-center gap-3 mb-5" aria-label="Etapas da assinatura">
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  className={`flex items-center gap-2 text-xs font-semibold py-1 transition-colors cursor-pointer ${
-                    step === 1 ? 'text-[#265de4] dark:text-[#9ebaff]' : 'text-zinc-400 hover:text-zinc-600'
-                  }`}
-                >
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] border ${
-                    step === 1 ? 'border-[#265de4] bg-[#265de4]/10 dark:border-[#9ebaff]' : 'border-zinc-300 dark:border-zinc-700'
-                  }`}>
-                    1
+                <div className="float-card mentor-card" aria-hidden="true">
+                  <span className="mentor-emblem">
+                    <svg className="icon" viewBox="0 0 24 24">
+                      <path d="M8 4H6a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h2v3l4-3h6a3 3 0 0 0 3-3v-3"/>
+                      <path d="m16 2 1.7 4.3L22 8l-4.3 1.7L16 14l-1.7-4.3L10 8l4.3-1.7ZM7 14h5"/>
+                    </svg>
                   </span>
-                  <span>Seu plano</span>
-                </button>
-                <div className="h-px flex-1 bg-black/[0.08] dark:bg-white/[0.08]" />
-                <button
-                  type="button"
-                  onClick={handleGoToPayment}
-                  className={`flex items-center gap-2 text-xs font-semibold py-1 transition-colors cursor-pointer ${
-                    step === 2 ? 'text-[#265de4] dark:text-[#9ebaff]' : 'text-zinc-400 hover:text-zinc-600'
-                  }`}
-                >
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] border ${
-                    step === 2 ? 'border-[#265de4] bg-[#265de4]/10 dark:border-[#9ebaff]' : 'border-zinc-300 dark:border-zinc-700'
-                  }`}>
-                    2
-                  </span>
-                  <span>Pagamento</span>
-                </button>
-              </nav>
+                  <span className="mentor-copy"><strong>Mentor IA</strong><span>com você</span></span>
+                </div>
+              </div>
 
-              {/* ================= VIEW: ETAPA 1 (RESUMO DO PLANO & CUPOM) ================= */}
-              {step === 1 && (
-                <div className="space-y-5 animate-in fade-in duration-200">
-                  <div>
-                    <h2 className="text-base sm:text-lg font-bold text-zinc-950 dark:text-white tracking-tight">
-                      Sua nova rotina começa aqui.
-                    </h2>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                      Uma assinatura. Sua rotina em ordem.
-                    </p>
-                  </div>
+              <ul className="benefits">
+                <li>
+                  <span className="benefit-icon"><svg className="icon" aria-hidden="true"><use href="#i-tasks"/></svg></span>
+                  <div><b>Tarefas e projetos</b><p>Tire os planos do papel.</p></div>
+                </li>
+                <li>
+                  <span className="benefit-icon"><svg className="icon" aria-hidden="true"><use href="#i-wallet"/></svg></span>
+                  <div><b>Organização financeira</b><p>Saiba para onde seu dinheiro vai.</p></div>
+                </li>
+                <li>
+                  <span className="benefit-icon"><svg className="icon" aria-hidden="true"><use href="#i-calendar"/></svg></span>
+                  <div><b>Agenda e foco</b><p>Abra espaço para o que importa.</p></div>
+                </li>
+                <li>
+                  <span className="benefit-icon"><svg className="icon" aria-hidden="true"><use href="#i-spark"/></svg></span>
+                  <div><b>Mentor IA</b><p>Uma ajuda para seguir em frente.</p></div>
+                </li>
+              </ul>
+            </section>
 
-                  {/* Price Box com Selo de Oferta */}
-                  <div className="relative p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.06]">
-                    {couponApplied && couponCode.toUpperCase() === 'FOCUS50' && (
-                      <div className="offer-seal" aria-label="50% de desconto">
-                        <strong className="text-xl font-extrabold leading-none">50%</strong>
-                        <small className="text-[8px] font-bold tracking-widest">OFF</small>
-                      </div>
-                    )}
+            {/* Lado Direito: Card de Checkout */}
+            <div>
+              <section className="checkout" id="checkout" aria-labelledby="plan-title">
+                <div className="plan-art">
+                  <span className="plan-emblem"><svg aria-hidden="true"><use href="#logo"/></svg></span>
+                  <div><strong>NEXUS FOCUS</strong><small>Sua rotina, mais inteligente.</small></div>
+                  <span className="pill">Mensal</span>
+                </div>
 
-                    <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1">
-                      {couponApplied ? (
-                        <del className="text-zinc-400">De R$ 19,90/mês</del>
-                      ) : (
-                        'Acesso a todos os recursos'
-                      )}
-                    </p>
-
-                    <div className="flex items-baseline gap-1.5 tracking-tight">
-                      <span className="text-xl font-semibold text-zinc-700 dark:text-zinc-300">R$</span>
-                      <strong className="text-4xl sm:text-5xl font-black text-zinc-950 dark:text-white">
-                        {formatMoney(currentAmount)}
-                      </strong>
-                      <span className="text-xs text-zinc-500 font-medium">/mês</span>
-                    </div>
-
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1.5">
-                      {couponApplied && couponCode.toUpperCase() === 'FOCUS50'
-                        ? 'Por mês, nos 3 primeiros meses. Renovação flexível.'
-                        : 'Assinatura com renovação mensal. Cancele quando quiser.'}
-                    </p>
-                  </div>
-
-                  {/* Seção do Cupom de Desconto */}
-                  <div className="space-y-2">
-                    {!showCouponInput && !couponApplied ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowCouponInput(true)}
-                        className="w-full flex items-center justify-between py-2 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white font-medium cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Tag size={14} className="text-[#265de4] dark:text-[#60a5fa]" />
-                          <span>Tem um cupom de desconto?</span>
-                        </div>
-                        <span className="text-[#265de4] dark:text-[#60a5fa] hover:underline font-semibold">Adicionar &gt;</span>
-                      </button>
-                    ) : (
-                      <form onSubmit={handleApplyCoupon} className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                          <Tag size={13} className="text-[#265de4] dark:text-[#60a5fa]" />
-                          <span>Cupom de desconto</span>
-                        </label>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            placeholder="Digite seu cupom (ex: FOCUS50)"
-                            value={couponCode}
-                            onChange={(e) => {
-                              setCouponCode(e.target.value);
-                              setCouponError('');
-                            }}
-                            className="flex-1 px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#265de4] uppercase font-semibold text-zinc-900 dark:text-white"
-                          />
-                          <button
-                            type="submit"
-                            className="px-4 py-2 text-xs font-bold bg-[#131923] dark:bg-white text-white dark:text-zinc-950 rounded-xl hover:opacity-90 transition-opacity cursor-pointer"
-                          >
-                            Aplicar
-                          </button>
-                          {showCouponInput && !couponApplied && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowCouponInput(false);
-                                setCouponError('');
-                              }}
-                              className="p-2 text-zinc-400 hover:text-zinc-600 cursor-pointer"
-                            >
-                              <X size={15} />
-                            </button>
-                          )}
-                        </div>
-                        {couponError && <p className="text-[11px] text-rose-500 font-medium">{couponError}</p>}
-                      </form>
-                    )}
-
-                    {couponApplied && (
-                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-xs text-emerald-800 dark:text-emerald-300">
-                        <div className="flex items-center gap-2 font-semibold">
-                          <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
-                          <span>{couponCode.toUpperCase()} aplicado ({couponCode.toUpperCase() === 'FOCUS50' ? '50% OFF' : 'Desconto especial'})</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleRemoveCoupon}
-                          className="text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 underline cursor-pointer"
-                        >
-                          Remover
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Bônus Desbloqueado com Cupom (3 e-books) */}
-                  {couponApplied && (
-                    <div className="flex items-center gap-3 p-3 rounded-2xl bg-[#265de4]/[0.06] dark:bg-[#265de4]/15 border border-[#265de4]/20 animate-in fade-in">
-                      <div className="book-stack" aria-hidden="true">
-                        <i />
-                        <i />
-                        <i />
-                      </div>
-                      <div>
-                        <strong className="text-xs font-bold text-zinc-950 dark:text-white block">
-                          Seu cupom também desbloqueia um bônus
-                        </strong>
-                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
-                          Kit com 3 e-books incluído na assinatura.
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Resumo de Valores */}
-                  <div className="pt-3 border-t border-black/[0.08] dark:border-white/[0.08] space-y-2 text-xs">
-                    <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
-                      <span>Plano mensal Pro</span>
-                      <span>R$ 19,90</span>
-                    </div>
-
-                    {couponApplied && (
-                      <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
-                        <span>Desconto {couponCode.toUpperCase()}</span>
-                        <span>− R$ {formatMoney(19.90 - currentAmount)}</span>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-baseline pt-2 border-t border-black/[0.08] dark:border-white/[0.08] text-sm font-bold text-zinc-950 dark:text-white">
-                      <span>Total da primeira mensalidade</span>
-                      <span className="text-base text-[#265de4] dark:text-[#9ebaff]">
-                        R$ {formatMoney(currentAmount)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Botão de Avançar para o Pagamento */}
+                <nav className="checkout-steps" aria-label="Etapas da assinatura">
                   <button
                     type="button"
-                    onClick={handleGoToPayment}
-                    className="w-full bg-[#265de4] hover:bg-[#1b4cc4] text-white font-bold py-3.5 px-5 rounded-2xl shadow-[0_5px_16px_rgba(38,93,228,0.25)] transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.99] mt-2"
+                    id="step-plan"
+                    aria-current={step === 1 ? 'step' : undefined}
+                    onClick={() => setStep(1)}
                   >
-                    <span>Ir para pagamento · R$ {formatMoney(currentAmount)}/mês</span>
-                    <ArrowRight size={16} />
+                    <span>1</span>Seu plano
                   </button>
-
-                  <p className="text-[11px] text-center text-zinc-400 dark:text-zinc-500">
-                    Ao prosseguir, você concorda com nossos termos e políticas.
-                  </p>
-                </div>
-              )}
-
-              {/* ================= VIEW: ETAPA 2 (PAGAMENTO SEGURO MERCADO PAGO) ================= */}
-              {step === 2 && (
-                <div className="space-y-4 animate-in fade-in duration-200">
-                  
-                  {/* Cabeçalho do Pagamento com Logo Mercado Pago e Botão Voltar */}
-                  <div className="flex items-center justify-between pb-3 border-b border-black/[0.08] dark:border-white/[0.08]">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/80 text-[#265de4] dark:text-[#60a5fa] flex items-center justify-center shrink-0">
-                        <Lock size={15} />
-                      </div>
-                      <div>
-                        <h2 className="text-sm sm:text-base font-bold text-zinc-950 dark:text-white leading-tight">
-                          Pague com Segurança
-                        </h2>
-                        <span className="text-[11px] text-[#087cb2] dark:text-[#6dc9ff] font-semibold block">
-                          Uma parceria Mercado Pago
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleBackToPlan}
-                      className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.12] px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
-                    >
-                      <ArrowRight size={13} className="rotate-180" />
-                      <span>Voltar</span>
-                    </button>
-                  </div>
-
-                  {/* Resumo do Valor na Etapa de Pagamento */}
-                  <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/[0.06] text-xs">
-                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">Assinatura mensal:</span>
-                    <strong className="text-sm font-extrabold text-zinc-950 dark:text-white">
-                      R$ {formatMoney(currentAmount)}
-                      <span className="text-[10px] font-normal text-zinc-400 ml-1">/mês</span>
-                    </strong>
-                  </div>
-
-                  {/* Mensagem de Erro de Validação/Gateway */}
-                  {errorMessage && (
-                    <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/50 text-xs text-rose-700 dark:text-rose-300 flex items-start gap-2">
-                      <AlertCircle size={15} className="shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
-                      <span>{errorMessage}</span>
-                    </div>
-                  )}
-
-                  {/* ================= CONTAINER DO BRICK MERCADO PAGO ================= */}
-                  {/* IMPORTANTE: Mantém rigorosamente os IDs e classes exigidos pelo SDK e validados no projeto */}
-                  <div
-                    id="cardPaymentBrick_container"
-                    data-testid="payment-brick-container"
-                    className="mercado-pago-brick-container w-full min-h-[340px] relative px-0.5 py-1"
+                  <i aria-hidden="true"></i>
+                  <button
+                    type="button"
+                    id="step-payment"
+                    aria-current={step === 2 ? 'step' : undefined}
+                    onClick={() => setStep(2)}
                   >
-                    {/* Skeleton Loader elegante enquanto os scripts externos do Mercado Pago carregam */}
-                    {!isBrickReady && !brickError && (
-                      <div className="w-full space-y-3.5 pt-1 animate-pulse" aria-label="Carregando formulário de pagamento">
-                        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-2">
-                          <Loader2 size={14} className="animate-spin text-[#265de4] dark:text-[#60a5fa]" />
-                          <span>Carregando formulário seguro do Mercado Pago…</span>
-                        </div>
-                        <div className="space-y-1.5">
-                          <div className="h-3 w-28 bg-zinc-200 dark:bg-zinc-800 rounded" />
-                          <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-800 rounded" />
-                            <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
+                    <span>2</span>Pagamento
+                  </button>
+                </nav>
+
+                <div className="checkout-stage" id="checkout-stage">
+                  {/* Etapa 1: Apresentação do Plano e Cupom */}
+                  <div id="offer-step" hidden={step !== 1}>
+                    <div className="plan-head"><h2 id="plan-title">Sua nova rotina começa aqui.</h2></div>
+                    <p className="plan-sub">Uma assinatura. Sua rotina em ordem.</p>
+                    
+                    <div className="price-wrap">
+                      <div className="offer-seal" id="offer-seal" hidden={!isCoupon50} aria-label="50% de desconto">
+                        <strong>50%</strong><small>OFF</small>
+                      </div>
+                      <p className="old-price" id="old-price">
+                        {isCoupon50 ? <del>De R$ 19,90/mês</del> : 'Acesso a todos os recursos'}
+                      </p>
+                      <div className="price">
+                        <span className="currency">R$</span>
+                        <strong id="price">{displayPrice}</strong>
+                        <span className="period">/mês</span>
+                      </div>
+                      <p className="price-term" id="price-term">
+                        {isCoupon50 ? 'Por mês, nos 3 primeiros meses.' : 'Assinatura com renovação mensal.'}
+                      </p>
+                    </div>
+
+                    <div className="rule"></div>
+
+                    <form id="coupon-form" noValidate onSubmit={handleApplyCoupon}>
+                      <label className="coupon-label" htmlFor="coupon">
+                        <svg className="icon" aria-hidden="true"><use href="#i-tag"/></svg>
+                        Tem um cupom de desconto?
+                      </label>
+                      <div className="input-row">
+                        <input
+                          id="coupon"
+                          name="coupon"
+                          type="text"
+                          placeholder="Digite seu cupom"
+                          autoComplete="off"
+                          autoCapitalize="characters"
+                          spellCheck="false"
+                          maxLength={40}
+                          aria-describedby="coupon-status"
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value)}
+                        />
+                        <button className="apply" id="apply" type="submit">Aplicar</button>
+                      </div>
+                      <p
+                        className={`coupon-status ${couponStatus.type}`}
+                        id="coupon-status"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        {couponStatus.message}
+                      </p>
+                    </form>
+
+                    <div className="coupon-chip" id="coupon-chip" hidden={!appliedCoupon}>
+                      <svg className="icon" aria-hidden="true"><use href="#i-check"/></svg>
+                      <span>{appliedCoupon} · {isCoupon50 ? '50% de desconto' : 'Desconto aplicado'}</span>
+                      <button className="remove" id="remove" type="button" onClick={handleRemoveCoupon}>Remover</button>
+                    </div>
+
+                    <div className="bonus" id="bonus" hidden={!isCoupon50}>
+                      <div className="book-stack" aria-hidden="true"><i></i><i></i><i></i></div>
+                      <div>
+                        <strong>Seu cupom também desbloqueia um bônus</strong>
+                        <span>Kit com 3 e-books incluído na assinatura.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Etapa 2: Formulário Seguro de Pagamento Mercado Pago */}
+                  <section id="payment-step" aria-labelledby="payment-title" hidden={step !== 2}>
+                    <div className="card-section-head">
+                      <div>
+                        <h2 id="payment-title" tabIndex={-1}>Pague com Segurança.</h2>
+                        <p>Uma parceria Mercado Pago</p>
+                      </div>
+                      <span className="mp-mark">
+                        <img
+                          className="mp-logo"
+                          src="data:image/png;base64,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"
+                          alt="Mercado Pago"
+                          width="554"
+                          height="554"
+                        />
+                      </span>
+                    </div>
+
+                    {/* Preview visual enquanto carrega */}
+                    {!isBrickReady && (
+                      <div className="payment-preview" id="payment-preview">
+                        <div className="preview-fields" aria-label="Exemplo visual do formulário. Campos desativados.">
+                          <label>
+                            Número do cartão
+                            <input disabled placeholder="0000 0000 0000 0000" autoComplete="off" />
+                          </label>
+                          <div className="field-pair">
+                            <label>
+                              Validade
+                              <input disabled placeholder="MM/AA" autoComplete="off" />
+                            </label>
+                            <label>
+                              Código de segurança
+                              <input disabled placeholder="CVV" autoComplete="off" />
+                            </label>
                           </div>
-                          <div className="space-y-1.5">
-                            <div className="h-3 w-16 bg-zinc-200 dark:bg-zinc-800 rounded" />
-                            <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
+                          <label>
+                            Nome no cartão
+                            <input disabled placeholder="Como aparece no cartão" autoComplete="off" />
+                          </label>
+                          <div className="field-pair">
+                            <label>
+                              CPF
+                              <input disabled placeholder="000.000.000-00" autoComplete="off" />
+                            </label>
+                            <label>
+                              E-mail
+                              <input disabled placeholder="seu@email.com" autoComplete="off" />
+                            </label>
                           </div>
                         </div>
-                        <div className="space-y-1.5">
-                          <div className="h-3 w-32 bg-zinc-200 dark:bg-zinc-800 rounded" />
-                          <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
-                        </div>
-                        <div className="h-12 w-full bg-zinc-200/90 dark:bg-zinc-800 rounded-xl mt-3" />
                       </div>
                     )}
 
-                    {/* Componente CardPayment oficial do @mercadopago/sdk-react */}
-                    <div className={!isBrickReady ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100 transition-opacity duration-300'}>
+                    {!isBrickReady && !brickError && (
+                      <p id="brick-loading" className="inline-note" role="status">
+                        Carregando formulário seguro do Mercado Pago…
+                      </p>
+                    )}
+
+                    {/* Contentor do Brick do Mercado Pago */}
+                    <div
+                      id="cardPaymentBrick_container"
+                      className="mercado-pago-brick-container"
+                      data-testid="payment-brick-container"
+                      style={{ minWidth: 0, marginTop: 10 }}
+                    >
                       <CardPayment
                         initialization={cardInitialization}
                         customization={cardCustomization}
@@ -808,84 +609,94 @@ export function CheckoutScreen() {
                       />
                     </div>
 
-                    {/* Feedback se o script falhar ou demorar */}
                     {brickError && (
-                      <div className="mt-3 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
-                        <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-                        <div className="flex-1">
-                          <p className="font-semibold">{brickError}</p>
-                          <p className="mt-0.5 text-[11px] opacity-90">Verifique sua conexão ou tente recarregar os campos.</p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBrickError(null);
-                              setIsBrickReady(false);
-                            }}
-                            className="mt-2 text-xs font-bold text-amber-900 dark:text-amber-200 underline cursor-pointer"
-                          >
-                            Recarregar formulário seguro
-                          </button>
-                        </div>
+                      <div style={{ marginTop: 12 }}>
+                        <p style={{ color: 'var(--red)', fontSize: 11 }}>{brickError}</p>
+                        <button
+                          type="button"
+                          className="retry-payment"
+                          id="retry-payment"
+                          onClick={() => {
+                            setBrickError(null);
+                            setIsBrickReady(false);
+                          }}
+                        >
+                          Tentar carregar novamente
+                        </button>
                       </div>
                     )}
-                  </div>
-
-                  {/* Feedback de Status Manual */}
-                  {statusFeedback && (
-                    <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs flex items-start justify-between gap-2">
-                      <span>{statusFeedback}</span>
-                      <button type="button" onClick={() => setStatusFeedback(null)} className="text-zinc-400 hover:text-zinc-600">
-                        <X size={12} />
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Botão de Verificação de Status */}
-                  <div className="pt-2 flex flex-col items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleRefreshStatus}
-                      disabled={isCheckingStatus}
-                      className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <RefreshCw size={12} className={isCheckingStatus ? "animate-spin text-[#265de4]" : "text-zinc-400"} />
-                      <span>Já realizou o pagamento? Atualizar status</span>
-                    </button>
-
-                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
-                      <ShieldCheck size={13} className="text-zinc-400" />
-                      <span>Criptografia de ponta a ponta Mercado Pago</span>
-                    </div>
-                  </div>
-
-                  {/* Loading Overlay durante submissão */}
-                  {loading && (
-                    <div className="absolute inset-0 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-[28px] gap-3 z-30">
-                      <Loader2 size={32} className="animate-spin text-[#265de4] dark:text-[#60a5fa]" />
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-white">Processando assinatura segura…</p>
-                    </div>
-                  )}
+                  </section>
                 </div>
-              )}
+
+                {/* Resumo Financeiro */}
+                <dl className="summary">
+                  <div>
+                    <dt>Plano mensal</dt>
+                    <dd>R$ 19,90</dd>
+                  </div>
+                  <div className="discount" id="discount-row" hidden={!appliedCoupon}>
+                    <dt>Desconto {appliedCoupon} ({isCoupon50 ? '50%' : 'Desconto'})</dt>
+                    <dd>− R$ {discountAmount}</dd>
+                  </div>
+                  <div className="total">
+                    <dt>Total da primeira mensalidade</dt>
+                    <dd id="total">R$ {displayPrice}</dd>
+                  </div>
+                </dl>
+
+                {/* Botão de Ação CTA */}
+                <button
+                  className="cta"
+                  id="subscribe"
+                  type="button"
+                  onClick={handleCtaClick}
+                  disabled={loading}
+                  aria-describedby="renewal"
+                >
+                  <span id="button-label">
+                    {loading
+                      ? 'Processando…'
+                      : step === 1
+                      ? `Ir para pagamento · R$ ${displayPrice}/mês`
+                      : `Assinar por R$ ${displayPrice}/mês`}
+                  </span>
+                  <svg className="icon" aria-hidden="true"><use href="#i-arrow"/></svg>
+                </button>
+
+                {errorMessage && (
+                  <p id="checkout-error" role="alert">
+                    {errorMessage}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  className="retry-payment"
+                  id="check-status"
+                  onClick={handleRefreshStatus}
+                  disabled={isCheckingStatus}
+                  style={{ marginTop: 10 }}
+                >
+                  {isCheckingStatus ? 'Verificando confirmação…' : 'Já pagou? Verificar confirmação'}
+                </button>
+
+                <p className="renewal" id="renewal">
+                  {isCoupon50
+                    ? 'R$ 9,95/mês nos 3 primeiros meses. A partir do 4º mês, R$ 19,90/mês, com renovação mensal.'
+                    : 'R$ 19,90/mês, com renovação mensal.'}
+                </p>
+              </section>
             </div>
-          </section>
+          </div>
         </main>
 
-        {/* ================= FOOTER INFERIOR ================= */}
-        <footer className="py-4 border-t border-black/[0.08] dark:border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-zinc-500 dark:text-zinc-400 mt-6">
-          <span>© {new Date().getFullYear()} Nexus Focus · Sua rotina, mais inteligente.</span>
-          <div className="flex items-center gap-4">
-            <Link to="/privacidade" target="_blank" className="hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
-              Política de Privacidade
-            </Link>
-            <span>•</span>
-            <span className="flex items-center gap-1">
-              <Shield size={12} />
-              Ambiente Seguro
-            </span>
-          </div>
+        <footer className="footer">
+          <span className="footer-copyright">
+            © <span id="year">{new Date().getFullYear()}</span> Nexus Focus · Sua rotina, mais inteligente.
+          </span>
         </footer>
       </div>
     </div>
   );
 }
+export default CheckoutScreen;
