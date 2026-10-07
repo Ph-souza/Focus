@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
 import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
@@ -39,6 +39,7 @@ export function CheckoutScreen() {
   const [loading, setLoading] = useState(false);
   const [isBrickReady, setIsBrickReady] = useState(false);
   const [brickError, setBrickError] = useState<string | null>(null);
+  const [brickKey, setBrickKey] = useState(0);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   
@@ -99,10 +100,10 @@ export function CheckoutScreen() {
         if (!isBrickReady) {
           setBrickError('O formulário do Mercado Pago está demorando para responder.');
         }
-      }, 9000);
+      }, 10000);
     }
     return () => clearTimeout(timer);
-  }, [step, isBrickReady, brickError]);
+  }, [step, isBrickReady, brickError, brickKey]);
 
   // Redirecionamento se já possuir acesso Pro
   if (hasAccess) {
@@ -120,14 +121,22 @@ export function CheckoutScreen() {
   const displayPrice = isCoupon50 ? '9,95' : (isCoupon10 ? '14,90' : '19,90');
   const discountAmount = isCoupon50 ? '9,95' : (isCoupon10 ? '5,00' : '0,00');
 
-  const cardInitialization = {
-    amount: currentAmount,
-    payer: {
-      email: userEmail || currentUser?.email || undefined
+  // Memoização estrita da inicialização para impedir re-renderizações e loops destrutivos no iframe do Mercado Pago
+  const cardInitialization = useMemo(() => {
+    const init: any = {
+      amount: currentAmount,
+    };
+    const email = userEmail || currentUser?.email;
+    if (email && typeof email === 'string' && email.trim().includes('@')) {
+      init.payer = {
+        email: email.trim(),
+      };
     }
-  };
+    return init;
+  }, [currentAmount, userEmail, currentUser?.email]);
 
-  const cardCustomization = {
+  // Memoização estrita da customização conforme padrão homologado do Mercado Pago
+  const cardCustomization = useMemo(() => ({
     paymentMethods: {
       maxInstallments: 1,
     },
@@ -135,18 +144,25 @@ export function CheckoutScreen() {
       hideFormTitle: true,
       style: {
         theme: (theme === 'dark' ? 'dark' : 'default') as 'dark' | 'default',
-        customVariables: {
-          baseColor: theme === 'dark' ? '#ffffff' : '#18181b',
-          borderRadius: '12px',
-        },
       },
       texts: {
         formSubmit: 'Confirmar Pagamento',
       },
     },
-  };
+  }), [theme]);
 
-  const onSubmit = async (param: any) => {
+  const onReady = useCallback(() => {
+    setIsBrickReady(true);
+    setBrickError(null);
+  }, []);
+
+  const onError = useCallback((error: any) => {
+    console.error('[Mercado Pago Brick] Erro:', error);
+    setBrickError('Não foi possível carregar os campos do cartão no momento.');
+    setIsBrickReady(true);
+  }, []);
+
+  const onSubmit = useCallback(async (param: any) => {
     setLoading(true);
     setErrorMessage('');
     try {
@@ -201,7 +217,7 @@ export function CheckoutScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, userEmail, appliedCoupon, currentAmount]);
 
   const handleApplyCoupon = (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,14 +277,30 @@ export function CheckoutScreen() {
     }
   };
 
-  const handleCtaClick = () => {
+  const handleCtaClick = async () => {
     if (step === 1) {
       setStep(2);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    // Se estiver no step 2, dispara o submit do formulário do Mercado Pago
+    if (loading) return;
+
+    // Se estiver no step 2, tenta obter os dados tokenizados via controller ou clica no submit nativo
+    const controller = (window as any).cardPaymentBrickController;
+    if (controller && typeof controller.getFormData === 'function') {
+      try {
+        const result = await controller.getFormData();
+        const data = result?.formData || result;
+        if (data && (data.token || result?.token)) {
+          await onSubmit(data);
+          return;
+        }
+      } catch (err: any) {
+        console.warn('[Mercado Pago Brick] Validação getFormData:', err);
+      }
+    }
+
     const submitBtn = document.querySelector('#cardPaymentBrick_container button[type="submit"]') as HTMLButtonElement | null;
     if (submitBtn) {
       submitBtn.click();
@@ -536,7 +568,7 @@ export function CheckoutScreen() {
                       <span className="mp-mark">
                         <img
                           className="mp-logo"
-                          src="data:image/png;base64,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"
+                          src="data:image/png;base64,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"
                           alt="Mercado Pago"
                           width="554"
                           height="554"
@@ -544,70 +576,30 @@ export function CheckoutScreen() {
                       </span>
                     </div>
 
-                    {/* Preview visual enquanto carrega */}
-                    {!isBrickReady && (
-                      <div className="payment-preview" id="payment-preview">
-                        <div className="preview-fields" aria-label="Exemplo visual do formulário. Campos desativados.">
-                          <label>
-                            Número do cartão
-                            <input disabled placeholder="0000 0000 0000 0000" autoComplete="off" />
-                          </label>
-                          <div className="field-pair">
-                            <label>
-                              Validade
-                              <input disabled placeholder="MM/AA" autoComplete="off" />
-                            </label>
-                            <label>
-                              Código de segurança
-                              <input disabled placeholder="CVV" autoComplete="off" />
-                            </label>
-                          </div>
-                          <label>
-                            Nome no cartão
-                            <input disabled placeholder="Como aparece no cartão" autoComplete="off" />
-                          </label>
-                          <div className="field-pair">
-                            <label>
-                              CPF
-                              <input disabled placeholder="000.000.000-00" autoComplete="off" />
-                            </label>
-                            <label>
-                              E-mail
-                              <input disabled placeholder="seu@email.com" autoComplete="off" />
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
+                    {/* Loading e Container Seguro do Brick */}
                     {!isBrickReady && !brickError && (
                       <p id="brick-loading" className="inline-note" role="status">
                         Carregando formulário seguro do Mercado Pago…
                       </p>
                     )}
 
-                    {/* Contentor do Brick do Mercado Pago */}
-                    <div
-                      id="cardPaymentBrick_container"
-                      className="mercado-pago-brick-container"
-                      data-testid="payment-brick-container"
-                      style={{ minWidth: 0, marginTop: 10 }}
-                    >
-                      <CardPayment
-                        initialization={cardInitialization}
-                        customization={cardCustomization}
-                        onSubmit={onSubmit}
-                        onReady={() => {
-                          setIsBrickReady(true);
-                          setBrickError(null);
-                        }}
-                        onError={(error: any) => {
-                          console.error('Erro no formulário de pagamento Mercado Pago:', error);
-                          setBrickError('Não foi possível carregar os campos do cartão no momento.');
-                          setIsBrickReady(true);
-                        }}
-                      />
-                    </div>
+                    {step === 2 && (
+                      <div
+                        className="mercado-pago-brick-wrapper"
+                        data-testid="payment-brick-container"
+                        style={{ minWidth: 0, marginTop: 10 }}
+                      >
+                        <CardPayment
+                          key={brickKey}
+                          id="cardPaymentBrick_container"
+                          initialization={cardInitialization}
+                          customization={cardCustomization}
+                          onSubmit={onSubmit}
+                          onReady={onReady}
+                          onError={onError}
+                        />
+                      </div>
+                    )}
 
                     {brickError && (
                       <div style={{ marginTop: 12 }}>
@@ -619,6 +611,7 @@ export function CheckoutScreen() {
                           onClick={() => {
                             setBrickError(null);
                             setIsBrickReady(false);
+                            setBrickKey(k => k + 1);
                           }}
                         >
                           Tentar carregar novamente
