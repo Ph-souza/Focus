@@ -9,21 +9,19 @@ import {
   ArrowRight,
   RefreshCw,
   User,
-  Users,
-  Star,
   Tag,
   CheckCircle2,
   AlertCircle,
   X,
   Loader2,
-  CreditCard,
   Sparkles,
-  Brain,
-  Flame,
-  Target,
-  TrendingUp,
-  Zap,
-  BadgeCheck
+  ListTodo,
+  Wallet,
+  Calendar,
+  Bot,
+  Sun,
+  Moon,
+  Gift
 } from 'lucide-react';
 import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { NexusFocusLogo } from './AuraLogo';
@@ -57,17 +55,41 @@ if (typeof window !== 'undefined' && MP_PUBLIC_KEY) {
 
 export function CheckoutScreen() {
   const { currentUser, isPremium, logout } = useAuth();
-  const [isFlipped, setIsFlipped] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
   const [isBrickReady, setIsBrickReady] = useState(false);
   const [brickError, setBrickError] = useState<string | null>(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
-  const [showCouponInput, setShowCouponInput] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponError, setCouponError] = useState('');
+  const [showCouponInput, setShowCouponInput] = useState(false);
+
+  // Controle de tema claro/escuro
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return document.documentElement.classList.contains('dark') || document.body.classList.contains('dark');
+    }
+    return false;
+  });
+
+  const toggleTheme = () => {
+    const next = !isDarkMode;
+    setIsDarkMode(next);
+    if (typeof window !== 'undefined') {
+      if (next) {
+        document.documentElement.classList.add('dark');
+        document.body.classList.add('dark');
+        localStorage.setItem('nexus_dark_mode', 'true');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.body.classList.remove('dark');
+        localStorage.setItem('nexus_dark_mode', 'false');
+      }
+    }
+  };
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
   const hasAccess = isPremium || isWhitelistedPro(userEmail);
@@ -83,10 +105,10 @@ export function CheckoutScreen() {
     }
   }, []);
 
-  // Timeout preventivo: se o script do Mercado Pago for bloqueado por adblocker ou demorar na rede
+  // Timeout preventivo: se o script do Mercado Pago demorar na rede
   useEffect(() => {
     let timer: any;
-    if (isFlipped && !isBrickReady && !brickError) {
+    if (step === 2 && !isBrickReady && !brickError) {
       timer = setTimeout(() => {
         if (!isBrickReady) {
           setBrickError('O formulário do Mercado Pago está demorando para responder.');
@@ -94,15 +116,28 @@ export function CheckoutScreen() {
       }, 8500);
     }
     return () => clearTimeout(timer);
-  }, [isFlipped, isBrickReady, brickError]);
+  }, [step, isBrickReady, brickError]);
 
   // Redirecionamento automático se já for Pro
   if (hasAccess) {
     return <Navigate to="/dashboard" replace />;
   }
 
+  // Cálculo dinâmico do valor
+  const getAmount = () => {
+    if (!couponApplied) return 19.90;
+    const code = couponCode.trim().toUpperCase();
+    if (code === 'FOCUS50') return 9.95;
+    if (code === 'FOCUS10' || code === 'PROMO') return 14.90;
+    return 19.90;
+  };
+
+  const currentAmount = getAmount();
+  const formatMoney = (val: number) =>
+    val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const cardInitialization = {
-    amount: couponApplied ? 14.90 : 19.90, // Valor da mensalidade Pro (R$ 19,90 ou R$ 14,90 com cupom)
+    amount: currentAmount,
     payer: {
       email: userEmail || currentUser?.email || undefined
     }
@@ -115,9 +150,9 @@ export function CheckoutScreen() {
     visual: {
       hideFormTitle: true,
       style: {
-        theme: 'default' as const,
+        theme: isDarkMode ? ('dark' as const) : ('default' as const),
         customVariables: {
-          baseColor: '#18181b',
+          baseColor: isDarkMode ? '#2563eb' : '#18181b',
           borderRadius: '14px',
         },
       },
@@ -127,20 +162,17 @@ export function CheckoutScreen() {
     },
   };
 
-  // Fluxo de Pagamento Interno (Swipe Card)
-  const handleCheckout = () => {
+  const handleGoToPayment = () => {
     setErrorMessage('');
     setIsBrickReady(false);
     setBrickError(null);
-    setIsFlipped(true);
+    setStep(2);
   };
 
-  const handleBack = () => {
-    setIsFlipped(false);
+  const handleBackToPlan = () => {
+    setStep(1);
     setLoading(false);
     setErrorMessage('');
-    setIsBrickReady(false);
-    setBrickError(null);
   };
 
   const onSubmit = async (param: any) => {
@@ -167,7 +199,7 @@ export function CheckoutScreen() {
           issuerId: formData.issuer_id || formData.issuerId,
           installments: formData.installments || 1,
           coupon: couponApplied ? couponCode : undefined,
-          amount: couponApplied ? 14.90 : 19.90,
+          amount: currentAmount,
         }),
       });
 
@@ -177,8 +209,7 @@ export function CheckoutScreen() {
         throw new Error(data.error || 'Erro ao processar a assinatura.');
       }
 
-      // Sucesso: fecha o swipe card e libera o acesso redirecionando para o dashboard
-      setIsFlipped(false);
+      // Sucesso: redireciona para o dashboard
       window.location.href = '/dashboard';
     } catch (err: any) {
       console.error('Erro no pagamento:', err);
@@ -192,9 +223,10 @@ export function CheckoutScreen() {
   const handleApplyCoupon = (e: React.FormEvent) => {
     e.preventDefault();
     setCouponError('');
-    if (!couponCode.trim()) return;
+    const code = couponCode.trim().toUpperCase();
+    if (!code) return;
 
-    if (couponCode.trim().toUpperCase() === 'FOCUS10' || couponCode.trim().toUpperCase() === 'PROMO') {
+    if (code === 'FOCUS50' || code === 'FOCUS10' || code === 'PROMO') {
       setCouponApplied(true);
       setCouponError('');
     } else {
@@ -202,11 +234,16 @@ export function CheckoutScreen() {
     }
   };
 
+  const handleRemoveCoupon = () => {
+    setCouponApplied(false);
+    setCouponCode('');
+    setCouponError('');
+  };
+
   const handleRefreshStatus = async () => {
     try {
       setIsCheckingStatus(true);
       setStatusFeedback(null);
-      // Pequeno delay para checar sincronização com o Firestore / backend
       await new Promise((r) => setTimeout(r, 1200));
 
       if (isWhitelistedPro(userEmail)) {
@@ -223,458 +260,632 @@ export function CheckoutScreen() {
   };
 
   const benefits = [
-    'Mentor IA com raciocínio financeiro em tempo real',
-    'Modo Foco & Timeboxing sincronizado',
-    'Gestão ilimitada de Caixinhas, Metas e Orçamento',
-    'Integração via WhatsApp com leitura automática de gastos',
-    'Sincronização em nuvem e segurança de nível executivo'
-  ];
-
-  const planGuarantees = [
-    'Acesso completo a todos os recursos',
-    'Suporte prioritário',
-    'Atualizações e novos recursos incluídos',
-    'Cancele quando quiser, sem complicação'
+    {
+      icon: <ListTodo className="w-5 h-5 text-[#265de4] dark:text-[#60a5fa]" />,
+      title: 'Tarefas e projetos',
+      desc: 'Tire os planos do papel com priorização clara.'
+    },
+    {
+      icon: <Wallet className="w-5 h-5 text-[#265de4] dark:text-[#60a5fa]" />,
+      title: 'Organização financeira',
+      desc: 'Saiba exatamente para onde seu dinheiro vai.'
+    },
+    {
+      icon: <Calendar className="w-5 h-5 text-[#265de4] dark:text-[#60a5fa]" />,
+      title: 'Agenda e foco',
+      desc: 'Abra espaço para o que realmente importa.'
+    },
+    {
+      icon: <Bot className="w-5 h-5 text-[#265de4] dark:text-[#60a5fa]" />,
+      title: 'Mentor IA',
+      desc: 'Ajuda inteligente para seguir em frente todos os dias.'
+    }
   ];
 
   return (
-    <div className="min-h-screen w-full flex flex-col justify-between items-center px-4 sm:px-6 py-6 sm:py-8 relative overflow-x-hidden bg-[url('/login-desktop-bg.jpg')] bg-cover bg-center bg-no-repeat selection:bg-zinc-900 selection:text-white">
-      {/* Soft Ambient Light Glow Overlay */}
-      <div className="absolute inset-0 bg-radial-[circle_at_center_top] from-white/30 via-transparent to-transparent pointer-events-none" />
+    <div className="min-h-screen w-full relative flex flex-col justify-between overflow-x-hidden bg-[#f8f9fb] dark:bg-[#10141d] text-[#131923] dark:text-[#f2f5fa] transition-colors duration-300">
+      {/* Background Ambiente com gradientes radiais suaves e grid pontilhado */}
+      <div className="checkout-ambient" aria-hidden="true">
+        <div className="absolute w-[440px] h-[440px] -right-[200px] top-[220px] rounded-full border border-blue-200/20 dark:border-blue-500/10 shadow-[0_0_0_55px_rgba(155,177,213,0.035),0_0_0_110px_rgba(155,177,213,0.035)] pointer-events-none" />
+      </div>
 
-      {/* Top Header Center Branding */}
-      <header className="w-full text-center relative z-10 pt-2 sm:pt-4 mb-4 sm:mb-6">
-        <span className="text-[12px] sm:text-xs font-bold tracking-[0.28em] text-zinc-900 uppercase block mb-1">
-          N E X U S &nbsp; F O C U S
-        </span>
-        <span className="text-[11px] sm:text-xs font-medium text-zinc-500 tracking-wider block">
-          Sua Rotina mais inteligente
-        </span>
-      </header>
+      <div className="w-full max-w-[1160px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex-1 flex flex-col justify-between py-5 sm:py-7">
+        
+        {/* ================= HEADER SUPERIOR ================= */}
+        <header className="flex items-center justify-between py-4 border-b border-black/[0.08] dark:border-white/[0.08] mb-6 sm:mb-8">
+          <Link to="/homepage" className="flex items-center gap-3 no-underline group cursor-pointer" aria-label="Nexus Focus, página inicial">
+            <div className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+              <NexusFocusLogo className="w-6 h-6" variant={isDarkMode ? 'light' : 'dark'} />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[15px] sm:text-base font-extrabold tracking-tight text-zinc-950 dark:text-white leading-tight">
+                NEXUS <span className="font-light text-zinc-600 dark:text-zinc-400">FOCUS</span>
+              </span>
+              <span className="text-[10px] text-zinc-500 dark:text-zinc-400 tracking-wider">
+                Sua rotina, mais inteligente.
+              </span>
+            </div>
+          </Link>
 
-      {/* Dual Card Main Container */}
-      <main className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 relative z-10 my-auto items-stretch">
+          <div className="flex items-center gap-3 sm:gap-5">
+            {/* Indicador de Checkout Seguro */}
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400 font-medium">
+              <Lock size={14} className="text-[#265de4] dark:text-[#60a5fa]" />
+              <span>Checkout seguro</span>
+            </div>
 
-        {/* ================= LEFT CARD: Feature & Value Showcase (Apple Clean Style) ================= */}
-        <section className="lg:col-span-7 bg-white/80 backdrop-blur-2xl border border-white/90 rounded-[32px] p-6 sm:p-8 lg:p-9 shadow-[0_20px_50px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.03)] flex flex-col justify-between">
-          <div>
-            {/* Left Card Header with Logo & Pro Pill */}
-            <div className="flex items-center justify-between gap-4 mb-7">
-              <div className="flex items-center gap-3.5">
-                <div className="w-13 h-13 sm:w-14 sm:h-14 bg-white/95 rounded-2xl border border-white shadow-[0_4px_16px_rgba(0,0,0,0.05)] flex items-center justify-center shrink-0">
-                  <NexusFocusLogo className="w-8 h-8 sm:w-9 sm:h-9" variant="dark" />
+            {/* Sessão do Usuário */}
+            {currentUser?.email && (
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.06] dark:border-white/[0.06]">
+                <User size={13} className="text-zinc-500 dark:text-zinc-400" />
+                <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300 max-w-[130px] sm:max-w-[180px] truncate">
+                  {currentUser.email}
+                </span>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="text-[10px] font-semibold text-rose-500 hover:text-rose-600 ml-1 cursor-pointer"
+                  title="Trocar de conta"
+                >
+                  Sair
+                </button>
+              </div>
+            )}
+
+            {/* Alternador de Tema */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="w-9 h-9 rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-white/60 dark:bg-slate-900/60 text-zinc-700 dark:text-zinc-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer"
+              aria-label={isDarkMode ? 'Ativar tema claro' : 'Ativar tema escuro'}
+            >
+              {isDarkMode ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+          </div>
+        </header>
+
+        {/* ================= CONTEÚDO PRINCIPAL (LAYOUT 2 COLUNAS) ================= */}
+        <main className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-start flex-1 my-auto pb-6">
+          
+          {/* ================= COLUNA DA ESQUERDA: APRESENTAÇÃO & BENEFÍCIOS ================= */}
+          <section className="lg:col-span-7 flex flex-col justify-center pt-2">
+            
+            {/* Eyebrow */}
+            <div className="flex items-center gap-2.5 text-[#265de4] dark:text-[#60a5fa] text-[10px] sm:text-[11px] font-bold tracking-[0.2em] uppercase mb-4">
+              <span className="w-5 h-0.5 bg-current" />
+              <span>Seu próximo passo</span>
+            </div>
+
+            {/* Título Principal */}
+            <h1 className="text-3xl sm:text-4xl lg:text-[46px] font-extrabold tracking-tight text-zinc-950 dark:text-white leading-[1.12] mb-4">
+              Seu próximo passo.<br />
+              <span className="text-[#265de4] dark:text-[#60a5fa]">Mais direção.</span><br />
+              Menos distração.
+            </h1>
+
+            {/* Lead */}
+            <p className="text-sm sm:text-[15px] text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-lg mb-6">
+              Tudo o que você precisa para organizar o dia e cuidar do seu dinheiro, em um só lugar.
+            </p>
+
+            {/* Palco Visual de Recursos (Visual Stage com Cards Flutuantes 3D) */}
+            <div className="visual-stage w-full max-w-[500px]" role="img" aria-label="Recursos Nexus Focus em ação">
+              
+              {/* Arte Orbital SVG */}
+              <svg className="orbit-art" viewBox="0 0 520 320" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                <defs>
+                  <radialGradient id="stageHalo">
+                    <stop stopColor="#82aafa" stopOpacity="0.4" />
+                    <stop offset="1" stopColor="#82aafa" stopOpacity="0" />
+                  </radialGradient>
+                </defs>
+                <ellipse cx="260" cy="161" rx="211" ry="145" fill="url(#stageHalo)" />
+                <g fill="none" stroke="currentColor" strokeWidth="0.8">
+                  <ellipse cx="260" cy="166" rx="216" ry="96" transform="rotate(-22 260 166)" />
+                  <ellipse cx="260" cy="166" rx="165" ry="121" transform="rotate(28 260 166)" strokeDasharray="3 7" />
+                  <path d="M65 166h391M260 33v262" opacity="0.25" />
+                </g>
+                <g fill="currentColor">
+                  <circle cx="85" cy="221" r="4" />
+                  <circle cx="423" cy="82" r="3" />
+                  <circle cx="324" cy="278" r="3" />
+                  <path d="m332 31 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z" />
+                </g>
+              </svg>
+
+              {/* Nexus Core Central */}
+              <div className="nexus-core" aria-hidden="true">
+                <NexusFocusLogo className="w-16 h-16" variant={isDarkMode ? 'light' : 'dark'} />
+              </div>
+
+              {/* Float Card 1: Tarefas */}
+              <div className="float-card task-card select-none" aria-hidden="true">
+                <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
+                  <ListTodo size={13} className="text-[#265de4] dark:text-[#60a5fa]" />
+                  <span className="text-[9px] tracking-wider uppercase font-semibold">Seu dia, em ordem</span>
+                </div>
+                <b className="text-[11px] font-bold text-zinc-900 dark:text-white block mb-2">Uma coisa de cada vez.</b>
+                <div className="space-y-1.5 text-[10px] text-zinc-600 dark:text-zinc-300">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <span className="w-3.5 h-3.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[9px] font-bold">✓</span>
+                    <span>Organizar prioridades</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 opacity-75">
+                    <span className="w-3.5 h-3.5 rounded border border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-[9px]" />
+                    <span>Tirar planos do papel</span>
+                  </div>
+                </div>
+                <div className="h-1 rounded-full bg-blue-100 dark:bg-blue-950 mt-3 overflow-hidden">
+                  <div className="w-[70%] h-full bg-[#366bea] rounded-full" />
+                </div>
+              </div>
+
+              {/* Float Card 2: Finanças */}
+              <div className="float-card finance-card select-none" aria-hidden="true">
+                <div className="flex items-center gap-1.5 mb-1 text-zinc-500 dark:text-zinc-400">
+                  <Wallet size={13} className="text-[#265de4] dark:text-[#60a5fa]" />
+                  <span className="text-[9px] tracking-wider uppercase font-semibold">Finanças</span>
+                </div>
+                <b className="text-[11px] font-bold text-zinc-900 dark:text-white block">Mais controle.</b>
+                <div className="finance-bars">
+                  <i style={{ height: '35%' }} />
+                  <i style={{ height: '58%' }} />
+                  <i style={{ height: '45%' }} />
+                  <i style={{ height: '77%' }} />
+                  <i style={{ height: '68%' }} />
+                  <i style={{ height: '100%' }} />
+                </div>
+              </div>
+
+              {/* Float Card 3: Foco */}
+              <div className="float-card focus-card select-none" aria-hidden="true">
+                <div className="focus-ring shrink-0">25:00</div>
+                <div>
+                  <strong className="text-xs font-bold text-zinc-900 dark:text-white block">Hora de focar.</strong>
+                  <span className="text-[9px] text-zinc-500 dark:text-zinc-400">Um passo por vez</span>
+                </div>
+              </div>
+
+              {/* Float Card 4: Mentor IA */}
+              <div className="float-card mentor-card select-none" aria-hidden="true">
+                <div className="w-8 h-8 rounded-xl bg-blue-100/80 dark:bg-blue-950/80 border border-blue-200/60 dark:border-blue-800/60 flex items-center justify-center text-[#265de4] dark:text-[#60a5fa] shrink-0">
+                  <Bot size={18} />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-xs sm:text-sm font-extrabold tracking-[0.25em] text-zinc-950 uppercase">
-                    NEXUS FOCUS
-                  </span>
-                  <span className="text-[11px] sm:text-xs text-zinc-500 font-medium tracking-wide">
-                    Sua Rotina mais inteligente
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-100/90 border border-zinc-200/60 text-zinc-700 text-[11px] font-semibold shadow-2xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span>Acesso Pro</span>
-              </div>
-            </div>
-
-            {/* Split Content: Text & Checklist on Left | Pedestal Graphic on Right */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 lg:gap-8 items-center">
-
-              {/* Text & Checklist */}
-              <div className="md:col-span-7 flex flex-col justify-center">
-                <h1 className="text-2xl sm:text-3xl lg:text-[34px] font-extrabold text-zinc-950 tracking-tight leading-[1.15] mb-2.5">
-                  Eleve seu Foco<br />e Gestão
-                </h1>
-                <p className="text-zinc-500 text-xs sm:text-[13px] leading-relaxed mb-6 font-normal">
-                  Desbloqueie o potencial máximo da sua mente com ferramentas desenhadas para alta performance.
-                </p>
-
-                {/* 5 Bullet Features */}
-                <div className="space-y-3.5">
-                  {[
-                    'Modo Foco Profundo com bloqueador de distrações',
-                    'Gestão de Tarefas e Metas por Prioridade',
-                    'Controle Financeiro e Gráficos de Desempenho',
-                    'Relatórios de Produtividade Diários e Semanais',
-                    'Treinamentos Exclusivos e Suporte Prioritário no WhatsApp'
-                  ].map((item, idx) => (
-                    <div key={idx} className="flex items-start gap-3">
-                      <div className="w-4 h-4 rounded-full bg-zinc-900 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-                        <Check size={10} strokeWidth={3} />
-                      </div>
-                      <span className="text-zinc-700 text-xs sm:text-[13px] font-medium leading-tight">
-                        {item}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Pedestal Graphic & Motto */}
-              <div className="md:col-span-5 flex flex-col items-center justify-center text-center mt-4 md:mt-0">
-                <div className="relative w-full max-w-[220px] sm:max-w-[240px] flex items-center justify-center">
-                  <img
-                    src="/checkout-pedestal.png"
-                    alt="Nexus Focus - Disciplina Hoje. Liberdade Sempre."
-                    className="w-full object-contain drop-shadow-[0_16px_32px_rgba(0,0,0,0.06)] select-none pointer-events-none"
-                  />
-                </div>
-                <div className="mt-4">
-                  <p className="text-[10px] sm:text-[11px] font-bold tracking-[0.28em] text-zinc-400 uppercase leading-relaxed">
-                    DISCIPLINA HOJE.<br />
-                    <span className="text-zinc-900 font-extrabold">LIBERDADE SEMPRE.</span>
-                  </p>
+                  <strong className="text-xs font-bold text-zinc-900 dark:text-white">Mentor IA</strong>
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400">com você</span>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Bottom Trust Metrics Row (Apple Clean Style) */}
-          <div className="border-t border-zinc-200/80 pt-6 mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-xl bg-zinc-100/90 border border-zinc-200/60 text-zinc-800 flex items-center justify-center shrink-0">
-                <Shield size={16} strokeWidth={2} />
-              </div>
-              <div>
-                <strong className="block text-xs font-bold text-zinc-900">100% seguro</strong>
-                <span className="text-[11px] text-zinc-500 leading-snug block">
-                  Seus dados protegidos com criptografia de ponta.
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-xl bg-zinc-100/90 border border-zinc-200/60 text-zinc-800 flex items-center justify-center shrink-0">
-                <Users size={16} strokeWidth={2} />
-              </div>
-              <div>
-                <strong className="block text-xs font-bold text-zinc-900">+10 mil usuários</strong>
-                <span className="text-[11px] text-zinc-500 leading-snug block">
-                  Mais foco, organização e resultados todos os dias.
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-xl bg-zinc-100/90 border border-zinc-200/60 text-zinc-800 flex items-center justify-center shrink-0">
-                <Star size={16} strokeWidth={2} />
-              </div>
-              <div>
-                <strong className="block text-xs font-bold text-zinc-900">4,9 de 5</strong>
-                <span className="text-[11px] text-zinc-500 leading-snug block">
-                  Usuários recomendam o Nexus Focus.
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ================= RIGHT CARD: Checkout & Plan Selection (3D FLIP) ================= */}
-        <div className="lg:col-span-5 perspective-[1000px] relative w-full h-full flex flex-col">
-          <div className={`w-full h-full transition-transform duration-700 [transform-style:preserve-3d] relative ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}>
-            
-            {/* ================= FRONT FACE ================= */}
-            <section className="[backface-visibility:hidden] bg-white/85 backdrop-blur-xl border border-white/90 rounded-[32px] p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between h-full relative z-10 min-h-[580px]">
-              <div>
-                {/* Top User Session Bar */}
-                <div className="flex items-center justify-between pb-4 border-b border-zinc-200/80 mb-5">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-600 shrink-0">
-                      <User size={15} />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-[10px] sm:text-[11px] text-zinc-400 block leading-tight">
-                        Conectado como
-                      </span>
-                      <span className="text-xs font-semibold text-zinc-900 truncate block leading-tight">
-                        {currentUser?.email || 'Usuário Nexus'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={logout}
-                    className="text-xs font-bold text-rose-500 hover:text-rose-600 transition-colors px-2 py-1 rounded-md cursor-pointer shrink-0"
-                  >
-                    Sair
-                  </button>
-                </div>
-
-                {/* Plan Header */}
-                <div className="flex items-center gap-3.5 mb-4">
-                  <div className="w-12 h-12 bg-white/95 rounded-2xl border border-zinc-200/80 shadow-sm flex items-center justify-center shrink-0">
-                    <NexusFocusLogo className="w-7 h-7" variant="dark" />
+            {/* Grade de 4 Benefícios */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+              {benefits.map((b, idx) => (
+                <div key={idx} className="flex items-start gap-3 p-2.5 rounded-2xl transition-colors">
+                  <div className="w-9 h-9 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-black/[0.06] dark:border-white/[0.08] shadow-2xs flex items-center justify-center shrink-0">
+                    {b.icon}
                   </div>
                   <div>
-                    <h2 className="text-xs sm:text-sm font-black tracking-wider text-zinc-950 uppercase">
-                      NEXUS FOCUS
-                    </h2>
-                    <span className="text-[11px] text-zinc-400 font-medium block">
-                      powered by Nexus Flow
-                    </span>
-                  </div>
-                </div>
-
-                {/* Pricing Highlight Card */}
-                <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 sm:p-4.5 flex justify-between items-center mb-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                  <div>
-                    <span className="text-[11px] font-black text-zinc-900 tracking-wider uppercase block mb-0.5">
-                      PLANO MENSAL
-                    </span>
-                    <span className="text-[11px] text-zinc-500">
-                      Renovação corporativa flexível
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-2xl sm:text-[26px] font-black text-zinc-950 tracking-tight">
-                      {couponApplied ? 'R$ 14,90' : 'R$ 19,90'}
-                    </span>
-                    <span className="text-xs text-zinc-500 font-medium">/mês</span>
-                  </div>
-                </div>
-
-                {/* Plan Guarantees Checklist */}
-                <div className="space-y-3 mb-6">
-                  {planGuarantees.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2.5 text-xs sm:text-[13px] text-zinc-700 font-medium">
-                      <CheckCircle2 size={16} className="text-zinc-800 shrink-0" strokeWidth={2} />
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Coupon Section */}
-                <div className="mb-5">
-                  {!showCouponInput ? (
-                    <button
-                      onClick={() => setShowCouponInput(true)}
-                      className="w-full flex items-center justify-between text-xs text-zinc-600 hover:text-zinc-900 font-medium py-1 cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Tag size={14} className="text-zinc-400" />
-                        <span>Tem um cupom de desconto?</span>
-                      </div>
-                      <span className="text-zinc-500 hover:underline">Adicionar &gt;</span>
-                    </button>
-                  ) : (
-                    <form onSubmit={handleApplyCoupon} className="space-y-2">
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="Código do cupom"
-                          value={couponCode}
-                          onChange={(e) => setCouponCode(e.target.value)}
-                          className="flex-1 px-3 py-2 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 uppercase font-semibold text-zinc-800"
-                        />
-                        <button
-                          type="submit"
-                          className="px-4 py-2 text-xs font-bold bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 cursor-pointer"
-                        >
-                          Aplicar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setShowCouponInput(false); setCouponError(''); }}
-                          className="p-2 text-zinc-400 hover:text-zinc-600 cursor-pointer"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                      {couponError && <p className="text-[11px] text-rose-500">{couponError}</p>}
-                      {couponApplied && <p className="text-[11px] text-emerald-600 font-semibold">✓ Cupom aplicado com sucesso!</p>}
-                    </form>
-                  )}
-                </div>
-
-                {/* Error Message */}
-                {errorMessage && (
-                  <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs flex items-start gap-2">
-                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
-                    <span>{errorMessage}</span>
-                  </div>
-                )}
-
-                {/* Status Feedback */}
-                {statusFeedback && (
-                  <div className="mb-4 p-3 rounded-xl bg-zinc-100 border border-zinc-200 text-zinc-700 text-xs flex items-start justify-between gap-2">
-                    <span>{statusFeedback}</span>
-                    <button onClick={() => setStatusFeedback(null)} className="text-zinc-400 hover:text-zinc-600">
-                      <X size={12} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Bottom Actions of Right Card */}
-              <div className="mt-auto pt-4">
-                {/* TODO: Certifique-se de substituir a chave/variável de ambiente do Stripe (ex: STRIPE_PRICE_ID / NEXT_PUBLIC_STRIPE_PRICE_ID / VITE_STRIPE_PRICE_ID) pelo novo ID correspondente ao plano de R$ 19,90 gerado no painel do Stripe */}
-                {/* Primary Action Button - Avança para o Swipe Card nativo de pagamento */}
-                <button
-                  onClick={handleCheckout}
-                  disabled={loading}
-                  className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold py-3.5 sm:py-4 px-5 rounded-2xl shadow-[0_6px_20px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.18)] transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed mb-3.5"
-                >
-                  <Lock size={15} className="text-white" />
-                  <span className="text-[14px] sm:text-base font-bold">Desbloquear Acesso Agora</span>
-                  <ArrowRight size={15} className="text-white" />
-                </button>
-
-                {/* Security Guarantee & Status Refresh */}
-                <div className="flex flex-col items-center gap-2">
-                  <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                    <ShieldCheck size={13} className="text-zinc-400" />
-                    <span>Pagamento 100% criptografado e seguro</span>
-                  </div>
-                  
-                  <p className="text-[10px] text-zinc-400 text-center max-w-[250px] mb-1">
-                    Ao prosseguir, você concorda com nossa{' '}
-                    <Link to="/privacidade" target="_blank" className="underline hover:text-zinc-600 transition-colors">Política de Privacidade</Link>
-                  </p>
-
-                  <button
-                    onClick={handleRefreshStatus}
-                    disabled={isCheckingStatus}
-                    className="text-xs text-zinc-500 hover:text-zinc-900 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    <RefreshCw size={12} className={isCheckingStatus ? "animate-spin text-zinc-700" : "text-zinc-400"} />
-                    <span>Já realizou o pagamento? Atualizar status</span>
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* ================= BACK FACE: Swipe Card de Pagamento Mercado Pago ================= */}
-            <section className="[backface-visibility:hidden] [transform:rotateY(180deg)] absolute inset-0 glass-card bg-white/95 dark:bg-zinc-950/90 backdrop-blur-2xl border border-white/90 dark:border-zinc-800/80 rounded-[32px] p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] flex flex-col h-full z-20 overflow-hidden">
-              
-              {/* Header with Back Button */}
-              <div className="flex justify-between items-center mb-4 pb-3 border-b border-zinc-200/80 dark:border-zinc-800/80 shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 flex items-center justify-center shadow-sm shrink-0">
-                    <Lock size={14} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm sm:text-base text-zinc-900 dark:text-white leading-tight">
-                      Pagamento Seguro
-                    </h3>
-                    <p className="text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400">
-                      Plano Mensal • {couponApplied ? 'R$ 14,90' : 'R$ 19,90'}/mês
+                    <strong className="text-xs font-bold text-zinc-900 dark:text-white block leading-tight mb-0.5">
+                      {b.title}
+                    </strong>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug">
+                      {b.desc}
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={handleBack}
-                  className="text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white text-xs font-bold bg-zinc-100 dark:bg-zinc-800/80 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shrink-0 border border-zinc-200/60 dark:border-zinc-700/60 active:scale-95"
-                  title="Voltar ao resumo do plano"
-                >
-                  <ArrowRight size={14} className="rotate-180" />
-                  <span>Voltar</span>
-                </button>
-              </div>
+              ))}
+            </div>
+          </section>
 
-              {/* Resumo do Pedido / Badge do Swipe Card */}
-              <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-zinc-50/80 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/80 flex items-center justify-between text-xs shrink-0">
-                <span className="text-zinc-500 font-medium">Total da assinatura:</span>
-                <span className="text-zinc-950 dark:text-white font-extrabold text-sm">
-                  {couponApplied ? 'R$ 14,90' : 'R$ 19,90'}
-                  <span className="text-[10px] font-normal text-zinc-400 ml-1">/ mês</span>
+          {/* ================= COLUNA DA DIREITA: CARTÃO DE CHECKOUT GLASSMORPHISM ================= */}
+          <section className="lg:col-span-5 w-full">
+            <div
+              id="checkout"
+              className="relative w-full rounded-[28px] p-6 sm:p-7 bg-white/75 dark:bg-[#1b2230]/75 backdrop-blur-2xl border border-white/90 dark:border-white/[0.1] shadow-[0_24px_80px_rgba(44,61,97,0.09)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.35)] overflow-hidden transition-all"
+            >
+              {/* Plan Art Header Banner */}
+              <div className="plan-art select-none">
+                <div className="w-10 h-10 rounded-xl bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 flex items-center justify-center shadow-sm shrink-0">
+                  <NexusFocusLogo className="w-6 h-6" variant={isDarkMode ? 'dark' : 'light'} />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <strong className="text-xs font-extrabold tracking-wider text-zinc-950 dark:text-white uppercase truncate">
+                    NEXUS FOCUS
+                  </strong>
+                  <small className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                    Sua rotina, mais inteligente.
+                  </small>
+                </div>
+                <span className="ml-auto px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#265de4]/10 dark:bg-[#9ebaff]/15 text-[#265de4] dark:text-[#9ebaff] border border-[#265de4]/20 shrink-0">
+                  Mensal
                 </span>
               </div>
 
-              {/* Mensagem de Erro de Validação/Gateway */}
-              {errorMessage && (
-                <div className="mb-3 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/50 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
-                  <AlertCircle size={15} className="shrink-0 text-red-600 dark:text-red-400" />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
+              {/* Stepper Navigation: Etapa 1 e Etapa 2 */}
+              <nav className="flex items-center gap-3 mb-5" aria-label="Etapas da assinatura">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className={`flex items-center gap-2 text-xs font-semibold py-1 transition-colors cursor-pointer ${
+                    step === 1 ? 'text-[#265de4] dark:text-[#9ebaff]' : 'text-zinc-400 hover:text-zinc-600'
+                  }`}
+                >
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] border ${
+                    step === 1 ? 'border-[#265de4] bg-[#265de4]/10 dark:border-[#9ebaff]' : 'border-zinc-300 dark:border-zinc-700'
+                  }`}>
+                    1
+                  </span>
+                  <span>Seu plano</span>
+                </button>
+                <div className="h-px flex-1 bg-black/[0.08] dark:bg-white/[0.08]" />
+                <button
+                  type="button"
+                  onClick={handleGoToPayment}
+                  className={`flex items-center gap-2 text-xs font-semibold py-1 transition-colors cursor-pointer ${
+                    step === 2 ? 'text-[#265de4] dark:text-[#9ebaff]' : 'text-zinc-400 hover:text-zinc-600'
+                  }`}
+                >
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] border ${
+                    step === 2 ? 'border-[#265de4] bg-[#265de4]/10 dark:border-[#9ebaff]' : 'border-zinc-300 dark:border-zinc-700'
+                  }`}>
+                    2
+                  </span>
+                  <span>Pagamento</span>
+                </button>
+              </nav>
 
-              {/* Brick do Mercado Pago integrado ao Glass-Card */}
-              <div className="mercado-pago-brick-container flex-1 overflow-y-auto px-1 -mx-1 pb-4 relative min-h-[340px]">
-                {/* Skeleton Loader elegante enquanto o Mercado Pago carrega os scripts externos */}
-                {!isBrickReady && !brickError && (
-                  <div className="w-full space-y-3 pt-2 animate-pulse" aria-label="Carregando formulário de pagamento">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-2">
-                      <Loader2 size={14} className="animate-spin text-zinc-700 dark:text-zinc-300" />
-                      <span>Carregando formulário seguro do Mercado Pago...</span>
-                    </div>
-                    {/* Campo Número do Cartão */}
-                    <div className="space-y-1.5">
-                      <div className="h-3 w-28 bg-zinc-200 dark:bg-zinc-800 rounded" />
-                      <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
-                    </div>
-                    {/* Campos Validade e CVV lado a lado */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-800 rounded" />
-                        <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <div className="h-3 w-16 bg-zinc-200 dark:bg-zinc-800 rounded" />
-                        <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
-                      </div>
-                    </div>
-                    {/* Campo Nome do Titular */}
-                    <div className="space-y-1.5">
-                      <div className="h-3 w-32 bg-zinc-200 dark:bg-zinc-800 rounded" />
-                      <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
-                    </div>
-                    {/* Botão de pagamento */}
-                    <div className="h-12 w-full bg-zinc-200/90 dark:bg-zinc-800 rounded-xl mt-4" />
+              {/* ================= VIEW: ETAPA 1 (RESUMO DO PLANO & CUPOM) ================= */}
+              {step === 1 && (
+                <div className="space-y-5 animate-in fade-in duration-200">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold text-zinc-950 dark:text-white tracking-tight">
+                      Sua nova rotina começa aqui.
+                    </h2>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      Uma assinatura. Sua rotina em ordem.
+                    </p>
                   </div>
-                )}
 
-                {/* Componente CardPayment do SDK React do Mercado Pago */}
-                <div className={!isBrickReady ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100 transition-opacity duration-300'}>
-                  <CardPayment
-                    initialization={cardInitialization}
-                    customization={cardCustomization}
-                    onSubmit={onSubmit}
-                    onReady={() => {
-                      setIsBrickReady(true);
-                      setBrickError(null);
-                    }}
-                    onError={(error: any) => {
-                      console.error('Erro no formulário de pagamento Mercado Pago:', error);
-                      setBrickError('Não foi possível carregar os campos do cartão no momento.');
-                      setIsBrickReady(true);
-                    }}
-                  />
-                </div>
+                  {/* Price Box com Selo de Oferta */}
+                  <div className="relative p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.06]">
+                    {couponApplied && couponCode.toUpperCase() === 'FOCUS50' && (
+                      <div className="offer-seal" aria-label="50% de desconto">
+                        <strong className="text-xl font-extrabold leading-none">50%</strong>
+                        <small className="text-[8px] font-bold tracking-widest">OFF</small>
+                      </div>
+                    )}
 
-                {brickError && (
-                  <div className="mt-4 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
-                    <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-                    <div className="flex-1">
-                      <p className="font-semibold">{brickError}</p>
-                      <p className="mt-0.5 text-[11px] opacity-90">Verifique os dados informados ou tente recarregar o formulário.</p>
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1">
+                      {couponApplied ? (
+                        <del className="text-zinc-400">De R$ 19,90/mês</del>
+                      ) : (
+                        'Acesso a todos os recursos'
+                      )}
+                    </p>
+
+                    <div className="flex items-baseline gap-1.5 tracking-tight">
+                      <span className="text-xl font-semibold text-zinc-700 dark:text-zinc-300">R$</span>
+                      <strong className="text-4xl sm:text-5xl font-black text-zinc-950 dark:text-white">
+                        {formatMoney(currentAmount)}
+                      </strong>
+                      <span className="text-xs text-zinc-500 font-medium">/mês</span>
+                    </div>
+
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1.5">
+                      {couponApplied && couponCode.toUpperCase() === 'FOCUS50'
+                        ? 'Por mês, nos 3 primeiros meses. Renovação flexível.'
+                        : 'Assinatura com renovação mensal. Cancele quando quiser.'}
+                    </p>
+                  </div>
+
+                  {/* Seção do Cupom de Desconto */}
+                  <div className="space-y-2">
+                    {!showCouponInput && !couponApplied ? (
                       <button
                         type="button"
-                        onClick={() => {
-                          setBrickError(null);
-                          setIsBrickReady(false);
-                        }}
-                        className="mt-2 text-xs font-bold text-amber-900 dark:text-amber-200 underline cursor-pointer"
+                        onClick={() => setShowCouponInput(true)}
+                        className="w-full flex items-center justify-between py-2 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white font-medium cursor-pointer transition-colors"
                       >
-                        Recarregar formulário
+                        <div className="flex items-center gap-2">
+                          <Tag size={14} className="text-[#265de4] dark:text-[#60a5fa]" />
+                          <span>Tem um cupom de desconto?</span>
+                        </div>
+                        <span className="text-[#265de4] dark:text-[#60a5fa] hover:underline font-semibold">Adicionar &gt;</span>
                       </button>
+                    ) : (
+                      <form onSubmit={handleApplyCoupon} className="space-y-2">
+                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                          <Tag size={13} className="text-[#265de4] dark:text-[#60a5fa]" />
+                          <span>Cupom de desconto</span>
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Digite seu cupom (ex: FOCUS50)"
+                            value={couponCode}
+                            onChange={(e) => {
+                              setCouponCode(e.target.value);
+                              setCouponError('');
+                            }}
+                            className="flex-1 px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#265de4] uppercase font-semibold text-zinc-900 dark:text-white"
+                          />
+                          <button
+                            type="submit"
+                            className="px-4 py-2 text-xs font-bold bg-[#131923] dark:bg-white text-white dark:text-zinc-950 rounded-xl hover:opacity-90 transition-opacity cursor-pointer"
+                          >
+                            Aplicar
+                          </button>
+                          {showCouponInput && !couponApplied && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowCouponInput(false);
+                                setCouponError('');
+                              }}
+                              className="p-2 text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                            >
+                              <X size={15} />
+                            </button>
+                          )}
+                        </div>
+                        {couponError && <p className="text-[11px] text-rose-500 font-medium">{couponError}</p>}
+                      </form>
+                    )}
+
+                    {couponApplied && (
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-xs text-emerald-800 dark:text-emerald-300">
+                        <div className="flex items-center gap-2 font-semibold">
+                          <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
+                          <span>{couponCode.toUpperCase()} aplicado ({couponCode.toUpperCase() === 'FOCUS50' ? '50% OFF' : 'Desconto especial'})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveCoupon}
+                          className="text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 underline cursor-pointer"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bônus Desbloqueado com Cupom (3 e-books) */}
+                  {couponApplied && (
+                    <div className="flex items-center gap-3 p-3 rounded-2xl bg-[#265de4]/[0.06] dark:bg-[#265de4]/15 border border-[#265de4]/20 animate-in fade-in">
+                      <div className="book-stack" aria-hidden="true">
+                        <i />
+                        <i />
+                        <i />
+                      </div>
+                      <div>
+                        <strong className="text-xs font-bold text-zinc-950 dark:text-white block">
+                          Seu cupom também desbloqueia um bônus
+                        </strong>
+                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
+                          Kit com 3 e-books incluído na assinatura.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resumo de Valores */}
+                  <div className="pt-3 border-t border-black/[0.08] dark:border-white/[0.08] space-y-2 text-xs">
+                    <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
+                      <span>Plano mensal Pro</span>
+                      <span>R$ 19,90</span>
+                    </div>
+
+                    {couponApplied && (
+                      <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
+                        <span>Desconto {couponCode.toUpperCase()}</span>
+                        <span>− R$ {formatMoney(19.90 - currentAmount)}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-baseline pt-2 border-t border-black/[0.08] dark:border-white/[0.08] text-sm font-bold text-zinc-950 dark:text-white">
+                      <span>Total da primeira mensalidade</span>
+                      <span className="text-base text-[#265de4] dark:text-[#9ebaff]">
+                        R$ {formatMoney(currentAmount)}
+                      </span>
                     </div>
                   </div>
-                )}
-              </div>
 
-              {loading && (
-                <div className="absolute inset-0 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-[32px] gap-3 z-30">
-                  <Loader2 size={32} className="animate-spin text-zinc-900 dark:text-white" />
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">Processando assinatura segura...</p>
+                  {/* Botão de Avançar para o Pagamento */}
+                  <button
+                    type="button"
+                    onClick={handleGoToPayment}
+                    className="w-full bg-[#265de4] hover:bg-[#1b4cc4] text-white font-bold py-3.5 px-5 rounded-2xl shadow-[0_5px_16px_rgba(38,93,228,0.25)] transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer active:scale-[0.99] mt-2"
+                  >
+                    <span>Ir para pagamento · R$ {formatMoney(currentAmount)}/mês</span>
+                    <ArrowRight size={16} />
+                  </button>
+
+                  <p className="text-[11px] text-center text-zinc-400 dark:text-zinc-500">
+                    Ao prosseguir, você concorda com nossos termos e políticas.
+                  </p>
                 </div>
               )}
-            </section>
+
+              {/* ================= VIEW: ETAPA 2 (PAGAMENTO SEGURO MERCADO PAGO) ================= */}
+              {step === 2 && (
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  
+                  {/* Cabeçalho do Pagamento com Logo Mercado Pago e Botão Voltar */}
+                  <div className="flex items-center justify-between pb-3 border-b border-black/[0.08] dark:border-white/[0.08]">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/80 text-[#265de4] dark:text-[#60a5fa] flex items-center justify-center shrink-0">
+                        <Lock size={15} />
+                      </div>
+                      <div>
+                        <h2 className="text-sm sm:text-base font-bold text-zinc-950 dark:text-white leading-tight">
+                          Pague com Segurança
+                        </h2>
+                        <span className="text-[11px] text-[#087cb2] dark:text-[#6dc9ff] font-semibold block">
+                          Uma parceria Mercado Pago
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleBackToPlan}
+                      className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.12] px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                    >
+                      <ArrowRight size={13} className="rotate-180" />
+                      <span>Voltar</span>
+                    </button>
+                  </div>
+
+                  {/* Resumo do Valor na Etapa de Pagamento */}
+                  <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/[0.06] text-xs">
+                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">Assinatura mensal:</span>
+                    <strong className="text-sm font-extrabold text-zinc-950 dark:text-white">
+                      R$ {formatMoney(currentAmount)}
+                      <span className="text-[10px] font-normal text-zinc-400 ml-1">/mês</span>
+                    </strong>
+                  </div>
+
+                  {/* Mensagem de Erro de Validação/Gateway */}
+                  {errorMessage && (
+                    <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/50 text-xs text-rose-700 dark:text-rose-300 flex items-start gap-2">
+                      <AlertCircle size={15} className="shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                      <span>{errorMessage}</span>
+                    </div>
+                  )}
+
+                  {/* ================= CONTAINER DO BRICK MERCADO PAGO ================= */}
+                  {/* IMPORTANTE: Mantém rigorosamente os IDs e classes exigidos pelo SDK e validados no projeto */}
+                  <div
+                    id="cardPaymentBrick_container"
+                    data-testid="payment-brick-container"
+                    className="mercado-pago-brick-container w-full min-h-[340px] relative px-0.5 py-1"
+                  >
+                    {/* Skeleton Loader elegante enquanto os scripts externos do Mercado Pago carregam */}
+                    {!isBrickReady && !brickError && (
+                      <div className="w-full space-y-3.5 pt-1 animate-pulse" aria-label="Carregando formulário de pagamento">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-2">
+                          <Loader2 size={14} className="animate-spin text-[#265de4] dark:text-[#60a5fa]" />
+                          <span>Carregando formulário seguro do Mercado Pago…</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="h-3 w-28 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                          <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                            <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="h-3 w-16 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                            <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="h-3 w-32 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                          <div className="h-11 w-full bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80 rounded-xl" />
+                        </div>
+                        <div className="h-12 w-full bg-zinc-200/90 dark:bg-zinc-800 rounded-xl mt-3" />
+                      </div>
+                    )}
+
+                    {/* Componente CardPayment oficial do @mercadopago/sdk-react */}
+                    <div className={!isBrickReady ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100 transition-opacity duration-300'}>
+                      <CardPayment
+                        initialization={cardInitialization}
+                        customization={cardCustomization}
+                        onSubmit={onSubmit}
+                        onReady={() => {
+                          setIsBrickReady(true);
+                          setBrickError(null);
+                        }}
+                        onError={(error: any) => {
+                          console.error('Erro no formulário de pagamento Mercado Pago:', error);
+                          setBrickError('Não foi possível carregar os campos do cartão no momento.');
+                          setIsBrickReady(true);
+                        }}
+                      />
+                    </div>
+
+                    {/* Feedback se o script falhar ou demorar */}
+                    {brickError && (
+                      <div className="mt-3 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
+                        <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                        <div className="flex-1">
+                          <p className="font-semibold">{brickError}</p>
+                          <p className="mt-0.5 text-[11px] opacity-90">Verifique sua conexão ou tente recarregar os campos.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBrickError(null);
+                              setIsBrickReady(false);
+                            }}
+                            className="mt-2 text-xs font-bold text-amber-900 dark:text-amber-200 underline cursor-pointer"
+                          >
+                            Recarregar formulário seguro
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Feedback de Status Manual */}
+                  {statusFeedback && (
+                    <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs flex items-start justify-between gap-2">
+                      <span>{statusFeedback}</span>
+                      <button type="button" onClick={() => setStatusFeedback(null)} className="text-zinc-400 hover:text-zinc-600">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Botão de Verificação de Status */}
+                  <div className="pt-2 flex flex-col items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRefreshStatus}
+                      disabled={isCheckingStatus}
+                      className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw size={12} className={isCheckingStatus ? "animate-spin text-[#265de4]" : "text-zinc-400"} />
+                      <span>Já realizou o pagamento? Atualizar status</span>
+                    </button>
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+                      <ShieldCheck size={13} className="text-zinc-400" />
+                      <span>Criptografia de ponta a ponta Mercado Pago</span>
+                    </div>
+                  </div>
+
+                  {/* Loading Overlay durante submissão */}
+                  {loading && (
+                    <div className="absolute inset-0 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-[28px] gap-3 z-30">
+                      <Loader2 size={32} className="animate-spin text-[#265de4] dark:text-[#60a5fa]" />
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-white">Processando assinatura segura…</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        </main>
+
+        {/* ================= FOOTER INFERIOR ================= */}
+        <footer className="py-4 border-t border-black/[0.08] dark:border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-zinc-500 dark:text-zinc-400 mt-6">
+          <span>© {new Date().getFullYear()} Nexus Focus · Sua rotina, mais inteligente.</span>
+          <div className="flex items-center gap-4">
+            <Link to="/privacidade" target="_blank" className="hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
+              Política de Privacidade
+            </Link>
+            <span>•</span>
+            <span className="flex items-center gap-1">
+              <Shield size={12} />
+              Ambiente Seguro
+            </span>
           </div>
-        </div>
-      </main>
+        </footer>
+      </div>
     </div>
   );
 }
