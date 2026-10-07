@@ -1,9 +1,11 @@
 {
   "mcpServers": {
     "mercadopago-mcp-server": {
+      "serverUrl": "https://mcp.mercadopago.com/mcp",
       "url": "https://mcp.mercadopago.com/mcp"
     },
     "whatsapp-business-tools": {
+      "serverUrl": "https://mcp.facebook.com/whatsapp_business_tools",
       "url": "https://mcp.facebook.com/whatsapp_business_tools"
     }
   }
