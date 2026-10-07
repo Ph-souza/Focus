@@ -36,6 +36,7 @@ if (typeof window !== 'undefined' && MP_PUBLIC_KEY) {
 export function CheckoutScreen() {
   const { currentUser, isPremium } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
+  const [billingCycle, setBillingCycle] = useState<'mensal' | 'anual'>('mensal');
   const [loading, setLoading] = useState(false);
   const [isBrickReady, setIsBrickReady] = useState(false);
   const [brickError, setBrickError] = useState<string | null>(null);
@@ -114,12 +115,31 @@ export function CheckoutScreen() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  // Cálculo de valores conforme cupom
+  // Cálculo de valores conforme ciclo e cupom
   const isCoupon50 = appliedCoupon === 'FOCUS50';
   const isCoupon10 = appliedCoupon === 'FOCUS10' || appliedCoupon === 'PROMO';
-  const currentAmount = isCoupon50 ? 9.95 : (isCoupon10 ? 14.90 : 19.90);
-  const displayPrice = isCoupon50 ? '9,95' : (isCoupon10 ? '14,90' : '19,90');
-  const discountAmount = isCoupon50 ? '9,95' : (isCoupon10 ? '5,00' : '0,00');
+
+  const baseAmount = billingCycle === 'anual' ? 238.80 : 19.90;
+  let currentAmount = baseAmount;
+  let discountAmount = '0,00';
+
+  if (billingCycle === 'anual') {
+    if (isCoupon50) {
+      currentAmount = 119.40;
+      discountAmount = '119,40';
+    }
+  } else {
+    if (isCoupon50) {
+      currentAmount = 9.95;
+      discountAmount = '9,95';
+    } else if (isCoupon10) {
+      currentAmount = 14.90;
+      discountAmount = '5,00';
+    }
+  }
+
+  const displayPrice = currentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const displayBasePrice = baseAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // Memoização estrita da inicialização para impedir re-renderizações e loops destrutivos no iframe do Mercado Pago
   const cardInitialization = useMemo(() => {
@@ -182,6 +202,7 @@ export function CheckoutScreen() {
           token: cardToken,
           email: currentUser?.email || userEmail || formData?.payer?.email,
           userId: currentUser?.uid,
+          plan: billingCycle,
           paymentMethodId: formData.payment_method_id || formData.paymentMethodId,
           issuerId: formData.issuer_id || formData.issuerId,
           installments: formData.installments || 1,
@@ -201,6 +222,9 @@ export function CheckoutScreen() {
         try {
           await setDoc(doc(db, 'users', currentUser.uid), {
             isPremium: true,
+            plan: billingCycle,
+            couponApplied: appliedCoupon || null,
+            currentPrice: currentAmount,
             updatedAt: new Date().toISOString()
           }, { merge: true });
         } catch (fsErr) {
@@ -217,7 +241,7 @@ export function CheckoutScreen() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser, userEmail, appliedCoupon, currentAmount]);
+  }, [currentUser, userEmail, billingCycle, appliedCoupon, currentAmount]);
 
   const handleApplyCoupon = (e: React.FormEvent) => {
     e.preventDefault();
@@ -464,7 +488,7 @@ export function CheckoutScreen() {
                 <div className="plan-art">
                   <span className="plan-emblem"><svg aria-hidden="true"><use href="#logo"/></svg></span>
                   <div><strong>NEXUS FOCUS</strong><small>Sua rotina, mais inteligente.</small></div>
-                  <span className="pill">Mensal</span>
+                  <span className="pill">{billingCycle === 'anual' ? 'Anual' : 'Mensal'}</span>
                 </div>
 
                 <nav className="checkout-steps" aria-label="Etapas da assinatura">
@@ -492,21 +516,52 @@ export function CheckoutScreen() {
                   <div id="offer-step" hidden={step !== 1}>
                     <div className="plan-head"><h2 id="plan-title">Sua nova rotina começa aqui.</h2></div>
                     <p className="plan-sub">Uma assinatura. Sua rotina em ordem.</p>
+
+                    {/* Toggle de Frequência de Assinatura (Mensal / Anual) */}
+                    <div className="plan-cycle-toggle" role="group" aria-label="Frequência da assinatura">
+                      <button
+                        type="button"
+                        id="cycle-monthly"
+                        className={`cycle-btn ${billingCycle === 'mensal' ? 'active' : ''}`}
+                        onClick={() => setBillingCycle('mensal')}
+                      >
+                        Mensal
+                      </button>
+                      <button
+                        type="button"
+                        id="cycle-annual"
+                        className={`cycle-btn ${billingCycle === 'anual' ? 'active' : ''}`}
+                        onClick={() => setBillingCycle('anual')}
+                      >
+                        Anual
+                        <span className="cycle-badge">Melhor valor</span>
+                      </button>
+                    </div>
                     
                     <div className="price-wrap">
                       <div className="offer-seal" id="offer-seal" hidden={!isCoupon50} aria-label="50% de desconto">
                         <strong>50%</strong><small>OFF</small>
                       </div>
                       <p className="old-price" id="old-price">
-                        {isCoupon50 ? <del>De R$ 19,90/mês</del> : 'Acesso a todos os recursos'}
+                        {isCoupon50 ? (
+                          <del>De R$ {displayBasePrice}{billingCycle === 'anual' ? '/ano' : '/mês'}</del>
+                        ) : (
+                          billingCycle === 'anual' ? 'Acesso Pro por 12 meses' : 'Acesso a todos os recursos'
+                        )}
                       </p>
                       <div className="price">
                         <span className="currency">R$</span>
                         <strong id="price">{displayPrice}</strong>
-                        <span className="period">/mês</span>
+                        <span className="period">{billingCycle === 'anual' ? '/ano' : '/mês'}</span>
                       </div>
                       <p className="price-term" id="price-term">
-                        {isCoupon50 ? 'Por mês, nos 3 primeiros meses.' : 'Assinatura com renovação mensal.'}
+                        {isCoupon50
+                          ? (billingCycle === 'anual'
+                            ? 'R$ 119,40 pelo primeiro ano, em uma única cobrança. Depois, R$ 238,80/ano. Renovação automática.'
+                            : 'R$ 9,95/mês nos 3 primeiros meses. Depois, R$ 19,90/mês. Renovação automática.')
+                          : (billingCycle === 'anual'
+                            ? 'Assinatura anual em parcela única com renovação automática.'
+                            : 'Assinatura com renovação mensal.')}
                       </p>
                     </div>
 
@@ -624,15 +679,15 @@ export function CheckoutScreen() {
                 {/* Resumo Financeiro */}
                 <dl className="summary">
                   <div>
-                    <dt>Plano mensal</dt>
-                    <dd>R$ 19,90</dd>
+                    <dt>{billingCycle === 'anual' ? 'Plano anual' : 'Plano mensal'}</dt>
+                    <dd>R$ {displayBasePrice}</dd>
                   </div>
                   <div className="discount" id="discount-row" hidden={!appliedCoupon}>
                     <dt>Desconto {appliedCoupon} ({isCoupon50 ? '50%' : 'Desconto'})</dt>
                     <dd>− R$ {discountAmount}</dd>
                   </div>
                   <div className="total">
-                    <dt>Total da primeira mensalidade</dt>
+                    <dt>{billingCycle === 'anual' ? 'Total do primeiro ano' : 'Total da primeira mensalidade'}</dt>
                     <dd id="total">R$ {displayPrice}</dd>
                   </div>
                 </dl>
@@ -650,8 +705,8 @@ export function CheckoutScreen() {
                     {loading
                       ? 'Processando…'
                       : step === 1
-                      ? `Ir para pagamento · R$ ${displayPrice}/mês`
-                      : `Assinar por R$ ${displayPrice}/mês`}
+                      ? `Ir para pagamento · R$ ${displayPrice}${billingCycle === 'anual' ? '/ano' : '/mês'}`
+                      : `Assinar por R$ ${displayPrice}${billingCycle === 'anual' ? '/ano' : '/mês'}`}
                   </span>
                   <svg className="icon" aria-hidden="true"><use href="#i-arrow"/></svg>
                 </button>
@@ -673,11 +728,22 @@ export function CheckoutScreen() {
                   {isCheckingStatus ? 'Verificando confirmação…' : 'Já pagou? Verificar confirmação'}
                 </button>
 
+                {/* Texto de Renovação Condicional Exato */}
                 <p className="renewal" id="renewal">
                   {isCoupon50
-                    ? 'R$ 9,95/mês nos 3 primeiros meses. A partir do 4º mês, R$ 19,90/mês, com renovação mensal.'
-                    : 'R$ 19,90/mês, com renovação mensal.'}
+                    ? (billingCycle === 'anual'
+                      ? 'R$ 119,40 pelo primeiro ano, em uma única cobrança. Depois, R$ 238,80/ano. Renovação automática.'
+                      : 'R$ 9,95/mês nos 3 primeiros meses. Depois, R$ 19,90/mês. Renovação automática.')
+                    : (billingCycle === 'anual'
+                      ? 'R$ 238,80/ano, em uma única cobrança com renovação anual.'
+                      : 'R$ 19,90/mês, com renovação mensal.')}
                 </p>
+
+                {/* Texto de Garantia Exato */}
+                <div className="guarantee-box">
+                  <svg className="icon" aria-hidden="true"><use href="#i-shield"/></svg>
+                  <span>Solicite o cancelamento em até 7 dias da primeira cobrança e receba o reembolso integral.</span>
+                </div>
               </section>
             </div>
           </div>

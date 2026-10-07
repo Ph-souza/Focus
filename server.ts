@@ -585,23 +585,48 @@ async function startServer() {
 
       // 5. Firebase Admin SDK: Criar/atualizar documento na coleção 'users' com o ID sendo o e-mail
       const emailDocRef = adminDb.collection("users").doc(payerEmail);
-      await emailDocRef.set({
+
+      // Recupera metadados ou informações salvas anteriormente para preservar plan e cupom
+      let parsedPlan: "mensal" | "anual" = "mensal";
+      let parsedCoupon: "FOCUS50" | null = null;
+      let parsedPrice = Number(paymentData.transaction_amount || 19.90);
+
+      if (paymentData.external_reference) {
+        try {
+          const extRef = JSON.parse(paymentData.external_reference);
+          if (extRef.plan === "anual") parsedPlan = "anual";
+          if (extRef.coupon === "FOCUS50") parsedCoupon = "FOCUS50";
+          if (extRef.price) parsedPrice = Number(extRef.price);
+        } catch (_) {}
+      }
+
+      const existingDoc = await emailDocRef.get();
+      if (existingDoc.exists) {
+        const d = existingDoc.data() || {};
+        if (d.plan === "anual" || d.plan === "mensal") parsedPlan = d.plan;
+        if (d.couponApplied === "FOCUS50") parsedCoupon = "FOCUS50";
+        if (d.currentPrice) parsedPrice = Number(d.currentPrice);
+      }
+
+      const webhookUserData = {
         email: payerEmail,
         isPremium: true,
         role: "premium_user",
-        plan: "pro_unlimited",
+        plan: parsedPlan,
+        couponApplied: parsedCoupon,
+        currentPrice: parsedPrice,
         lastPaymentId: paymentId,
         paymentMethod: paymentData.payment_method_id || "mercadopago",
-        transactionAmount: paymentData.transaction_amount || 0,
+        transactionAmount: paymentData.transaction_amount || parsedPrice,
         approvedAt: paymentData.date_approved || new Date().toISOString(),
         updatedAt: FieldValue.serverTimestamp()
-      }, { merge: true });
+      };
 
-      console.log(`[Webhook MP] Documento users/${payerEmail} atualizado com isPremium: true com sucesso!`);
+      await emailDocRef.set(webhookUserData, { merge: true });
+
+      console.log(`[Webhook MP] Documento users/${payerEmail} atualizado com isPremium: true, plan: ${parsedPlan}, couponApplied: ${parsedCoupon}, currentPrice: ${parsedPrice}!`);
 
       // 6. Vinculação Adicional com Contas UID (Google Sign-In)
-      // Se o usuário já tiver conta criada com o mesmo e-mail (onde o ID do documento é o UID),
-      // atualizamos também o documento do UID para liberação em tempo real no Dashboard
       try {
         const matchingUsersSnap = await adminDb.collection("users").where("email", "==", payerEmail).get();
         const batch = adminDb.batch();
@@ -611,6 +636,9 @@ async function startServer() {
           if (userDoc.id !== payerEmail) {
             batch.set(userDoc.ref, {
               isPremium: true,
+              plan: parsedPlan,
+              couponApplied: parsedCoupon,
+              currentPrice: parsedPrice,
               lastPaymentId: paymentId,
               updatedAt: FieldValue.serverTimestamp()
             }, { merge: true });
@@ -636,7 +664,7 @@ async function startServer() {
   // =========================================================================
   app.post("/api/subscriptions", async (req, res) => {
     try {
-      const { token, email, userId, planId } = req.body || {};
+      const { token, email, userId, plan, coupon, planId } = req.body || {};
 
       if (!token) {
         return res.status(400).json({ success: false, error: "Token do cartão não fornecido." });
@@ -647,7 +675,39 @@ async function startServer() {
       }
 
       const payerEmail = email.trim().toLowerCase();
-      console.log(`[Assinaturas MP] Criando assinatura para o cliente: ${payerEmail}`);
+      const normalizedPlan = (plan === "anual") ? "anual" : "mensal";
+      const isCoupon50 = (coupon && String(coupon).trim().toUpperCase() === "FOCUS50");
+      const couponApplied = isCoupon50 ? "FOCUS50" : null;
+
+      // Lógica de preços e periodicidade baseada na escolha e no cupom
+      let finalAmount = 19.90;
+      let frequency = 1;
+      let frequencyType = "months";
+      let reason = "Nexus Focus Pro - Assinatura Mensal";
+
+      if (normalizedPlan === "anual") {
+        frequency = 12;
+        frequencyType = "months";
+        if (isCoupon50) {
+          finalAmount = 119.40;
+          reason = "Nexus Focus Pro - Assinatura Anual (Cupom FOCUS50)";
+        } else {
+          finalAmount = 238.80;
+          reason = "Nexus Focus Pro - Assinatura Anual";
+        }
+      } else {
+        frequency = 1;
+        frequencyType = "months";
+        if (isCoupon50) {
+          finalAmount = 9.95;
+          reason = "Nexus Focus Pro - Assinatura Mensal (Cupom FOCUS50)";
+        } else {
+          finalAmount = 19.90;
+          reason = "Nexus Focus Pro - Assinatura Mensal";
+        }
+      }
+
+      console.log(`[Assinaturas MP] Criando assinatura: plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}, cliente=${payerEmail}`);
 
       if (!mpClient && !mpAccessToken) {
         return res.status(500).json({
@@ -657,25 +717,30 @@ async function startServer() {
       }
 
       const selectedPlanId = planId || process.env.MERCADOPAGO_PLAN_ID;
-      const amount = Number(process.env.SUBSCRIPTION_AMOUNT || 19.90);
       const appUrl = process.env.APP_URL || "https://nexusfocus.web.app";
 
-      // Montar corpo da requisição de PreApproval
+      // Montar corpo da requisição de PreApproval com metadados para auditoria e webhook
       const preapprovalPayload: any = {
         payer_email: payerEmail,
         card_token_id: token,
         back_url: `${appUrl}/dashboard`,
-        status: "authorized"
+        status: "authorized",
+        external_reference: JSON.stringify({
+          plan: normalizedPlan,
+          coupon: couponApplied,
+          userId: userId || null,
+          price: finalAmount
+        })
       };
 
-      if (selectedPlanId) {
+      if (selectedPlanId && !isCoupon50 && normalizedPlan === "mensal") {
         preapprovalPayload.preapproval_plan_id = selectedPlanId;
       } else {
-        preapprovalPayload.reason = "Nexus Focus Pro - Assinatura Mensal";
+        preapprovalPayload.reason = reason;
         preapprovalPayload.auto_recurring = {
-          frequency: 1,
-          frequency_type: "months",
-          transaction_amount: amount,
+          frequency,
+          frequency_type: frequencyType,
+          transaction_amount: finalAmount,
           currency_id: "BRL"
         };
       }
@@ -708,24 +773,31 @@ async function startServer() {
 
       // Se a assinatura foi autorizada ou está pendente de confirmação bancária
       if (status === "authorized" || status === "pending") {
-        // 1. Atualizar documento users/{payerEmail}
-        const emailRef = adminDb.collection("users").doc(payerEmail);
-        await emailRef.set({
+        const firestoreSubscriptionData = {
           email: payerEmail,
           isPremium: true,
           role: "premium_user",
-          plan: "pro_unlimited",
+          plan: normalizedPlan,
+          couponApplied: couponApplied,
+          currentPrice: finalAmount,
           subscriptionId: subscriptionId,
           subscriptionStatus: status,
           subscribedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp()
-        }, { merge: true });
+        };
+
+        // 1. Atualizar documento users/{payerEmail}
+        const emailRef = adminDb.collection("users").doc(payerEmail);
+        await emailRef.set(firestoreSubscriptionData, { merge: true });
 
         // 2. Se o userId (UID do Firebase Auth) foi enviado, atualizar users/{userId}
         if (userId && typeof userId === "string") {
           const userRef = adminDb.collection("users").doc(userId);
           await userRef.set({
             isPremium: true,
+            plan: normalizedPlan,
+            couponApplied: couponApplied,
+            currentPrice: finalAmount,
             subscriptionId: subscriptionId,
             subscriptionStatus: status,
             updatedAt: FieldValue.serverTimestamp()
@@ -740,6 +812,9 @@ async function startServer() {
             if (docSnap.id !== payerEmail && docSnap.id !== userId) {
               batch.set(docSnap.ref, {
                 isPremium: true,
+                plan: normalizedPlan,
+                couponApplied: couponApplied,
+                currentPrice: finalAmount,
                 subscriptionId: subscriptionId,
                 subscriptionStatus: status,
                 updatedAt: FieldValue.serverTimestamp()
@@ -755,6 +830,9 @@ async function startServer() {
           success: true,
           status,
           subscriptionId,
+          plan: normalizedPlan,
+          couponApplied,
+          currentPrice: finalAmount,
           message: "Assinatura ativada com sucesso!"
         });
       } else {

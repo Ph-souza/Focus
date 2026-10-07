@@ -633,6 +633,76 @@
   background: var(--soft);
 }
 
+/* Toggle de Ciclo de Faturamento: Mensal / Anual */
+.checkout-page-wrapper .plan-cycle-toggle {
+  display: flex;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 4px;
+  gap: 4px;
+  margin: 0 0 18px;
+}
+
+.checkout-page-wrapper .cycle-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 12px;
+  border-radius: 10px;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+  cursor: pointer;
+}
+
+.checkout-page-wrapper .cycle-btn:hover {
+  color: var(--ink);
+}
+
+.checkout-page-wrapper .cycle-btn.active {
+  background: var(--solid);
+  color: var(--blue);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.checkout-page-wrapper .cycle-badge {
+  font-size: 9px;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: var(--tint);
+  color: var(--blue);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+/* Box de Garantia Incondicional de 7 dias */
+.checkout-page-wrapper .guarantee-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--tint);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.checkout-page-wrapper .guarantee-box .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--blue);
+  flex-shrink: 0;
+}
+
 .checkout-page-wrapper .checkout-steps {
   display: flex;
   align-items: center;
