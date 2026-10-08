@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
+import QRCode from 'qrcode';
 import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { getApiUrl } from '../lib/api';
 import { db } from '../lib/firebase';
@@ -53,6 +54,7 @@ export function CheckoutScreen() {
     ticketUrl?: string;
     amount?: number;
   } | null>(null);
+  const [pixQrDataUrl, setPixQrDataUrl] = useState<string | null>(null);
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
   
@@ -357,6 +359,55 @@ export function CheckoutScreen() {
       console.warn('Erro ao copiar Pix:', e);
     }
   };
+
+  // Garante a geração do QR Code visual sempre que houver dados Pix
+  useEffect(() => {
+    let isMounted = true;
+    if (!pixData) {
+      setPixQrDataUrl(null);
+      return;
+    }
+
+    // Caso já venha com Base64 pronto (ex: Mercado Pago API)
+    if (pixData.qrCodeBase64 && pixData.qrCodeBase64.trim().length > 0) {
+      const src = pixData.qrCodeBase64.startsWith('data:image')
+        ? pixData.qrCodeBase64
+        : `data:image/png;base64,${pixData.qrCodeBase64}`;
+      setPixQrDataUrl(src);
+      return;
+    }
+
+    // Se tiver o código string Copia e Cola, renderiza localmente em alta resolução via canvas/svg
+    if (pixData.qrCode && pixData.qrCode.trim().length > 0) {
+      QRCode.toDataURL(pixData.qrCode, {
+        width: 280,
+        margin: 1,
+        color: {
+          dark: '#0f172a',
+          light: '#ffffff'
+        }
+      })
+        .then((url) => {
+          if (isMounted) {
+            setPixQrDataUrl(url);
+          }
+        })
+        .catch((err) => {
+          console.warn('[Pix QR] Erro ao renderizar QR code:', err);
+        });
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [pixData]);
+
+  // Se o usuário entrar no passo 3 com Pix e ainda não gerou, gera automaticamente
+  useEffect(() => {
+    if (step === 3 && paymentMethod === 'pix' && !pixData && !isGeneratingPix) {
+      generatePix();
+    }
+  }, [step, paymentMethod, pixData, isGeneratingPix, generatePix]);
 
   const handleCtaClick = async () => {
     if (step === 1) {
@@ -834,15 +885,24 @@ export function CheckoutScreen() {
                               <span>Valor a pagar: R$ {displayPrice}</span>
                             </div>
 
-                            {pixData.qrCodeBase64 ? (
+                            {pixQrDataUrl ? (
                               <div className="pix-qr-container">
                                 <img
-                                  src={`data:image/png;base64,${pixData.qrCodeBase64}`}
+                                  src={pixQrDataUrl}
                                   alt="QR Code Pix Mercado Pago"
                                   className="pix-qr-img"
+                                  width={220}
+                                  height={220}
                                 />
+                                <span className="pix-qr-scan-hint">
+                                  Aponte a câmera ou app do seu banco para pagar
+                                </span>
                               </div>
-                            ) : null}
+                            ) : (
+                              <div className="pix-qr-container pix-qr-loading">
+                                <span className="inline-note">Renderizando QR Code Pix…</span>
+                              </div>
+                            )}
 
                             {pixData.qrCode && (
                               <div className="pix-copy-section">

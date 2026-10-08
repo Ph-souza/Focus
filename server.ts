@@ -14,6 +14,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import webpush from "web-push";
 import Stripe from "stripe";
+import QRCode from "qrcode";
 
 // Firebase Admin SDK initialization (Singleton)
 let adminApp: App;
@@ -937,9 +938,19 @@ async function startServer() {
           });
 
           const pData = mpResponse;
-          const qrCode = pData.point_of_interaction?.transaction_data?.qr_code;
-          const qrCodeBase64 = pData.point_of_interaction?.transaction_data?.qr_code_base64;
-          const ticketUrl = pData.point_of_interaction?.transaction_data?.ticket_url;
+          const qrCode = pData.point_of_interaction?.transaction_data?.qr_code || "";
+          let qrCodeBase64 = pData.point_of_interaction?.transaction_data?.qr_code_base64 || "";
+          const ticketUrl = pData.point_of_interaction?.transaction_data?.ticket_url || "";
+
+          // Se a API retornou o código copia-e-cola mas não o base64, gera no backend
+          if (qrCode && !qrCodeBase64) {
+            try {
+              const genDataUrl = await QRCode.toDataURL(qrCode, { width: 300, margin: 1 });
+              qrCodeBase64 = genDataUrl.replace(/^data:image\/png;base64,/, "");
+            } catch (qrErr: any) {
+              console.warn("[Pix MP] Erro ao sintetizar base64 do QR Code:", qrErr?.message);
+            }
+          }
 
           console.log(`[Pix MP] Cobrança Pix criada com sucesso! ID: ${pData.id}`);
 
@@ -959,13 +970,21 @@ async function startServer() {
 
       // Fallback amigável de chave Pix caso Mercado Pago SDK não esteja com credenciais de produção
       const fallbackPayload = `00020126580014br.gov.bcb.pix0136${payerEmail}5204000053039865405${finalAmount.toFixed(2)}5802BR5911Nexus Focus6009Sao Paulo62070503***6304`;
+      let fallbackBase64 = "";
+      try {
+        const genDataUrl = await QRCode.toDataURL(fallbackPayload, { width: 300, margin: 1 });
+        fallbackBase64 = genDataUrl.replace(/^data:image\/png;base64,/, "");
+      } catch (errFallbackQr: any) {
+        console.warn("[Pix Fallback] Erro ao sintetizar base64:", errFallbackQr?.message);
+      }
+
       return res.status(200).json({
         success: true,
         id: `pix_${Date.now()}`,
         status: "pending",
         amount: finalAmount,
         qrCode: fallbackPayload,
-        qrCodeBase64: "",
+        qrCodeBase64: fallbackBase64,
         ticketUrl: ""
       });
 
