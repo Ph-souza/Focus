@@ -36,11 +36,7 @@ if (typeof window !== 'undefined' && MP_PUBLIC_KEY) {
 export function CheckoutScreen() {
   const { currentUser, isPremium } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-<<<<<<< HEAD
-  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'card' | null>(null);
-=======
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
->>>>>>> 0f4b20d (feat(checkout): adicionar etapa intermediaria de escolha entre Pix e Cartao)
   const [billingCycle, setBillingCycle] = useState<'mensal' | 'anual'>('mensal');
   const [loading, setLoading] = useState(false);
   const [isBrickReady, setIsBrickReady] = useState(false);
@@ -314,12 +310,6 @@ export function CheckoutScreen() {
     }
   };
 
-<<<<<<< HEAD
-  const goToStep = (nextStep: 1 | 2 | 3) => {
-    if (loading) return;
-    setErrorMessage('');
-    if (nextStep === 3 && !paymentMethod) {
-=======
   const generatePix = useCallback(async () => {
     try {
       setIsGeneratingPix(true);
@@ -370,49 +360,11 @@ export function CheckoutScreen() {
 
   const handleCtaClick = async () => {
     if (step === 1) {
->>>>>>> 0f4b20d (feat(checkout): adicionar etapa intermediaria de escolha entre Pix e Cartao)
       setStep(2);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    if (nextStep === 3 && step !== 3) {
-      setIsBrickReady(false);
-      setBrickError(null);
-    }
-    setStep(nextStep);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
-<<<<<<< HEAD
-  const handlePixCheckout = async () => {
-    setLoading(true);
-    setErrorMessage('');
-    try {
-      if (!currentUser) throw new Error('Entre na sua conta para continuar.');
-      const idToken = await currentUser.getIdToken();
-      const response = await fetch(getApiUrl('/api/subscriptions'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ paymentMethod: 'pix', plan: billingCycle, coupon: appliedCoupon }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success || !data.initPoint) {
-        throw new Error(data.error || 'Não foi possível abrir o pagamento. Tente novamente.');
-      }
-      const checkoutUrl = new URL(data.initPoint);
-      if (checkoutUrl.protocol !== 'https:' ||
-          !(checkoutUrl.hostname === 'mercadopago.com.br' || checkoutUrl.hostname.endsWith('.mercadopago.com.br'))) {
-        throw new Error('O endereço de pagamento recebido é inválido.');
-      }
-      window.location.assign(checkoutUrl.href);
-    } catch (error: any) {
-      setErrorMessage(error.message || 'Não foi possível abrir o pagamento.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCtaClick = async () => {
-=======
     if (step === 2) {
       if (paymentMethod === 'pix') {
         generatePix();
@@ -427,27 +379,9 @@ export function CheckoutScreen() {
       return;
     }
 
->>>>>>> 0f4b20d (feat(checkout): adicionar etapa intermediaria de escolha entre Pix e Cartao)
     if (loading) return;
-    if (step === 1) {
-      goToStep(2);
-      return;
-    }
-    if (step === 2) {
-      goToStep(3);
-      return;
-    }
-    if (paymentMethod === 'pix') {
-      await handlePixCheckout();
-      return;
-    }
-    if (paymentMethod !== 'card' || !isBrickReady || brickError) return;
 
-<<<<<<< HEAD
-    // Se estiver no step 3, tenta obter os dados tokenizados via controller ou clica no submit nativo
-=======
     // Se estiver no step 3 com cartão, tenta obter os dados tokenizados via controller ou clica no submit nativo
->>>>>>> 0f4b20d (feat(checkout): adicionar etapa intermediaria de escolha entre Pix e Cartao)
     const controller = (window as any).cardPaymentBrickController;
     if (controller && typeof controller.getFormData === 'function') {
       try {
@@ -641,7 +575,10 @@ export function CheckoutScreen() {
                     id="step-plan"
                     aria-current={step === 1 ? 'step' : undefined}
                     disabled={loading}
-                    onClick={() => goToStep(1)}
+                    onClick={() => {
+                      setStep(1);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
                   >
                     <span>1</span>Seu plano
                   </button>
@@ -651,30 +588,26 @@ export function CheckoutScreen() {
                     id="step-method"
                     aria-current={step === 2 ? 'step' : undefined}
                     disabled={loading}
-                    onClick={() => goToStep(2)}
+                    onClick={() => {
+                      setStep(2);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
                   >
-<<<<<<< HEAD
-                    <span>2</span>Pix ou cartão
-=======
                     <span>2</span>Pix ou Cartão
->>>>>>> 0f4b20d (feat(checkout): adicionar etapa intermediaria de escolha entre Pix e Cartao)
                   </button>
                   <i aria-hidden="true"></i>
                   <button
                     type="button"
                     id="step-payment"
                     aria-current={step === 3 ? 'step' : undefined}
-<<<<<<< HEAD
-                    disabled={loading || !paymentMethod}
-                    onClick={() => goToStep(3)}
-=======
+                    disabled={loading}
                     onClick={() => {
                       if (paymentMethod === 'pix' && !pixData) {
                         generatePix();
                       }
                       setStep(3);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
->>>>>>> 0f4b20d (feat(checkout): adicionar etapa intermediaria de escolha entre Pix e Cartao)
                   >
                     <span>3</span>Pagamento
                   </button>
