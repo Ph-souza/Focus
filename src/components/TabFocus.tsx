@@ -20,12 +20,15 @@ import {
   CheckSquare,
   Timer
 } from 'lucide-react';
+import { DeepModeScreen } from './DeepModeScreen';
 
 interface TabFocusProps {
   onTabChange?: (tab: any) => void;
 }
 
 export function TabFocus({ onTabChange }: TabFocusProps) {
+  // Estado do Modo Profundo (Fullscreen Overlay)
+  const [isDeepModeActive, setIsDeepModeActive] = useState(false);
   // Mode selection state: Pomodoro (25m), Timer (60m), Ritmo, Personalizado
   const [activeMode, setActiveMode] = useState<'pomodoro' | 'timer' | 'ritmo' | 'personalizado'>('pomodoro');
   
@@ -126,13 +129,24 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
             </p>
           </div>
 
-          <button 
-            onClick={() => onTabChange?.('calendar')}
-            className="w-11 h-11 rounded-2xl glass-card flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer"
-            aria-label="Abrir agenda"
-          >
-            <Calendar size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsDeepModeActive(true)}
+              className="h-11 px-3 rounded-2xl glass-card flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              aria-label="Ativar Modo Profundo"
+              title="Ativar Modo Profundo"
+            >
+              <Moon size={16} className="text-blue-500" />
+              <span className="hidden sm:inline">Modo profundo</span>
+            </button>
+            <button 
+              onClick={() => onTabChange?.('calendar')}
+              className="w-11 h-11 rounded-2xl glass-card flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              aria-label="Abrir agenda"
+            >
+              <Calendar size={20} />
+            </button>
+          </div>
         </div>
 
         {/* 1. Mode Selector Pills */}
@@ -474,8 +488,12 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
             <span className="text-sm font-bold text-slate-500 dark:text-slate-400">
               {new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' })}
             </span>
-            <button className="flex items-center gap-2 px-4 py-2 glass-card text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-white dark:hover:bg-slate-900 transition-colors shadow-sm">
-              <Moon size={14} /> Modo profundo
+            <button 
+              onClick={() => setIsDeepModeActive(true)}
+              className="flex items-center gap-2 px-4 py-2 glass-card text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-white dark:hover:bg-slate-900 transition-colors shadow-sm cursor-pointer"
+              title="Entrar em Foco Profundo Imersivo"
+            >
+              <Moon size={14} className="text-blue-500" /> Modo profundo
             </button>
           </div>
         </div>
@@ -676,6 +694,14 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
           </div>
         </div>
       </div>
+
+      {/* Overlay de Tela Cheia do Modo Profundo */}
+      <DeepModeScreen
+        isOpen={isDeepModeActive}
+        onClose={() => setIsDeepModeActive(false)}
+        taskTitle={focusTask}
+        initialMinutes={Math.round(totalTime / 60)}
+      />
     </motion.div>
   );
 }
