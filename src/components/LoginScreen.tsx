@@ -1,91 +1,100 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate, Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Shield, AlertCircle, Loader2, Sparkles } from 'lucide-react';
-import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
+import { doc, getDoc } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
+import { db, mapAuthError } from '../lib/firebase';
 import { NexusFocusLogo } from './AuraLogo';
-import { mapAuthError } from '../lib/firebase';
-import { createStripeCheckoutSession } from '../lib/stripe';
 
 export function LoginScreen() {
-  const { currentUser, isPremium, isLoading, loginWithGoogle } = useAuth();
+  const { currentUser, isLoading, loginWithGoogle } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isCheckoutIntent = searchParams.get('intent') === 'checkout';
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [isVerifyingUserDoc, setIsVerifyingUserDoc] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
-  const hasAccess = isPremium || isWhitelistedPro(userEmail);
-
-  // Redirecionamento automático ou interceptação caso já esteja autenticado
+  // Redirecionamento e verificação caso o usuário já esteja autenticado
   useEffect(() => {
-    if (!isLoading && currentUser) {
-      if (isCheckoutIntent && !hasAccess) {
-        setCheckoutLoading(true);
-        createStripeCheckoutSession({
-          userId: currentUser.uid,
-          email: currentUser.email || undefined
-        }).then((session) => {
-          if (session.url) {
-            window.location.href = session.url;
+    let isMounted = true;
+
+    async function checkExistingAuth() {
+      if (!isLoading && currentUser) {
+        setIsVerifyingUserDoc(true);
+        try {
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (!isMounted) return;
+
+          // Se já cadastrado -> /dashboard. Se não cadastrado no banco -> /checkout
+          if (userDocSnap.exists()) {
+            navigate('/dashboard', { replace: true });
           } else {
-            window.location.href = `/checkout?userId=${encodeURIComponent(currentUser.uid)}&intent=checkout`;
+            navigate('/checkout', { replace: true });
           }
-        }).catch(() => {
-          window.location.href = `/checkout?userId=${encodeURIComponent(currentUser.uid)}&intent=checkout`;
-        });
+        } catch (err) {
+          console.error('[LoginScreen] Erro ao verificar documento existente:', err);
+          if (!isMounted) return;
+          navigate('/checkout', { replace: true });
+        } finally {
+          if (isMounted) {
+            setIsVerifyingUserDoc(false);
+          }
+        }
       }
     }
-  }, [isLoading, currentUser, isCheckoutIntent, hasAccess]);
 
-  if (!isLoading && currentUser) {
-    if (hasAccess) {
-      return <Navigate to="/dashboard" replace />;
-    }
-    if (!isCheckoutIntent) {
-      return <Navigate to="/checkout" replace />;
-    }
-  }
+    checkExistingAuth();
 
+    return () => {
+      isMounted = false;
+    };
+  }, [isLoading, currentUser, navigate]);
+
+  // Regra 2: Lógica do Pós-Login com Google Auth
   const handleGoogleClick = async () => {
     try {
       setErrorMsg(null);
       setIsSubmitting(true);
       const user = await loginWithGoogle();
 
-      // Interceptação Pós-Login (Firebase + Stripe)
       if (user) {
-        const email = (user.email || user.providerData?.[0]?.email || '').trim().toLowerCase();
-        const userHasAccess = isPremium || isWhitelistedPro(email);
+        // Assim que o login via Google for concluído com sucesso:
+        // Verifique a existência do documento users/{uid}.
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
 
-        if (isCheckoutIntent && !userHasAccess) {
-          // Impede o redirecionamento imediato para o dashboard!
-          setCheckoutLoading(true);
-          const session = await createStripeCheckoutSession({
-            userId: user.uid,
-            email: user.email || undefined
-          });
-
-          if (session.url) {
-            window.location.href = session.url;
-            return;
-          } else {
-            window.location.href = `/checkout?userId=${encodeURIComponent(user.uid)}&intent=checkout`;
-            return;
-          }
+        // Se já cadastrado -> redirecione para /dashboard.
+        // Se não cadastrado no banco -> redirecione para /checkout.
+        if (userDocSnap.exists()) {
+          navigate('/dashboard', { replace: true });
+        } else {
+          navigate('/checkout', { replace: true });
         }
+        return;
       }
     } catch (err: any) {
       console.error('Login error:', err);
       const mapped = mapAuthError(err);
       setErrorMsg(mapped.message || 'Erro ao autenticar com o Google. Tente novamente.');
-      setCheckoutLoading(false);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Regra 4: Estado de loading durante resolução para evitar flashes
+  if (isLoading || isVerifyingUserDoc) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-zinc-400 text-sm font-medium tracking-wide">Validando acesso...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex flex-col justify-between items-center px-4 sm:px-6 py-6 sm:py-8 relative overflow-x-hidden bg-[url('/login-desktop-bg.jpg')] bg-cover bg-center bg-no-repeat selection:bg-zinc-900 selection:text-white">
@@ -156,14 +165,14 @@ export function LoginScreen() {
           {/* Clean Official Google Sign-In Button with Contextual Label */}
           <button
             onClick={handleGoogleClick}
-            disabled={isSubmitting || isLoading || checkoutLoading}
+            disabled={isSubmitting || isLoading}
             className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold py-3.5 px-5 rounded-2xl border border-zinc-200/80 shadow-[0_4px_16px_rgba(0,0,0,0.05)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.09)] transition-all duration-200 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3 cursor-pointer"
           >
-            {isSubmitting || checkoutLoading ? (
+            {isSubmitting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin text-zinc-700" />
                 <span className="text-sm sm:text-base font-bold text-zinc-800">
-                  {checkoutLoading ? 'Preparando pagamento seguro...' : 'Conectando ao Google...'}
+                  Conectando ao Google...
                 </span>
               </>
             ) : (

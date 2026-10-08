@@ -72,34 +72,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // 1. O ID do documento na coleção users tem OBRIGATORIAMENTE de ser o uid oficial do Firebase Auth
         const userDocRef = doc(db, 'users', user.uid);
 
-        // Garante a existência e integridade do documento do usuário no Firestore
+        // Garante integridade do documento do usuário no Firestore apenas se já cadastrado ou for admin
         try {
           const snap = await getDoc(userDocRef);
 
-          // Padronização de Dados:
-          // O payload salvo pelo cliente deve conter apenas dados comuns: name, email, photoURL e createdAt.
-          // Campos sensíveis de autorização (role, isAdmin, isPremium) são restritos ao Admin SDK no backend (QA-02).
           const name = user.displayName || user.providerData?.[0]?.displayName || user.email?.split('@')[0] || 'Usuário';
           const email = user.email || '';
           const photoURL = user.photoURL || user.providerData?.[0]?.photoURL || '';
 
-          const payload: Record<string, any> = {
-            name,
-            photoURL
-          };
-
-          // email só é enviado na criação inicial do documento (!snap.exists())
-          // Isso respeita a regra de segurança do Firestore que proíbe a edição de email pelo próprio utilizador
-          if (!snap.exists()) {
-            payload.email = email;
-            payload.createdAt = serverTimestamp();
+          if (snap.exists()) {
+            // Usuário já cadastrado no banco: sincroniza dados básicos
+            await setDoc(userDocRef, {
+              name,
+              photoURL
+            }, { merge: true });
+          } else if (isPro) {
+            // Contas Pro whitelisted / Administradores são criadas com acesso irrestrito
+            await setDoc(userDocRef, {
+              name,
+              email,
+              photoURL,
+              isPremium: true,
+              createdAt: serverTimestamp()
+            }, { merge: true });
           }
-
-          // 1. Uso Obrigatório do UID (setDoc):
-          // Substitua addDoc(collection(db, 'users')...) por setDoc(doc(db, 'users', user.uid), data, { merge: true }).
-          // O ID do documento na coleção users tem obrigatoriamente que ser o user.uid do Firebase Auth.
-          // O { merge: true } é vital para não sobrescrevermos assinaturas em logins futuros.
-          await setDoc(userDocRef, payload, { merge: true });
+          // Se !snap.exists() e não for Pro, NÃO criamos o documento aqui.
+          // O documento só será criado após a conclusão do checkout/onboarding.
         } catch (err) {
           console.warn('Notice ensuring user doc exists:', err);
           if (isPro) {

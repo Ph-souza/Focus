@@ -52,11 +52,13 @@ export function LandingPage() {
     }
   };
 
-  // Regra de CTA mandatória: redirecionar para login com intent=checkout
+  // Regra 3: Botões de Ação na Landing Page (/homepage)
+  // Botão 'Começar agora': Navega/redireciona para /checkout
   const handleCtaCheckout = () => {
-    navigate('/login?intent=checkout');
+    navigate('/checkout');
   };
 
+  // Botão 'Entrar na minha conta': Navega/redireciona para /login
   const handleCtaLogin = () => {
     navigate('/login');
   };
@@ -177,14 +179,14 @@ export function LandingPage() {
               onClick={handleCtaLogin}
               className="hidden sm:inline-flex px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
             >
-              Entrar
+              Entrar na minha conta
             </button>
 
             <button
               onClick={handleCtaCheckout}
               className="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.3)] transition-all duration-200 active:scale-95 cursor-pointer flex items-center gap-2"
             >
-              <span>Começar Agora</span>
+              <span>Começar agora</span>
               <ArrowRight size={15} />
             </button>
           </div>
@@ -242,7 +244,7 @@ export function LandingPage() {
               onClick={handleCtaCheckout}
               className="w-full sm:w-auto px-8 py-4 text-base font-bold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-2xl shadow-[0_10px_30px_rgba(37,99,235,0.4)] transition-all duration-200 active:scale-98 flex items-center justify-center gap-3 cursor-pointer"
             >
-              <span>Começar Agora — R$ 19,90/mês</span>
+              <span>Começar agora</span>
               <ArrowRight size={18} />
             </button>
 
@@ -250,7 +252,7 @@ export function LandingPage() {
               onClick={handleCtaLogin}
               className="w-full sm:w-auto px-8 py-4 text-base font-semibold text-slate-700 dark:text-slate-200 bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-2xl hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
             >
-              <span>Acessar Minha Conta</span>
+              <span>Entrar na minha conta</span>
             </button>
           </motion.div>
 

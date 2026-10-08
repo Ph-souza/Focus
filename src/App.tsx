@@ -33,6 +33,7 @@ import { LandingPage } from './components/LandingPage';
 import { AdminPanel } from './components/AdminPanel';
 import PainelPage from './app/painel/page';
 import { AdminProtectedRoute } from './components/AdminProtectedRoute';
+import { RootRoute } from './components/RootRoute';
 
 function Dashboard() {
   const { currentUser, logout } = useAuth();
@@ -378,7 +379,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<RootRoute />} />
           <Route path="/homepage" element={<LandingPage />} />
           <Route path="/page" element={<Navigate to="/homepage" replace />} />
           <Route path="/login" element={<LoginScreen />} />
@@ -401,8 +402,8 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          {/* Fallback inteligente: redireciona para o dashboard que valida as regras de acesso */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          {/* Fallback inteligente: redireciona para a raiz onde o RootRoute avalia o destino */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
