@@ -357,10 +357,15 @@ export function CheckoutScreen() {
       <a className="skip" href="#checkout">Ir para a assinatura</a>
 
       <div className="wrap">
-        <header className="header">
+        <header className="header" id="checkout-header">
           <Link to="/homepage" className="brand" aria-label="Nexus Focus, página inicial">
-            <svg aria-hidden="true"><use href="#logo"/></svg>
-            <span>NEXUS <span>FOCUS</span></span>
+            <svg className="brand-logo" viewBox="0 0 100 100" aria-hidden="true">
+              <use href="#logo"/>
+            </svg>
+            <span className="brand-title">
+              <strong>NEXUS</strong>
+              <span className="brand-sub">FOCUS</span>
+            </span>
           </Link>
           <div className="header-actions">
             <span className="secure">

@@ -159,63 +159,104 @@
 }
 
 .checkout-page-wrapper .header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 22px 0;
-  border-bottom: 1px solid var(--line);
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 20px 0 !important;
+  border-bottom: 1px solid var(--line) !important;
+  width: 100% !important;
 }
 
 .checkout-page-wrapper .brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  font-size: 17px;
-  letter-spacing: -0.5px;
-  font-weight: 700;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  text-decoration: none !important;
+  color: var(--ink) !important;
+  line-height: 1 !important;
 }
 
+.checkout-page-wrapper .brand-logo,
 .checkout-page-wrapper .brand svg {
-  width: 39px;
-  height: 39px;
+  width: 26px !important;
+  height: 26px !important;
+  color: var(--ink) !important;
+  flex-shrink: 0 !important;
+  display: block !important;
 }
 
-.checkout-page-wrapper .brand span span {
-  font-weight: 400;
+.checkout-page-wrapper .brand-title {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 16px !important;
+  letter-spacing: -0.3px !important;
+  color: var(--ink) !important;
+  line-height: 1 !important;
+}
+
+.checkout-page-wrapper .brand-title strong {
+  font-weight: 800 !important;
+  color: var(--ink) !important;
+  font-size: 16px !important;
+  letter-spacing: -0.3px !important;
+}
+
+.checkout-page-wrapper .brand-title .brand-sub,
+.checkout-page-wrapper .brand-title span {
+  font-weight: 400 !important;
+  color: var(--ink) !important;
+  font-size: 16px !important;
+  letter-spacing: -0.3px !important;
 }
 
 .checkout-page-wrapper .header-actions {
-  display: flex;
-  align-items: center;
-  gap: 22px;
+  display: flex !important;
+  align-items: center !important;
+  gap: 20px !important;
 }
 
 .checkout-page-wrapper .secure {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12px;
-  color: var(--muted);
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--muted) !important;
 }
 
 .checkout-page-wrapper .secure .icon {
-  width: 15px;
-  height: 15px;
+  width: 14px !important;
+  height: 14px !important;
+  stroke: var(--muted) !important;
+  stroke-width: 1.65 !important;
+  flex-shrink: 0 !important;
 }
 
 .checkout-page-wrapper .theme {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--line);
-  background: var(--soft);
-  color: var(--ink);
+  display: grid !important;
+  place-items: center !important;
+  width: 38px !important;
+  height: 38px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 12px !important;
+  background: var(--soft) !important;
+  color: var(--ink) !important;
+  cursor: pointer !important;
+  transition: background 0.18s ease, transform 0.18s ease !important;
+  padding: 0 !important;
+  flex-shrink: 0 !important;
 }
 
 .checkout-page-wrapper .theme:hover {
-  background: var(--tint);
+  background: var(--tint) !important;
+}
+
+.checkout-page-wrapper .theme .icon {
+  width: 18px !important;
+  height: 18px !important;
+  color: var(--ink) !important;
+  stroke: currentColor !important;
 }
 
 .checkout-page-wrapper main {
@@ -1404,26 +1445,27 @@
     padding-bottom: 16px;
   }
   .checkout-page-wrapper .header {
-    padding: 16px 0;
+    padding: 16px 0 !important;
   }
   .checkout-page-wrapper .header-actions {
-    gap: 10px;
+    gap: 12px !important;
   }
   .checkout-page-wrapper .secure {
-    font-size: 0;
-    gap: 0;
+    font-size: 0 !important;
+    gap: 0 !important;
   }
   .checkout-page-wrapper .secure .icon {
-    width: 17px;
-    height: 17px;
+    width: 15px !important;
+    height: 15px !important;
   }
   .checkout-page-wrapper .brand {
-    font-size: 15px;
-    gap: 6px;
+    font-size: 15px !important;
+    gap: 8px !important;
   }
+  .checkout-page-wrapper .brand-logo,
   .checkout-page-wrapper .brand svg {
-    width: 34px;
-    height: 34px;
+    width: 24px !important;
+    height: 24px !important;
   }
   .checkout-page-wrapper .intro {
     padding: 0;
