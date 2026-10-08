@@ -7,6 +7,7 @@ export interface AuthContextType {
   currentUser: FirebaseUser | null;
   isPremium: boolean;
   isAdmin: boolean;
+  userDocExists: boolean | null;
   isLoading: boolean;
   loginWithGoogle: () => Promise<FirebaseUser | null>;
   logout: () => Promise<void>;
@@ -45,6 +46,7 @@ export function isWhitelistedPro(email?: string | null): boolean {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [userDocExists, setUserDocExists] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -66,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Se for conta Pro whitelisted ou Admin, ativa imediatamente sem esperar rede
         if (isPro) {
           setIsPremium(true);
+          setUserDocExists(true);
           setIsLoading(false);
         }
 
@@ -81,12 +84,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const photoURL = user.photoURL || user.providerData?.[0]?.photoURL || '';
 
           if (snap.exists()) {
+            setUserDocExists(true);
             // Usuário já cadastrado no banco: sincroniza dados básicos
             await setDoc(userDocRef, {
               name,
               photoURL
             }, { merge: true });
           } else if (isPro) {
+            setUserDocExists(true);
             // Contas Pro whitelisted / Administradores são criadas com acesso irrestrito
             await setDoc(userDocRef, {
               name,
@@ -95,6 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               isPremium: true,
               createdAt: serverTimestamp()
             }, { merge: true });
+          } else {
+            setUserDocExists(false);
           }
           // Se !snap.exists() e não for Pro, NÃO criamos o documento aqui.
           // O documento só será criado após a conclusão do checkout/onboarding.
@@ -102,14 +109,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.warn('Notice ensuring user doc exists:', err);
           if (isPro) {
             setIsPremium(true);
+            setUserDocExists(true);
           }
         }
 
         // Realtime listener for isPremium status changes
         unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
+          const exists = docSnap.exists();
+          setUserDocExists(isPro ? true : exists);
+
           if (isPro) {
             setIsPremium(true);
-          } else if (docSnap.exists()) {
+          } else if (exists) {
             const data = docSnap.data();
             setIsPremium(Boolean(data?.isPremium));
           } else {
@@ -120,14 +131,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('Firestore user snapshot error:', err);
           if (isPro) {
             setIsPremium(true);
+            setUserDocExists(true);
           } else {
             setIsPremium(false);
+            setUserDocExists(false);
           }
           setIsLoading(false);
         });
       } else {
         setCurrentUser(null);
         setIsPremium(false);
+        setUserDocExists(false);
         setIsLoading(false);
       }
     });
@@ -142,6 +156,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const result = await signInWithGoogle();
+      if (result?.user) {
+        setCurrentUser(result.user);
+      }
       return result?.user || null;
     } catch (error) {
       setIsLoading(false);
@@ -150,9 +167,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await signOutUser();
+    try {
+      await signOutUser();
+    } catch (e) {
+      console.warn('Erro ao deslogar:', e);
+    }
     setCurrentUser(null);
     setIsPremium(false);
+    setUserDocExists(false);
+    try {
+      sessionStorage.clear();
+      localStorage.removeItem('nexus_latest_mentor_feedback');
+    } catch (_) {}
   };
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
@@ -164,6 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         isPremium,
         isAdmin: userIsAdmin,
+        userDocExists,
         isLoading,
         loginWithGoogle,
         logout

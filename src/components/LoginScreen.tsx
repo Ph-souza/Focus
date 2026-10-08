@@ -8,7 +8,7 @@ import { db, mapAuthError } from '../lib/firebase';
 import { NexusFocusLogo } from './AuraLogo';
 
 export function LoginScreen() {
-  const { currentUser, isLoading, loginWithGoogle } = useAuth();
+  const { currentUser, isLoading, loginWithGoogle, logout } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isCheckoutIntent = searchParams.get('intent') === 'checkout';
@@ -60,6 +60,10 @@ export function LoginScreen() {
     try {
       setErrorMsg(null);
       setIsSubmitting(true);
+      if (currentUser) {
+        // Se já havia uma sessão, desconecta para permitir selecionar outra conta Google
+        await logout();
+      }
       const user = await loginWithGoogle();
 
       if (user) {
@@ -208,6 +212,23 @@ export function LoginScreen() {
             <p className="text-[11px] sm:text-xs text-zinc-500 text-center mt-3.5 leading-relaxed">
               Você será redirecionado para o pagamento seguro após criar a conta
             </p>
+          )}
+
+          {currentUser?.email && (
+            <div className="mt-3.5 px-3 py-2 rounded-xl bg-zinc-100/90 border border-zinc-200/80 text-center w-full">
+              <p className="text-xs text-zinc-600">
+                Sessão ativa como: <strong className="text-zinc-800">{currentUser.email}</strong>
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  await logout();
+                }}
+                className="mt-1 text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
+              >
+                Trocar de conta / Desconectar
+              </button>
+            </div>
           )}
 
           {/* Security Badge with Horizontal Dividers */}

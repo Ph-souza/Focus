@@ -7,13 +7,14 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { currentUser, isPremium, isLoading } = useAuth();
+  const { currentUser, isPremium, userDocExists, isLoading } = useAuth();
   const location = useLocation();
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
-  const hasAccess = isPremium || isWhitelistedPro(userEmail);
+  const isWhitelisted = isWhitelistedPro(userEmail);
+  const hasAccess = isWhitelisted || isPremium || userDocExists === true;
 
-  if (isLoading && !hasAccess) {
+  if (isLoading || (currentUser && userDocExists === null)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white">
         <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-4" />
@@ -27,7 +28,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 2. Se houver currentUser MAS não tiver acesso: Redireciona para /checkout
+  // 2. Se houver currentUser MAS o documento não existir: Redireciona para /checkout
   if (!hasAccess) {
     return <Navigate to="/checkout" replace />;
   }

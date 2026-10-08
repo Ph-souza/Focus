@@ -35,7 +35,7 @@ if (typeof window !== 'undefined' && MP_PUBLIC_KEY) {
 }
 
 export function CheckoutScreen() {
-  const { currentUser, isPremium } = useAuth();
+  const { currentUser, isPremium, userDocExists, logout } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
   const [billingCycle, setBillingCycle] = useState<'mensal' | 'anual'>('mensal');
@@ -77,7 +77,8 @@ export function CheckoutScreen() {
   });
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
-  const hasAccess = isPremium || isWhitelistedPro(userEmail);
+  const isWhitelisted = isWhitelistedPro(userEmail);
+  const hasAccess = isWhitelisted || isPremium || userDocExists === true;
 
   // Inicialização no componente
   useEffect(() => {
@@ -494,6 +495,24 @@ export function CheckoutScreen() {
             </span>
           </Link>
           <div className="header-actions">
+            {currentUser?.email && (
+              <div className="checkout-user-pill">
+                <span className="checkout-user-email" title={currentUser.email}>
+                  {currentUser.email}
+                </span>
+                <button
+                  type="button"
+                  className="checkout-logout-btn"
+                  onClick={async () => {
+                    await logout();
+                    window.location.href = '/login';
+                  }}
+                  title="Sair ou entrar com outra conta"
+                >
+                  Trocar conta
+                </button>
+              </div>
+            )}
             <span className="secure">
               <svg className="icon" aria-hidden="true"><use href="#i-lock"/></svg>
               Checkout da assinatura

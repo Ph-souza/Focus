@@ -213,7 +213,43 @@
 .checkout-page-wrapper .header-actions {
   display: flex !important;
   align-items: center !important;
-  gap: 20px !important;
+  gap: 16px !important;
+}
+
+.checkout-page-wrapper .checkout-user-pill {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 4px 10px !important;
+  background: var(--soft) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 9999px !important;
+  font-size: 11.5px !important;
+}
+
+.checkout-page-wrapper .checkout-user-email {
+  color: var(--ink) !important;
+  font-weight: 500 !important;
+  max-width: 140px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.checkout-page-wrapper .checkout-logout-btn {
+  background: none !important;
+  border: none !important;
+  color: var(--blue) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  padding: 2px 4px !important;
+  text-decoration: underline !important;
+  transition: opacity 0.15s ease !important;
+}
+
+.checkout-page-wrapper .checkout-logout-btn:hover {
+  opacity: 0.8 !important;
 }
 
 .checkout-page-wrapper .secure {
