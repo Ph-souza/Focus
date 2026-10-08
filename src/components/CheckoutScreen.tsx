@@ -162,11 +162,9 @@ export function CheckoutScreen() {
     },
     visual: {
       hideFormTitle: true,
+      hidePaymentButton: true,
       style: {
         theme: (theme === 'dark' ? 'dark' : 'default') as 'dark' | 'default',
-      },
-      texts: {
-        formSubmit: 'Confirmar Pagamento',
       },
     },
   }), [theme]);

@@ -703,6 +703,15 @@
   flex-shrink: 0;
 }
 
+/* Oculta botão nativo do Mercado Pago Brick para usar exclusivamente o botão da página */
+#cardPaymentBrick_container button[type="submit"],
+#cardPaymentBrick_container .svelte-1vjtx7v,
+#cardPaymentBrick_container [class*="submit-button"],
+#cardPaymentBrick_container [class*="form-submit"],
+#cardPaymentBrick_container [data-testid*="submit"] {
+  display: none !important;
+}
+
 .checkout-page-wrapper .checkout-steps {
   display: flex;
   align-items: center;
