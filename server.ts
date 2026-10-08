@@ -662,11 +662,21 @@ async function startServer() {
   // =========================================================================
   // Rota de Assinaturas Recorrentes (PreApproval / Subscriptions)
   // =========================================================================
-  app.post("/api/subscriptions", async (req, res) => {
+  app.post("/api/subscriptions", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
-      const { token, email, userId, plan, coupon, planId } = req.body || {};
+      const { token, plan, coupon, planId, paymentMethod } = req.body || {};
+      const email = req.user?.email;
+      const userId = req.user?.uid;
+      const hostedCheckout = paymentMethod === "pix";
 
-      if (!token) {
+      if (paymentMethod && paymentMethod !== "pix" && paymentMethod !== "card") {
+        return res.status(400).json({ success: false, error: "Forma de pagamento inválida." });
+      }
+      if (plan !== "mensal" && plan !== "anual") {
+        return res.status(400).json({ success: false, error: "Plano inválido." });
+      }
+
+      if (!token && !hostedCheckout) {
         return res.status(400).json({ success: false, error: "Token do cartão não fornecido." });
       }
 
@@ -722,9 +732,9 @@ async function startServer() {
       // Montar corpo da requisição de PreApproval com metadados para auditoria e webhook
       const preapprovalPayload: any = {
         payer_email: payerEmail,
-        card_token_id: token,
+        ...(hostedCheckout ? {} : { card_token_id: token }),
         back_url: `${appUrl}/dashboard`,
-        status: "authorized",
+        status: hostedCheckout ? "pending" : "authorized",
         external_reference: JSON.stringify({
           plan: normalizedPlan,
           coupon: couponApplied,
@@ -733,7 +743,7 @@ async function startServer() {
         })
       };
 
-      if (selectedPlanId && !isCoupon50 && normalizedPlan === "mensal") {
+      if (!hostedCheckout && selectedPlanId && !isCoupon50 && normalizedPlan === "mensal") {
         preapprovalPayload.preapproval_plan_id = selectedPlanId;
       } else {
         preapprovalPayload.reason = reason;
@@ -770,6 +780,29 @@ async function startServer() {
 
       const subscriptionId = subscriptionResult?.id;
       const status = subscriptionResult?.status; // 'authorized', 'pending', etc.
+
+      // O checkout hospedado ainda não é um pagamento confirmado.
+      // Não conceder Pro nem escrever isPremium nesta etapa.
+      if (hostedCheckout) {
+        const initPoint = subscriptionResult?.init_point;
+        if (!subscriptionId || status !== "pending" || !initPoint) {
+          return res.status(502).json({ success: false, error: "O Mercado Pago não disponibilizou o checkout. Tente novamente." });
+        }
+        const checkoutUrl = new URL(initPoint);
+        if (checkoutUrl.protocol !== "https:" ||
+            !(checkoutUrl.hostname === "mercadopago.com.br" || checkoutUrl.hostname.endsWith(".mercadopago.com.br"))) {
+          return res.status(502).json({ success: false, error: "O Mercado Pago retornou um endereço de checkout inválido." });
+        }
+        return res.status(200).json({
+          success: true,
+          status,
+          subscriptionId,
+          initPoint: checkoutUrl.href,
+          plan: normalizedPlan,
+          couponApplied,
+          currentPrice: finalAmount
+        });
+      }
 
       // Se a assinatura foi autorizada ou está pendente de confirmação bancária
       if (status === "authorized" || status === "pending") {

@@ -35,7 +35,8 @@ if (typeof window !== 'undefined' && MP_PUBLIC_KEY) {
 
 export function CheckoutScreen() {
   const { currentUser, isPremium } = useAuth();
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'card' | null>(null);
   const [billingCycle, setBillingCycle] = useState<'mensal' | 'anual'>('mensal');
   const [loading, setLoading] = useState(false);
   const [isBrickReady, setIsBrickReady] = useState(false);
@@ -96,7 +97,7 @@ export function CheckoutScreen() {
   // Timeout preventivo para o Brick
   useEffect(() => {
     let timer: any;
-    if (step === 2 && !isBrickReady && !brickError) {
+    if (step === 3 && paymentMethod === 'card' && !isBrickReady && !brickError) {
       timer = setTimeout(() => {
         if (!isBrickReady) {
           setBrickError('O formulário do Mercado Pago está demorando para responder.');
@@ -104,12 +105,8 @@ export function CheckoutScreen() {
       }, 10000);
     }
     return () => clearTimeout(timer);
-  }, [step, isBrickReady, brickError, brickKey]);
+  }, [step, paymentMethod, isBrickReady, brickError, brickKey]);
 
-  // Redirecionamento se já possuir acesso Pro
-  if (hasAccess) {
-    return <Navigate to="/dashboard" replace />;
-  }
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -191,10 +188,13 @@ export function CheckoutScreen() {
         throw new Error('Não foi possível gerar o token do cartão. Revise os dados digitados.');
       }
 
+      if (!currentUser) throw new Error('Entre na sua conta para continuar.');
+      const idToken = await currentUser.getIdToken();
       const response = await fetch(getApiUrl('/api/subscriptions'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           token: cardToken,
@@ -255,7 +255,7 @@ export function CheckoutScreen() {
     if (code === 'FOCUS50') {
       setAppliedCoupon('FOCUS50');
       setCouponStatus({
-        message: 'Cupom aplicado! Você economiza R$ 9,95 por mês durante 3 meses.',
+        message: 'Cupom aplicado! 50% de desconto nas 3 primeiras mensalidades ou no primeiro ano.',
         type: 'success'
       });
     } else if (code === 'FOCUS10' || code === 'PROMO') {
@@ -276,7 +276,7 @@ export function CheckoutScreen() {
     setAppliedCoupon(null);
     setCouponCode('');
     setCouponStatus({
-      message: 'Cupom removido. Valor atualizado para R$ 19,90/mês.',
+      message: 'Cupom removido. Valor do plano atualizado.',
       type: ''
     });
   };
@@ -299,16 +299,66 @@ export function CheckoutScreen() {
     }
   };
 
-  const handleCtaClick = async () => {
-    if (step === 1) {
+  const goToStep = (nextStep: 1 | 2 | 3) => {
+    if (loading) return;
+    setErrorMessage('');
+    if (nextStep === 3 && !paymentMethod) {
       setStep(2);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
+    if (nextStep === 3 && step !== 3) {
+      setIsBrickReady(false);
+      setBrickError(null);
+    }
+    setStep(nextStep);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
+  const handlePixCheckout = async () => {
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      if (!currentUser) throw new Error('Entre na sua conta para continuar.');
+      const idToken = await currentUser.getIdToken();
+      const response = await fetch(getApiUrl('/api/subscriptions'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ paymentMethod: 'pix', plan: billingCycle, coupon: appliedCoupon }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.initPoint) {
+        throw new Error(data.error || 'Não foi possível abrir o pagamento. Tente novamente.');
+      }
+      const checkoutUrl = new URL(data.initPoint);
+      if (checkoutUrl.protocol !== 'https:' ||
+          !(checkoutUrl.hostname === 'mercadopago.com.br' || checkoutUrl.hostname.endsWith('.mercadopago.com.br'))) {
+        throw new Error('O endereço de pagamento recebido é inválido.');
+      }
+      window.location.assign(checkoutUrl.href);
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Não foi possível abrir o pagamento.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCtaClick = async () => {
     if (loading) return;
+    if (step === 1) {
+      goToStep(2);
+      return;
+    }
+    if (step === 2) {
+      goToStep(3);
+      return;
+    }
+    if (paymentMethod === 'pix') {
+      await handlePixCheckout();
+      return;
+    }
+    if (paymentMethod !== 'card' || !isBrickReady || brickError) return;
 
-    // Se estiver no step 2, tenta obter os dados tokenizados via controller ou clica no submit nativo
+    // Se estiver no step 3, tenta obter os dados tokenizados via controller ou clica no submit nativo
     const controller = (window as any).cardPaymentBrickController;
     if (controller && typeof controller.getFormData === 'function') {
       try {
@@ -328,6 +378,8 @@ export function CheckoutScreen() {
       submitBtn.click();
     }
   };
+
+  if (hasAccess) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className="checkout-page-wrapper">
@@ -499,18 +551,30 @@ export function CheckoutScreen() {
                     type="button"
                     id="step-plan"
                     aria-current={step === 1 ? 'step' : undefined}
-                    onClick={() => setStep(1)}
+                    disabled={loading}
+                    onClick={() => goToStep(1)}
                   >
                     <span>1</span>Seu plano
                   </button>
                   <i aria-hidden="true"></i>
                   <button
                     type="button"
-                    id="step-payment"
+                    id="step-method"
                     aria-current={step === 2 ? 'step' : undefined}
-                    onClick={() => setStep(2)}
+                    disabled={loading}
+                    onClick={() => goToStep(2)}
                   >
-                    <span>2</span>Pagamento
+                    <span>2</span>Pix ou cartão
+                  </button>
+                  <i aria-hidden="true"></i>
+                  <button
+                    type="button"
+                    id="step-payment"
+                    aria-current={step === 3 ? 'step' : undefined}
+                    disabled={loading || !paymentMethod}
+                    onClick={() => goToStep(3)}
+                  >
+                    <span>3</span>Pagamento
                   </button>
                 </nav>
 
@@ -616,8 +680,26 @@ export function CheckoutScreen() {
                     </div>
                   </div>
 
-                  {/* Etapa 2: Formulário Seguro de Pagamento Mercado Pago */}
-                  <section id="payment-step" aria-labelledby="payment-title" hidden={step !== 2}>
+                  <section id="payment-method-step" aria-labelledby="payment-method-title" hidden={step !== 2}>
+                    <div className="plan-head"><h2 id="payment-method-title">Como você prefere pagar?</h2></div>
+                    <p className="plan-sub">Escolha uma forma de pagamento para continuar.</p>
+                    <fieldset className="payment-method-options">
+                      <legend className="payment-method-legend">Forma de pagamento</legend>
+                      <label className={`payment-method-option ${paymentMethod === 'pix' ? 'is-selected' : ''}`}>
+                        <input type="radio" name="payment-method" value="pix"
+                          checked={paymentMethod === 'pix'} onChange={() => setPaymentMethod('pix')} />
+                        <span><strong>Pix</strong><small>Continue no Mercado Pago e selecione Pix entre os meios disponíveis.</small></span>
+                      </label>
+                      <label className={`payment-method-option ${paymentMethod === 'card' ? 'is-selected' : ''}`}>
+                        <input type="radio" name="payment-method" value="card"
+                          checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} />
+                        <span><strong>Cartão de crédito</strong><small>Preencha os dados do cartão com segurança na próxima etapa.</small></span>
+                      </label>
+                    </fieldset>
+                  </section>
+
+                  {/* Etapa 3: Pagamento conforme o meio escolhido */}
+                  <section id="payment-step" aria-labelledby="payment-title" hidden={step !== 3}>
                     <div className="card-section-head">
                       <div>
                         <h2 id="payment-title" tabIndex={-1}>Pague com Segurança.</h2>
@@ -635,13 +717,13 @@ export function CheckoutScreen() {
                     </div>
 
                     {/* Loading e Container Seguro do Brick */}
-                    {!isBrickReady && !brickError && (
+                    {paymentMethod === 'card' && !isBrickReady && !brickError && (
                       <p id="brick-loading" className="inline-note" role="status">
                         Carregando formulário seguro do Mercado Pago…
                       </p>
                     )}
 
-                    {step === 2 && (
+                    {step === 3 && paymentMethod === 'card' && (
                       <div
                         className="mercado-pago-brick-wrapper"
                         data-testid="payment-brick-container"
@@ -659,7 +741,17 @@ export function CheckoutScreen() {
                       </div>
                     )}
 
-                    {brickError && (
+                    {paymentMethod === 'pix' && (
+                      <div className="pix-checkout-note">
+                        <h3>Continue com Pix no Mercado Pago</h3>
+                        <p>Ao continuar, você será direcionado ao ambiente seguro do Mercado Pago.
+                          Selecione Pix, se disponível para esta assinatura, e siga as instruções para concluir.</p>
+                        <p>A disponibilidade do Pix e as condições de autorização serão apresentadas pelo Mercado Pago.
+                          Seu acesso será liberado após a confirmação do pagamento.</p>
+                      </div>
+                    )}
+
+                    {paymentMethod === 'card' && brickError && (
                       <div style={{ marginTop: 12 }}>
                         <p style={{ color: 'var(--red)', fontSize: 11 }}>{brickError}</p>
                         <button
@@ -701,14 +793,18 @@ export function CheckoutScreen() {
                   id="subscribe"
                   type="button"
                   onClick={handleCtaClick}
-                  disabled={loading}
+                  disabled={loading || (step === 2 && !paymentMethod) || (step === 3 && paymentMethod === 'card' && (!isBrickReady || !!brickError))}
                   aria-describedby="renewal"
                 >
                   <span id="button-label">
                     {loading
                       ? 'Processando…'
                       : step === 1
-                      ? `Ir para pagamento · R$ ${displayPrice}${billingCycle === 'anual' ? '/ano' : '/mês'}`
+                      ? 'Escolher forma de pagamento'
+                      : step === 2
+                      ? 'Continuar para pagamento'
+                      : paymentMethod === 'pix'
+                      ? `Continuar no Mercado Pago · R$ ${displayPrice}`
                       : `Assinar por R$ ${displayPrice}${billingCycle === 'anual' ? '/ano' : '/mês'}`}
                   </span>
                   <svg className="icon" aria-hidden="true"><use href="#i-arrow"/></svg>
