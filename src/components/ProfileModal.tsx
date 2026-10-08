@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Calendar, User as UserIcon, Shield } from 'lucide-react';
 import { User } from '../types';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { isAdmin } from '../contexts/AuthContext';
 
@@ -32,7 +32,8 @@ export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, 
     e.preventDefault();
     if (!name.trim()) return;
 
-    if (!user?.id) {
+    const activeUid = auth.currentUser?.uid;
+    if (!activeUid) {
       alert('Erro: Usuário não autenticado.');
       return;
     }
@@ -47,7 +48,7 @@ export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, 
         throw new Error('Formato de data inválido. Use AAAA-MM-DD.');
       }
 
-      await setDoc(doc(db, 'users', user.id), {
+      await setDoc(doc(db, 'users', activeUid), {
         name: name.trim(),
         dateOfBirth: cleanDate
       }, { merge: true });

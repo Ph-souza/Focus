@@ -78,7 +78,7 @@ export function CheckoutScreen() {
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
   const isWhitelisted = isWhitelistedPro(userEmail);
-  const hasAccess = isWhitelisted || isPremium || userDocExists === true;
+  const hasAccess = isWhitelisted || isPremium;
 
   // Inicialização no componente
   useEffect(() => {

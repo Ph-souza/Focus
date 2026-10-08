@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Target, Edit2, Check, X, AlertCircle } from 'lucide-react';
 import { Transaction, User } from '../types';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 interface MonthlyBudgetWidgetProps {
@@ -30,9 +30,14 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
 
   // Sincronização em tempo real com o documento do Firestore (se disponível)
   useEffect(() => {
-    if (!user?.id) return;
-    const userDocRef = doc(db, 'users', user.id);
+    const activeUid = auth.currentUser?.uid;
+    if (!activeUid) {
+      setCurrentBudget(0);
+      return;
+    }
+    const userDocRef = doc(db, 'users', activeUid);
     const unsubscribe = onSnapshot(userDocRef, (snap) => {
+      if (auth.currentUser?.uid !== activeUid) return;
       if (snap.exists()) {
         const data = snap.data();
         if (typeof data?.monthlyBudget === 'number') {
@@ -86,15 +91,10 @@ export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetP
           user.monthlyBudget = newVal;
         }
 
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('nexus_monthly_budget', newVal.toString());
-          } catch {}
-        }
-
-        // 3. Persistência assíncrona desacoplada no Firestore
-        if (user?.id) {
-          setDoc(doc(db, `users/${user.id}`), { monthlyBudget: newVal }, { merge: true })
+        // 3. Persistência assíncrona desacoplada no Firestore usando auth.currentUser.uid estrito
+        const activeUid = auth.currentUser?.uid;
+        if (activeUid) {
+          setDoc(doc(db, 'users', activeUid), { monthlyBudget: newVal }, { merge: true })
             .catch((err) => {
               console.warn('[MonthlyBudgetWidget] Firestore save notice:', err?.message);
             });

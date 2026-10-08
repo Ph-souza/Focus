@@ -44,9 +44,17 @@ function Dashboard() {
     photoURL?: string;
   }>({});
 
+  // 1. Perfil do Usuário com validação direta de auth.currentUser.uid
   useEffect(() => {
-    if (!currentUser?.uid) return;
-    const unsub = onSnapshot(doc(db, 'users', currentUser.uid), (docSnap) => {
+    const activeUid = auth.currentUser?.uid;
+    if (!activeUid) {
+      setUserProfile({});
+      return;
+    }
+
+    const unsub = onSnapshot(doc(db, 'users', activeUid), (docSnap) => {
+      // Aborta imediatamente se o usuário ativo mudou
+      if (auth.currentUser?.uid !== activeUid) return;
       if (docSnap.exists()) {
         const data = docSnap.data();
         setUserProfile({
@@ -58,11 +66,17 @@ function Dashboard() {
     }, (error) => {
       console.warn('Notice user profile snapshot error:', error);
     });
-    return () => unsub();
+
+    return () => {
+      unsub();
+      setUserProfile({});
+    };
   }, [currentUser?.uid]);
 
+  const activeAuthUid = auth.currentUser?.uid || '';
+
   const user: User = {
-    id: currentUser?.uid || '',
+    id: activeAuthUid,
     name: userProfile.name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Usuário',
     email: currentUser?.email || '',
     photoURL: userProfile.photoURL || currentUser?.photoURL || undefined,
@@ -113,66 +127,87 @@ function Dashboard() {
   }, []);
 
 
-  // Firestore Subscriptions
+  // 2. ISOLAMENTO ESTRITO DE CONSULTAS (P0):
+  // Todas as consultas dependem estritamente de auth.currentUser.uid no momento da chamada.
+  // Se auth.currentUser for nulo, a requisição é sumariamente abortada e todo o estado purgado.
   useEffect(() => {
-    if (!user.id) return;
+    const activeUid = auth.currentUser?.uid;
 
-    // 1. Transactions Listener (Limit 5 mais recentes para cards de resumo da Tela Início)
+    // Purga imediata de qualquer resíduo em memória da sessão anterior
+    setTransactions([]);
+    setGoals([]);
+    setTasks([]);
+    setChatMessages([]);
+    setAppointments([]);
+    setRotinas([]);
+    setNotifications([]);
+
+    if (!activeUid) {
+      return;
+    }
+
+    // 1. Transactions Listener (Limit 5 mais recentes)
     const transQuery = query(
-      collection(db, 'users', user.id, 'transactions'),
+      collection(db, 'users', activeUid, 'transactions'),
       orderBy('date', 'desc'),
       limit(5)
     );
     const unsubTrans = onSnapshot(transQuery, (snapshot) => {
+      if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
       setTransactions(docs);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/transactions`);
+      handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/transactions`);
     });
 
     // 2. Goals Listener
-    const goalsQuery = query(collection(db, 'users', user.id, 'goals'));
+    const goalsQuery = query(collection(db, 'users', activeUid, 'goals'));
     const unsubGoals = onSnapshot(goalsQuery, (snapshot) => {
+      if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setGoals(docs);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/goals`);
+      handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/goals`);
     });
 
     // 3. Tasks Listener (Limit 20)
-    const tasksQuery = query(collection(db, 'users', user.id, 'tasks'), orderBy('createdAt', 'desc'), limit(20));
+    const tasksQuery = query(collection(db, 'users', activeUid, 'tasks'), orderBy('createdAt', 'desc'), limit(20));
     const unsubTasks = onSnapshot(tasksQuery, (snapshot) => {
+      if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Task));
       setTasks(docs);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/tasks`);
+      handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/tasks`);
     });
 
     // 4. Chat Messages Listener
-    const chatQuery = query(collection(db, 'users', user.id, 'chatMessages'), orderBy('timestamp', 'asc'));
+    const chatQuery = query(collection(db, 'users', activeUid, 'chatMessages'), orderBy('timestamp', 'asc'));
     const unsubChat = onSnapshot(chatQuery, (snapshot) => {
+      if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage));
       setChatMessages(docs);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/chatMessages`);
+      handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/chatMessages`);
     });
 
     // 5. Appointments Listener
-    const appointmentsQuery = query(collection(db, 'users', user.id, 'appointments'), orderBy('createdAt', 'desc'), limit(10));
+    const appointmentsQuery = query(collection(db, 'users', activeUid, 'appointments'), orderBy('createdAt', 'desc'), limit(10));
     const unsubAppointments = onSnapshot(appointmentsQuery, (snapshot) => {
+      if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Appointment));
       setAppointments(docs);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/appointments`);
+      handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/appointments`);
     });
 
-    // 6. Rotinas Listener (Limit 5 para Próximas Atividades da Tela Início)
-    const rotinasQuery = query(collection(db, 'users', user.id, 'rotinas'), orderBy('date', 'desc'), limit(5));
+    // 6. Rotinas Listener
+    const rotinasQuery = query(collection(db, 'users', activeUid, 'rotinas'), orderBy('date', 'desc'), limit(5));
     const unsubRotinas = onSnapshot(rotinasQuery, (snapshot) => {
+      if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Rotina));
       setRotinas(docs);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `users/${user.id}/rotinas`);
+      handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/rotinas`);
     });
 
     return () => {
@@ -182,8 +217,15 @@ function Dashboard() {
       unsubChat();
       unsubAppointments();
       unsubRotinas();
+      // Purga estrita na desmontagem do efeito
+      setTransactions([]);
+      setGoals([]);
+      setTasks([]);
+      setChatMessages([]);
+      setAppointments([]);
+      setRotinas([]);
     };
-  }, [user.id]);
+  }, [currentUser?.uid]);
 
   // Notifications & Push Trigger
   useEffect(() => {

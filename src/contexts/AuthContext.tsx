@@ -176,9 +176,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsPremium(false);
     setUserDocExists(false);
     try {
+      localStorage.clear();
       sessionStorage.clear();
-      localStorage.removeItem('nexus_latest_mentor_feedback');
     } catch (_) {}
+    // Purga de Estado Absoluta: força destruição de toda memória do processo e recarrega /login
+    window.location.href = '/login';
   };
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();

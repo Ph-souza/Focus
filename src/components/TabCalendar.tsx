@@ -16,7 +16,7 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Rotina, User } from '../types';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { collection, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { 
   Plus, 
@@ -314,8 +314,9 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
   const [calendarRotinas, setCalendarRotinas] = useState<Rotina[]>(rotinas);
 
   useEffect(() => {
-    if (!user?.id) {
-      setCalendarRotinas(rotinas);
+    const activeUid = auth.currentUser?.uid;
+    if (!activeUid) {
+      setCalendarRotinas([]);
       return;
     }
 
@@ -324,20 +325,24 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
     const endOfMonthStr = format(endOfMonth(monthTarget), 'yyyy-MM-dd');
 
     const q = query(
-      collection(db, 'users', user.id, 'rotinas'),
+      collection(db, 'users', activeUid, 'rotinas'),
       where('date', '>=', startOfMonthStr),
       where('date', '<=', endOfMonthStr),
       orderBy('date', 'asc')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Rotina));
       setCalendarRotinas(docs);
     }, (error) => {
       console.error("Erro ao carregar rotinas do mês selecionado:", error);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      setCalendarRotinas([]);
+    };
   }, [user?.id, format(displayedMonthDate || selectedDate, 'yyyy-MM')]);
 
   // 1. Fonte Única da Verdade: Firestore Listener contextual via calendarRotinas
@@ -475,9 +480,10 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
 
   // 3. Atualização direta no Firestore (sem mutação manual de estado local)
   const handleToggleComplete = async (id: string, currentVal: boolean) => {
-    if (user?.id && !id.startsWith('mock-')) {
+    const activeUid = auth.currentUser?.uid;
+    if (activeUid && !id.startsWith('mock-')) {
       try {
-        await updateDoc(doc(db, 'users', user.id, 'rotinas', id), {
+        await updateDoc(doc(db, 'users', activeUid, 'rotinas', id), {
           completed: !currentVal
         });
       } catch (err) {
@@ -488,9 +494,10 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
 
   // Delete activity handler diretamente no Firestore (onSnapshot sincroniza o array)
   const handleDeleteActivity = async (id: string) => {
-    if (user?.id && !id.startsWith('mock-')) {
+    const activeUid = auth.currentUser?.uid;
+    if (activeUid && !id.startsWith('mock-')) {
       try {
-        await deleteDoc(doc(db, 'users', user.id, 'rotinas', id));
+        await deleteDoc(doc(db, 'users', activeUid, 'rotinas', id));
       } catch (err) {
         console.error('Error deleting routine from Firestore:', err);
       }
@@ -526,9 +533,10 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
     setNewTime('09:00');
     setIsCreateModalOpen(false);
 
-    if (user?.id) {
+    const activeUid = auth.currentUser?.uid;
+    if (activeUid) {
       try {
-        await addDoc(collection(db, 'users', user.id, 'rotinas'), {
+        await addDoc(collection(db, 'users', activeUid, 'rotinas'), {
           title: titleToSave,
           subtitle: subtitleToSave,
           time: literalTime,

@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 
 export function RootRoute() {
-  const { currentUser, isLoading, userDocExists } = useAuth();
+  const { currentUser, isPremium, isLoading, userDocExists } = useAuth();
 
   // 1. Estado de loading (spinner) enquanto o Firebase Auth e a verificação do documento resolvem
   if (isLoading || (currentUser && userDocExists === null)) {
@@ -23,9 +23,12 @@ export function RootRoute() {
   }
 
   // 3. Se o usuário ESTIVER autenticado no Firebase Auth:
-  // Se o documento existir (doc.exists()): Redirecione para /dashboard.
-  // Se o documento NÃO existir (primeiro acesso com e-mail novo): Redirecione imediatamente para /checkout.
-  if (userDocExists === true) {
+  // Se o pagamento estiver confirmado (isPremium ou Whitelisted): Redirecione para /dashboard.
+  // Se NÃO tiver pagamento confirmado: Redirecione imediatamente para /checkout.
+  const userEmail = (currentUser.email || '').trim().toLowerCase();
+  const hasPaidAccess = isWhitelistedPro(userEmail) || isPremium;
+
+  if (hasPaidAccess) {
     return <Navigate to="/dashboard" replace />;
   }
 

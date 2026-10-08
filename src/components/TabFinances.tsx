@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Transaction, TransactionType, User, Goal } from '../types';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { collection, doc, writeBatch, increment, serverTimestamp, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 import { 
@@ -133,7 +133,9 @@ export function TabFinances({
   const [contextualTransactions, setContextualTransactions] = useState<Transaction[]>([]);
 
   useEffect(() => {
-    if (!user?.id) {
+    const activeUid = auth.currentUser?.uid;
+    if (!activeUid) {
+      setContextualTransactions([]);
       return;
     }
 
@@ -141,20 +143,24 @@ export function TabFinances({
     const endOfMonthStr = format(endOfMonth(selectedDate), 'yyyy-MM-dd');
 
     const q = query(
-      collection(db, 'users', user.id, 'transactions'),
+      collection(db, 'users', activeUid, 'transactions'),
       where('date', '>=', startOfMonthStr),
       where('date', '<=', endOfMonthStr),
       orderBy('date', 'desc')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
       setContextualTransactions(docs);
     }, (error) => {
       console.error("Erro ao carregar transações do mês selecionado:", error);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      setContextualTransactions([]);
+    };
   }, [user?.id, format(selectedDate, 'yyyy-MM')]);
 
   // 1. Fonte Única da Verdade: Transações filtradas pelo mês selecionado via query contextual do Firestore
@@ -445,12 +451,13 @@ export function TabFinances({
     setSelectedMetaId('');
     setIsAddModalOpen(false);
 
-    if (user?.id) {
+    const activeUid = auth.currentUser?.uid;
+    if (activeUid) {
       try {
         const batch = writeBatch(db);
 
         // 1. Grava a transação no Firestore (o onSnapshot de App.tsx atualizará a interface)
-        const txDocRef = doc(collection(db, 'users', user.id, 'transactions'));
+        const txDocRef = doc(collection(db, 'users', activeUid, 'transactions'));
         batch.set(txDocRef, {
           title: txTitle,
           amount: num,
@@ -463,7 +470,7 @@ export function TabFinances({
 
         // 2. Se for aporte em meta, atualiza a Meta na mesma operação atômica
         if (txType === 'investimento_meta' && selectedMetaId) {
-          const goalRef = doc(db, 'users', user.id, 'goals', selectedMetaId);
+          const goalRef = doc(db, 'users', activeUid, 'goals', selectedMetaId);
           batch.update(goalRef, {
             currentAmount: increment(num),
             valorAcumulado: increment(num),

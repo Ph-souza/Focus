@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Smartphone, MessageCircle, ArrowRight, Check, ShieldCheck, Sparkles, Loader2 } from 'lucide-react';
 import { User } from '../types';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 interface WhatsAppModalProps {
@@ -15,25 +15,24 @@ export const WHATSAPP_BOT_NUMBER = (import.meta.env.VITE_WHATSAPP_BOT_PHONE as s
 export const WHATSAPP_BOT_DISPLAY = '+1 (555) 375-7186';
 
 export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
-  const [phoneNumber, setPhoneNumber] = useState<string>(() => {
-    return localStorage.getItem('nexus_whatsapp_number') || '';
-  });
+  const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // Carregar número do usuário do Firestore se ainda não estiver definido
+  // Carregar número do usuário do Firestore com isolamento estrito de UID
   useEffect(() => {
-    if (!isOpen || !user?.id) return;
+    const activeUid = auth.currentUser?.uid;
+    if (!isOpen || !activeUid) return;
 
     const fetchUserPhone = async () => {
       try {
-        const userDoc = await getDoc(doc(db, 'users', user.id));
+        const userDoc = await getDoc(doc(db, 'users', activeUid));
+        if (auth.currentUser?.uid !== activeUid) return;
         if (userDoc.exists()) {
           const data = userDoc.data();
           const savedNum = data?.whatsappFormatted || data?.whatsappNumber;
           if (savedNum && !phoneNumber) {
             setPhoneNumber(savedNum);
-            localStorage.setItem('nexus_whatsapp_number', savedNum);
           }
         }
       } catch (e) {

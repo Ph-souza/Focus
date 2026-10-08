@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Shield, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
 import { db, mapAuthError } from '../lib/firebase';
 import { NexusFocusLogo } from './AuraLogo';
 
@@ -30,8 +30,11 @@ export function LoginScreen() {
 
           if (!isMounted) return;
 
-          // Se já cadastrado -> /dashboard. Se não cadastrado no banco -> /checkout
-          if (userDocSnap.exists()) {
+          // Acesso ao /dashboard apenas com pagamento confirmado (isPremium) ou conta whitelisted
+          const userEmail = (currentUser.email || '').trim().toLowerCase();
+          const hasPaidAccess = isWhitelistedPro(userEmail) || Boolean(userDocSnap.data()?.isPremium);
+
+          if (hasPaidAccess) {
             navigate('/dashboard', { replace: true });
           } else {
             navigate('/checkout', { replace: true });
@@ -68,13 +71,14 @@ export function LoginScreen() {
 
       if (user) {
         // Assim que o login via Google for concluído com sucesso:
-        // Verifique a existência do documento users/{uid}.
+        // Verifique a existência do documento users/{uid} e status de pagamento
         const userDocRef = doc(db, 'users', user.uid);
         const userDocSnap = await getDoc(userDocRef);
+        const userEmail = (user.email || '').trim().toLowerCase();
+        const hasPaidAccess = isWhitelistedPro(userEmail) || Boolean(userDocSnap.data()?.isPremium);
 
-        // Se já cadastrado -> redirecione para /dashboard.
-        // Se não cadastrado no banco -> redirecione para /checkout.
-        if (userDocSnap.exists()) {
+        // Se pagamento confirmado -> /dashboard. Se não confirmado / novo -> /checkout
+        if (hasPaidAccess) {
           navigate('/dashboard', { replace: true });
         } else {
           navigate('/checkout', { replace: true });

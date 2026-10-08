@@ -169,8 +169,16 @@ export const signInWithGoogle = async () => {
 };
 
 export const signOutUser = async () => {
-  await signOut(auth);
+  try {
+    await signOut(auth);
+  } catch (e) {
+    console.warn('Erro ao deslogar auth:', e);
+  }
   cachedAccessToken = null;
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch (_) {}
 };
 
 export const googleSignInWithScopes = signInWithGoogle;

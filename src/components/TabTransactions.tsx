@@ -34,8 +34,9 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
 
   // 1. Carrega inicialmente apenas 20 itens (.limit(20)) ordenados por date desc
   useEffect(() => {
-    if (!user?.id) {
-      setPaginatedTransactions(transactions.slice(0, 20));
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid) {
+      setPaginatedTransactions([]);
       return;
     }
 
@@ -44,7 +45,7 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
       setIsLoadingInitial(true);
       try {
         const firstQuery = query(
-          collection(db, 'users', user.id, 'transactions'),
+          collection(db, 'users', currentUid, 'transactions'),
           orderBy('date', 'desc'),
           limit(20)
         );
@@ -73,16 +74,18 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
 
     return () => {
       isMounted = false;
+      setPaginatedTransactions([]);
     };
   }, [user?.id]);
 
   // 2. Paginação baseada em cursor: busca próxima página de 20 itens com startAfter(lastVisible)
   const loadMore = async () => {
-    if (!lastVisible || isLoadingMore || !hasMore || !user?.id) return;
+    const currentUid = auth.currentUser?.uid;
+    if (!lastVisible || isLoadingMore || !hasMore || !currentUid) return;
     setIsLoadingMore(true);
     try {
       const nextQuery = query(
-        collection(db, 'users', user.id, 'transactions'),
+        collection(db, 'users', currentUid, 'transactions'),
         orderBy('date', 'desc'),
         startAfter(lastVisible),
         limit(20)
