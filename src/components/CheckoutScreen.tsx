@@ -8,7 +8,8 @@ import { db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import './CheckoutScreen.css';
 
-// Chave pública oficial de produção da aplicação Nexus Focus no Mercado Pago (App ID: 1713752160212036)
+// Chaves públicas do Mercado Pago (Teste e Produção)
+const TEST_MP_PUBLIC_KEY = 'TEST-3b5701c9-9c51-4fd2-9528-14e5e516a392';
 const PROD_MP_PUBLIC_KEY = 'APP_USR-e42fc2b0-97b3-4aaa-b0f7-60b94d19825b';
 
 const rawKey = (
@@ -20,8 +21,8 @@ const rawKey = (
   ''
 ).trim();
 
-// Garante que chaves fictícias não quebrem a inicialização em produção
-export const MP_PUBLIC_KEY = (rawKey && !rawKey.includes('your-public-key')) ? rawKey : PROD_MP_PUBLIC_KEY;
+// Garante o uso da chave do ambiente ou da chave de teste oficial
+export const MP_PUBLIC_KEY = (rawKey && !rawKey.includes('your-public-key')) ? rawKey : TEST_MP_PUBLIC_KEY;
 
 // Inicializa o SDK do Mercado Pago
 if (typeof window !== 'undefined' && MP_PUBLIC_KEY) {

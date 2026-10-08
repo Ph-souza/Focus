@@ -144,8 +144,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-// Mercado Pago setup
-const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN?.trim() || process.env.MP_ACCESS_TOKEN?.trim() || "";
+// Mercado Pago setup (Credenciais de Teste / Sandbox configuradas como fallback)
+const TEST_MP_ACCESS_TOKEN = "TEST-1713752160212036-090418-0a8b27fb0f3007d1cfb8bc7aa6869d7a-149374129";
+const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN?.trim() || process.env.MP_ACCESS_TOKEN?.trim() || TEST_MP_ACCESS_TOKEN;
 const mpWebhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim() || process.env.MP_WEBHOOK_SECRET?.trim() || "";
 
 const mpClient = mpAccessToken ? new MercadoPagoConfig({ accessToken: mpAccessToken }) : null;
