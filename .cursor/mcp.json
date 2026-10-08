@@ -2,6 +2,10 @@
   "mcpServers": {
     "mercadopago-mcp-server": {
       "url": "https://mcp.mercadopago.com/mcp"
+    },
+    "resend": {
+      "serverUrl": "https://mcp.resend.com/mcp",
+      "url": "https://mcp.resend.com/mcp"
     }
   }
 }
