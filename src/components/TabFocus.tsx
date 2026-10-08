@@ -93,7 +93,7 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
 
   // Timer controls
   const handleTogglePlay = () => {
-    setIsRunning(!isRunning);
+    setIsRunning(running => !running);
   };
 
   const handleStop = () => {
@@ -700,7 +700,10 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
         isOpen={isDeepModeActive}
         onClose={() => setIsDeepModeActive(false)}
         taskTitle={focusTask}
-        initialMinutes={Math.round(totalTime / 60)}
+        timeRemaining={timeRemaining}
+        isRunning={isRunning}
+        onTogglePlay={handleTogglePlay}
+        onStop={handleStop}
       />
     </motion.div>
   );
