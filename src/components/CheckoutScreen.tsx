@@ -38,7 +38,7 @@ if (typeof window !== 'undefined' && MP_PUBLIC_KEY) {
 export function CheckoutScreen() {
   const { currentUser, isPremium, userDocExists, logout } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix' | 'mercadopago'>('card');
   const [billingCycle, setBillingCycle] = useState<'mensal' | 'anual'>('mensal');
   const [loading, setLoading] = useState(false);
   const [isBrickReady, setIsBrickReady] = useState(false);
@@ -62,8 +62,10 @@ export function CheckoutScreen() {
   // Cupom e valores
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [discountPercentage, setDiscountPercentage] = useState<number>(0);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [couponStatus, setCouponStatus] = useState<{ message: string; type: '' | 'success' | 'error' }>({
-    message: 'Seu desconto aparece aqui após aplicar.',
+    message: '',
     type: ''
   });
 
@@ -127,27 +129,21 @@ export function CheckoutScreen() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  // Cálculo de valores conforme ciclo e cupom
-  const isCoupon50 = appliedCoupon === 'FOCUS50';
-  const isCoupon10 = appliedCoupon === 'FOCUS10' || appliedCoupon === 'PROMO';
-
+  // Cálculo de valores conforme ciclo e cupom validado
   const baseAmount = billingCycle === 'anual' ? 238.80 : 19.90;
   let currentAmount = baseAmount;
   let discountAmount = '0,00';
 
-  if (billingCycle === 'anual') {
-    if (isCoupon50) {
-      currentAmount = 119.40;
-      discountAmount = '119,40';
-    }
-  } else {
-    if (isCoupon50) {
-      currentAmount = 9.95;
-      discountAmount = '9,95';
-    } else if (isCoupon10) {
-      currentAmount = 14.90;
-      discountAmount = '5,00';
-    }
+  const effectiveDiscountPercentage = discountPercentage > 0
+    ? discountPercentage
+    : (appliedCoupon === 'FOCUS50' ? 50 : 0);
+  const hasDiscount = Boolean(appliedCoupon && effectiveDiscountPercentage > 0);
+
+  if (hasDiscount) {
+    const rawDiscounted = Number((baseAmount * (1 - effectiveDiscountPercentage / 100)).toFixed(2));
+    // Regra técnica P0: Piso mínimo de R$ 1,00 para garantir aceitação pelo Mercado Pago
+    currentAmount = Math.max(1.00, rawDiscounted);
+    discountAmount = (baseAmount - currentAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   const displayPrice = currentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -220,6 +216,7 @@ export function CheckoutScreen() {
           issuerId: formData.issuer_id || formData.issuerId,
           installments: formData.installments || 1,
           coupon: appliedCoupon || undefined,
+          couponCode: appliedCoupon || undefined,
           amount: currentAmount,
         }),
       });
@@ -256,39 +253,95 @@ export function CheckoutScreen() {
     }
   }, [currentUser, userEmail, billingCycle, appliedCoupon, currentAmount]);
 
-  const handleApplyCoupon = (e: React.FormEvent) => {
+  const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = couponCode.trim().toUpperCase();
     if (!code) {
       setCouponStatus({
-        message: 'Digite um cupom para aplicar.',
+        message: 'Por favor, digite um cupom para aplicar.',
         type: 'error'
       });
       return;
     }
 
-    if (code === 'FOCUS50') {
-      setAppliedCoupon('FOCUS50');
-      setCouponStatus({
-        message: 'Cupom aplicado! 50% de desconto nas 3 primeiras mensalidades ou no primeiro ano.',
-        type: 'success'
+    setIsApplyingCoupon(true);
+    setCouponStatus({ message: 'Validando cupom...', type: '' });
+
+    try {
+      const response = await fetch(getApiUrl('/api/coupons/validate'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          coupon: code,
+          couponCode: code,
+          plan: billingCycle
+        })
       });
-    } else if (code === 'FOCUS10' || code === 'PROMO') {
-      setAppliedCoupon(code);
-      setCouponStatus({
-        message: 'Cupom aplicado! Desconto concedido com sucesso.',
-        type: 'success'
-      });
-    } else {
-      setCouponStatus({
-        message: 'Cupom não reconhecido ou expirado.',
-        type: 'error'
-      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success && data.valid) {
+        setAppliedCoupon(data.coupon);
+        setDiscountPercentage(data.discountPercentage || 0);
+        setCouponStatus({
+          message: `Cupom ${data.coupon} aplicado! ${data.discountPercentage}% de desconto concedido com sucesso.`,
+          type: 'success'
+        });
+      } else {
+        // Fallback para cupons clássicos caso o backend esteja inicializando
+        if (code === 'FOCUS50') {
+          setAppliedCoupon('FOCUS50');
+          setDiscountPercentage(50);
+          setCouponStatus({
+            message: 'Cupom FOCUS50 aplicado! 50% de desconto concedido.',
+            type: 'success'
+          });
+        } else if (code === 'NEXUSELITE') {
+          setAppliedCoupon('NEXUSELITE');
+          setDiscountPercentage(99);
+          setCouponStatus({
+            message: 'Cupom NEXUSELITE aplicado! 99% de desconto (Elite Member).',
+            type: 'success'
+          });
+        } else {
+          setCouponStatus({
+            message: data.error || 'Cupom não reconhecido ou expirado.',
+            type: 'error'
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[Checkout] Erro ao validar cupom via API:', err);
+      if (code === 'FOCUS50') {
+        setAppliedCoupon('FOCUS50');
+        setDiscountPercentage(50);
+        setCouponStatus({
+          message: 'Cupom FOCUS50 aplicado! 50% de desconto concedido.',
+          type: 'success'
+        });
+      } else if (code === 'NEXUSELITE') {
+        setAppliedCoupon('NEXUSELITE');
+        setDiscountPercentage(99);
+        setCouponStatus({
+          message: 'Cupom NEXUSELITE aplicado! 99% de desconto (Elite Member).',
+          type: 'success'
+        });
+      } else {
+        setCouponStatus({
+          message: 'Não foi possível validar o cupom. Verifique sua conexão.',
+          type: 'error'
+        });
+      }
+    } finally {
+      setIsApplyingCoupon(false);
     }
   };
 
   const handleRemoveCoupon = () => {
     setAppliedCoupon(null);
+    setDiscountPercentage(0);
     setCouponCode('');
     setCouponStatus({
       message: 'Cupom removido. Valor do plano atualizado.',
@@ -329,6 +382,7 @@ export function CheckoutScreen() {
           userId: currentUser?.uid,
           plan: billingCycle,
           coupon: appliedCoupon || undefined,
+          couponCode: appliedCoupon || undefined,
         }),
       });
 
@@ -419,6 +473,41 @@ export function CheckoutScreen() {
     }
 
     if (step === 2) {
+      if (paymentMethod === 'mercadopago') {
+        try {
+          setLoading(true);
+          setErrorMessage('');
+          const email = userEmail || currentUser?.email || 'contato@nexusfocus.com';
+          const response = await fetch(getApiUrl('/api/checkout'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              couponCode: appliedCoupon || undefined,
+              coupon: appliedCoupon || undefined,
+              plan: billingCycle,
+              email,
+              userId: currentUser?.uid,
+            }),
+          });
+
+          const data = await response.json();
+          if (!response.ok || !data.success || !data.initPoint) {
+            throw new Error(data.error || 'Não foi possível gerar a preferência de pagamento no Mercado Pago.');
+          }
+
+          // Redirecionamento oficial para o fluxo real do Mercado Pago
+          window.location.href = data.initPoint;
+          return;
+        } catch (err: any) {
+          console.error('[Checkout MP] Erro ao redirecionar:', err);
+          setErrorMessage(err.message || 'Falha ao redirecionar para o Mercado Pago.');
+          setLoading(false);
+          return;
+        }
+      }
+
       if (paymentMethod === 'pix') {
         generatePix();
       }
@@ -712,11 +801,11 @@ export function CheckoutScreen() {
                     </div>
                     
                     <div className="price-wrap">
-                      <div className="offer-seal" id="offer-seal" hidden={!isCoupon50} aria-label="50% de desconto">
-                        <strong>50%</strong><small>OFF</small>
+                      <div className="offer-seal" id="offer-seal" hidden={!hasDiscount} aria-label={`${effectiveDiscountPercentage}% de desconto`}>
+                        <strong>{effectiveDiscountPercentage}%</strong><small>OFF</small>
                       </div>
                       <p className="old-price" id="old-price">
-                        {isCoupon50 ? (
+                        {hasDiscount ? (
                           <del>De R$ {displayBasePrice}{billingCycle === 'anual' ? '/ano' : '/mês'}</del>
                         ) : (
                           billingCycle === 'anual' ? 'Acesso Pro por 12 meses' : 'Acesso a todos os recursos'
@@ -728,10 +817,10 @@ export function CheckoutScreen() {
                         <span className="period">{billingCycle === 'anual' ? '/ano' : '/mês'}</span>
                       </div>
                       <p className="price-term" id="price-term">
-                        {isCoupon50
+                        {hasDiscount
                           ? (billingCycle === 'anual'
-                            ? 'R$ 119,40 pelo primeiro ano, em uma única cobrança. Depois, R$ 238,80/ano. Renovação automática.'
-                            : 'R$ 9,95/mês nos 3 primeiros meses. Depois, R$ 19,90/mês. Renovação automática.')
+                            ? `R$ ${displayPrice} pelo primeiro ano (desconto de ${effectiveDiscountPercentage}%). Renovação automática.`
+                            : `R$ ${displayPrice}/mês (desconto de ${effectiveDiscountPercentage}%). Renovação automática.`)
                           : (billingCycle === 'anual'
                             ? 'Assinatura anual em parcela única com renovação automática.'
                             : 'Assinatura com renovação mensal.')}
@@ -743,14 +832,14 @@ export function CheckoutScreen() {
                     <form id="coupon-form" noValidate onSubmit={handleApplyCoupon}>
                       <label className="coupon-label" htmlFor="coupon">
                         <svg className="icon" aria-hidden="true"><use href="#i-tag"/></svg>
-                        Tem um cupom de desconto?
+                        Possui um cupom?
                       </label>
                       <div className="input-row">
                         <input
                           id="coupon"
                           name="coupon"
                           type="text"
-                          placeholder="Digite seu cupom"
+                          placeholder="Possui um cupom?"
                           autoComplete="off"
                           autoCapitalize="characters"
                           spellCheck="false"
@@ -759,7 +848,9 @@ export function CheckoutScreen() {
                           value={couponCode}
                           onChange={(e) => setCouponCode(e.target.value)}
                         />
-                        <button className="apply" id="apply" type="submit">Aplicar</button>
+                        <button className="apply" id="apply" type="submit" disabled={isApplyingCoupon}>
+                          {isApplyingCoupon ? 'Aplicando…' : 'Aplicar'}
+                        </button>
                       </div>
                       <p
                         className={`coupon-status ${couponStatus.type}`}
@@ -773,11 +864,11 @@ export function CheckoutScreen() {
 
                     <div className="coupon-chip" id="coupon-chip" hidden={!appliedCoupon}>
                       <svg className="icon" aria-hidden="true"><use href="#i-check"/></svg>
-                      <span>{appliedCoupon} · {isCoupon50 ? '50% de desconto' : 'Desconto aplicado'}</span>
+                      <span>{appliedCoupon} · {effectiveDiscountPercentage}% de desconto</span>
                       <button className="remove" id="remove" type="button" onClick={handleRemoveCoupon}>Remover</button>
                     </div>
 
-                    <div className="bonus" id="bonus" hidden={!isCoupon50}>
+                    <div className="bonus" id="bonus" hidden={!hasDiscount}>
                       <div className="book-stack" aria-hidden="true"><i></i><i></i><i></i></div>
                       <div>
                         <strong>Seu cupom também desbloqueia um bônus</strong>
@@ -853,12 +944,41 @@ export function CheckoutScreen() {
                           <span className="method-tagline">Sem anuidade · Seguro Mercado Pago</span>
                         </div>
                       </div>
+
+                      {/* Opção Mercado Pago Checkout Pro (Oficial) */}
+                      <div
+                        className={`method-card ${paymentMethod === 'mercadopago' ? 'selected' : ''}`}
+                        onClick={() => setPaymentMethod('mercadopago')}
+                        role="radio"
+                        aria-checked={paymentMethod === 'mercadopago'}
+                        tabIndex={0}
+                        id="method-mp-opt"
+                      >
+                        <div className="method-radio">
+                          <div className="method-radio-dot" />
+                        </div>
+                        <div className="method-icon-wrap" style={{ background: 'rgba(0, 158, 227, 0.12)', color: '#009ee3' }}>
+                          <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </div>
+                        <div className="method-info">
+                          <div className="method-title-row">
+                            <strong>Mercado Pago Checkout</strong>
+                            <span className="method-badge" style={{ background: '#009ee3', color: '#fff' }}>Oficial</span>
+                          </div>
+                          <p className="method-desc">Pague no ambiente hospedado do Mercado Pago (Saldo MP, Cartão, Pix com redirecionamento).</p>
+                          <span className="method-tagline">Redirecionamento oficial e seguro</span>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="method-notice">
                       <svg className="icon" aria-hidden="true"><use href="#i-shield"/></svg>
                       <span>
-                        {paymentMethod === 'card'
+                        {paymentMethod === 'mercadopago'
+                          ? 'Ao clicar em continuar, você será redirecionado para a página oficial do Mercado Pago para efetuar o pagamento.'
+                          : paymentMethod === 'card'
                           ? 'Na próxima etapa você preencherá os dados do cartão no formulário seguro do Mercado Pago.'
                           : 'Na próxima etapa geraremos o QR Code e código Copia e Cola para pagamento imediato.'}
                       </span>
@@ -1062,7 +1182,7 @@ export function CheckoutScreen() {
                     <dd>R$ {displayBasePrice}</dd>
                   </div>
                   <div className="discount" id="discount-row" hidden={!appliedCoupon}>
-                    <dt>Desconto {appliedCoupon} ({isCoupon50 ? '50%' : 'Desconto'})</dt>
+                    <dt>Desconto {appliedCoupon} ({effectiveDiscountPercentage}%)</dt>
                     <dd>− R$ {discountAmount}</dd>
                   </div>
                   <div className="total">
@@ -1086,7 +1206,9 @@ export function CheckoutScreen() {
                       : step === 1
                       ? `Ir para pagamento · R$ ${displayPrice}${billingCycle === 'anual' ? '/ano' : '/mês'}`
                       : step === 2
-                      ? `Continuar com ${paymentMethod === 'pix' ? 'Pix' : 'Cartão'} · R$ ${displayPrice}${billingCycle === 'anual' ? '/ano' : '/mês'}`
+                      ? paymentMethod === 'mercadopago'
+                        ? `Pagar no Mercado Pago · R$ ${displayPrice}${billingCycle === 'anual' ? '/ano' : '/mês'}`
+                        : `Continuar com ${paymentMethod === 'pix' ? 'Pix' : 'Cartão'} · R$ ${displayPrice}${billingCycle === 'anual' ? '/ano' : '/mês'}`
                       : paymentMethod === 'pix'
                       ? 'Já fiz o pagamento via Pix'
                       : `Assinar por R$ ${displayPrice}${billingCycle === 'anual' ? '/ano' : '/mês'}`}
@@ -1113,10 +1235,10 @@ export function CheckoutScreen() {
 
                 {/* Texto de Renovação Condicional Exato */}
                 <p className="renewal" id="renewal">
-                  {isCoupon50
+                  {hasDiscount
                     ? (billingCycle === 'anual'
-                      ? 'R$ 119,40 pelo primeiro ano, em uma única cobrança. Depois, R$ 238,80/ano. Renovação automática.'
-                      : 'R$ 9,95/mês nos 3 primeiros meses. Depois, R$ 19,90/mês. Renovação automática.')
+                      ? `R$ ${displayPrice} no primeiro ano com cupom ${appliedCoupon} (${effectiveDiscountPercentage}% OFF). Depois, R$ ${displayBasePrice}/ano. Renovação automática.`
+                      : `R$ ${displayPrice} com cupom ${appliedCoupon} (${effectiveDiscountPercentage}% OFF). Depois, R$ ${displayBasePrice}/mês. Renovação automática.`)
                     : (billingCycle === 'anual'
                       ? 'R$ 238,80/ano, em uma única cobrança com renovação anual.'
                       : 'R$ 19,90/mês, com renovação mensal.')}

@@ -8,7 +8,7 @@ import crypto from "crypto";
 import { initializeApp, getApps, cert, App } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-import { MercadoPagoConfig, Payment, PreApproval } from "mercadopago";
+import { MercadoPagoConfig, Payment, PreApproval, Preference } from "mercadopago";
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
@@ -92,6 +92,143 @@ try {
 const adminAuth = getAuth(adminApp);
 
 /**
+ * Inicialização e Seed da coleção 'coupons' no Firestore.
+ * Prepara e garante a estrutura dos documentos na coleção 'coupons' com ID sendo o próprio código
+ * (ex: NEXUSELITE) para busca O(1).
+ * Campos: discountPercentage (número), maxUses (número), active (booleano).
+ */
+async function initCouponsCollection() {
+  try {
+    const eliteRef = adminDb.collection("coupons").doc("NEXUSELITE");
+    const snap = await eliteRef.get();
+    if (!snap.exists) {
+      await eliteRef.set({
+        discountPercentage: 99,
+        maxUses: 100,
+        active: true,
+        createdAt: FieldValue.serverTimestamp(),
+        description: "Cupom exclusivo Nexus Elite para testes e homologação (99% de desconto)."
+      });
+      console.log("🎟️ [Firestore] Cupom NEXUSELITE inicializado com sucesso (99% OFF, 100 usos, ativo).");
+    } else {
+      console.log("🎟️ [Firestore] Coleção 'coupons' ativa (NEXUSELITE verificado).");
+    }
+
+    const focus50Ref = adminDb.collection("coupons").doc("FOCUS50");
+    const focus50Snap = await focus50Ref.get();
+    if (!focus50Snap.exists) {
+      await focus50Ref.set({
+        discountPercentage: 50,
+        maxUses: 1000,
+        active: true,
+        createdAt: FieldValue.serverTimestamp(),
+        description: "Cupom padrão de 50% de desconto."
+      });
+    }
+  } catch (err: any) {
+    console.warn("⚠️ [Firestore] Aviso ao inicializar coleção coupons:", err?.message);
+  }
+}
+
+interface CouponValidationResult {
+  valid: boolean;
+  code?: string;
+  discountPercentage?: number;
+  finalAmount?: number;
+  discountAmount?: number;
+  originalAmount?: number;
+  error?: string;
+}
+
+/**
+ * Validação de cupons no Firestore e cálculo de desconto com garantia
+ * do piso mínimo de R$ 1,00 para conformidade estrita com o Mercado Pago.
+ */
+async function validateAndComputeCoupon(
+  rawCode: string | undefined | null,
+  plan: "mensal" | "anual"
+): Promise<CouponValidationResult> {
+  const originalAmount = plan === "anual" ? 238.80 : 19.90;
+  if (!rawCode || typeof rawCode !== "string") {
+    return { valid: false, originalAmount, finalAmount: originalAmount, error: "Nenhum código de cupom informado." };
+  }
+
+  const code = rawCode.trim().toUpperCase();
+  if (!code) {
+    return { valid: false, originalAmount, finalAmount: originalAmount, error: "Código do cupom inválido." };
+  }
+
+  try {
+    const couponRef = adminDb.collection("coupons").doc(code);
+    const snap = await couponRef.get();
+
+    if (!snap.exists) {
+      // Compatibilidade retroativa para cupom padrão FOCUS50 se ainda não semeado
+      if (code === "FOCUS50") {
+        const discountPercentage = 50;
+        const rawDiscounted = Number((originalAmount * 0.5).toFixed(2));
+        const finalAmount = Math.max(1.00, rawDiscounted);
+        const discountAmount = Number((originalAmount - finalAmount).toFixed(2));
+        return { valid: true, code: "FOCUS50", discountPercentage, originalAmount, finalAmount, discountAmount };
+      }
+      return { valid: false, originalAmount, finalAmount: originalAmount, error: "Cupom inválido ou não encontrado." };
+    }
+
+    const data = snap.data() || {};
+    if (data.active !== true) {
+      return { valid: false, originalAmount, finalAmount: originalAmount, error: "Este cupom não está mais ativo." };
+    }
+
+    if (typeof data.maxUses === "number" && data.maxUses <= 0) {
+      return { valid: false, originalAmount, finalAmount: originalAmount, error: "Limite de utilizações deste cupom foi atingido." };
+    }
+
+    const discountPercentage = Number(data.discountPercentage) || 0;
+    if (discountPercentage <= 0) {
+      return { valid: false, originalAmount, finalAmount: originalAmount, error: "Cupom sem percentual de desconto válido configurado." };
+    }
+
+    // Regra técnica P0 Mercado Pago: Valor mínimo aceito é R$ 1,00 para não quebrar a transação
+    const rawDiscounted = Number((originalAmount * (1 - discountPercentage / 100)).toFixed(2));
+    const finalAmount = Math.max(1.00, rawDiscounted);
+    const discountAmount = Number((originalAmount - finalAmount).toFixed(2));
+
+    return {
+      valid: true,
+      code,
+      discountPercentage,
+      originalAmount,
+      finalAmount,
+      discountAmount
+    };
+  } catch (err: any) {
+    console.error(`[Coupons] Erro ao validar cupom ${code}:`, err);
+    return { valid: false, originalAmount, finalAmount: originalAmount, error: "Erro interno ao validar cupom no servidor." };
+  }
+}
+
+/**
+ * Decrementa a quantidade de utilizações (maxUses) de um cupom no Firestore
+ */
+async function decrementCouponUsage(code: string) {
+  try {
+    const normalizedCode = code.trim().toUpperCase();
+    const couponRef = adminDb.collection("coupons").doc(normalizedCode);
+    const snap = await couponRef.get();
+    if (snap.exists) {
+      await couponRef.update({
+        maxUses: FieldValue.increment(-1),
+        usedCount: FieldValue.increment(1),
+        lastUsedAt: FieldValue.serverTimestamp()
+      });
+      console.log(`🎟️ [Coupons] maxUses do cupom ${normalizedCode} decrementado com sucesso.`);
+    }
+  } catch (err: any) {
+    console.warn(`[Coupons] Aviso ao decrementar cupom ${code}:`, err?.message);
+  }
+}
+
+/**
  * Interface estendida do Express Request com dados do usuário autenticado via Firebase Auth
  */
 interface AuthenticatedRequest extends express.Request {
@@ -152,6 +289,7 @@ const mpWebhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim() || proces
 const mpClient = mpAccessToken ? new MercadoPagoConfig({ accessToken: mpAccessToken }) : null;
 const mpPayment = mpClient ? new Payment(mpClient) : null;
 const mpPreApproval = mpClient ? new PreApproval(mpClient) : null;
+const mpPreference = mpClient ? new Preference(mpClient) : null;
 
 /**
  * Valida a assinatura do Webhook do Mercado Pago (Header x-signature)
@@ -466,6 +604,11 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
+  // Inicializa a coleção de cupons no Firestore (NEXUSELITE, FOCUS50)
+  initCouponsCollection().catch((err) => {
+    console.error("[Firestore] Erro ao inicializar cupons:", err);
+  });
+
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json({
     limit: '10mb',
@@ -590,14 +733,14 @@ async function startServer() {
 
       // Recupera metadados ou informações salvas anteriormente para preservar plan e cupom
       let parsedPlan: "mensal" | "anual" = "mensal";
-      let parsedCoupon: "FOCUS50" | null = null;
+      let parsedCoupon: string | null = null;
       let parsedPrice = Number(paymentData.transaction_amount || 19.90);
 
       if (paymentData.external_reference) {
         try {
           const extRef = JSON.parse(paymentData.external_reference);
           if (extRef.plan === "anual") parsedPlan = "anual";
-          if (extRef.coupon === "FOCUS50") parsedCoupon = "FOCUS50";
+          if (extRef.coupon) parsedCoupon = String(extRef.coupon).trim().toUpperCase();
           if (extRef.price) parsedPrice = Number(extRef.price);
         } catch (_) {}
       }
@@ -606,8 +749,8 @@ async function startServer() {
       if (existingDoc.exists) {
         const d = existingDoc.data() || {};
         if (d.plan === "anual" || d.plan === "mensal") parsedPlan = d.plan;
-        if (d.couponApplied === "FOCUS50") parsedCoupon = "FOCUS50";
-        if (d.currentPrice) parsedPrice = Number(d.currentPrice);
+        if (d.couponApplied && !parsedCoupon) parsedCoupon = String(d.couponApplied);
+        if (d.currentPrice && !paymentData.transaction_amount) parsedPrice = Number(d.currentPrice);
       }
 
       const webhookUserData = {
@@ -666,7 +809,7 @@ async function startServer() {
   // =========================================================================
   app.post("/api/subscriptions", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
-      const { token, plan, coupon, planId, paymentMethod } = req.body || {};
+      const { token, plan, coupon, couponCode, planId, paymentMethod } = req.body || {};
       const email = req.user?.email;
       const userId = req.user?.uid;
       const hostedCheckout = paymentMethod === "pix";
@@ -688,36 +831,35 @@ async function startServer() {
 
       const payerEmail = email.trim().toLowerCase();
       const normalizedPlan = (plan === "anual") ? "anual" : "mensal";
-      const isCoupon50 = (coupon && String(coupon).trim().toUpperCase() === "FOCUS50");
-      const couponApplied = isCoupon50 ? "FOCUS50" : null;
+      const rawCoupon = couponCode || coupon;
 
-      // Lógica de preços e periodicidade baseada na escolha e no cupom
-      let finalAmount = 19.90;
-      let frequency = 1;
+      // Lógica de preços e periodicidade baseada na escolha e no cupom validado no Firestore
+      let finalAmount = normalizedPlan === "anual" ? 238.80 : 19.90;
+      let frequency = normalizedPlan === "anual" ? 12 : 1;
       let frequencyType = "months";
-      let reason = "Nexus Focus Pro - Assinatura Mensal";
+      let reason = normalizedPlan === "anual" ? "Nexus Focus Pro - Assinatura Anual" : "Nexus Focus Pro - Assinatura Mensal";
+      let couponApplied: string | null = null;
 
-      if (normalizedPlan === "anual") {
-        frequency = 12;
-        frequencyType = "months";
-        if (isCoupon50) {
-          finalAmount = 119.40;
-          reason = "Nexus Focus Pro - Assinatura Anual (Cupom FOCUS50)";
-        } else {
-          finalAmount = 238.80;
-          reason = "Nexus Focus Pro - Assinatura Anual";
+      if (rawCoupon) {
+        const couponRes = await validateAndComputeCoupon(rawCoupon, normalizedPlan);
+        if (!couponRes.valid) {
+          return res.status(400).json({
+            success: false,
+            error: couponRes.error || "Cupom inválido ou expirado."
+          });
         }
-      } else {
-        frequency = 1;
-        frequencyType = "months";
-        if (isCoupon50) {
-          finalAmount = 9.95;
-          reason = "Nexus Focus Pro - Assinatura Mensal (Cupom FOCUS50)";
-        } else {
-          finalAmount = 19.90;
-          reason = "Nexus Focus Pro - Assinatura Mensal";
+        couponApplied = couponRes.code || null;
+        finalAmount = couponRes.finalAmount || finalAmount;
+        reason = `Nexus Focus Pro - Assinatura ${normalizedPlan === "anual" ? "Anual" : "Mensal"} (Cupom ${couponApplied} ${couponRes.discountPercentage}% OFF)`;
+
+        // Decrementa maxUses no Firestore após validação bem-sucedida
+        if (couponApplied) {
+          await decrementCouponUsage(couponApplied);
         }
       }
+
+      // Regra técnica P0 Mercado Pago: Valor mínimo aceito é R$ 1,00 para garantir autorização
+      finalAmount = Math.max(1.00, Number(finalAmount.toFixed(2)));
 
       console.log(`[Assinaturas MP] Criando assinatura: plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}, cliente=${payerEmail}`);
 
@@ -745,7 +887,7 @@ async function startServer() {
         })
       };
 
-      if (!hostedCheckout && selectedPlanId && !isCoupon50 && normalizedPlan === "mensal") {
+      if (!hostedCheckout && selectedPlanId && !couponApplied && normalizedPlan === "mensal") {
         preapprovalPayload.preapproval_plan_id = selectedPlanId;
       } else {
         preapprovalPayload.reason = reason;
@@ -891,7 +1033,7 @@ async function startServer() {
   // =========================================================================
   app.post("/api/payments/pix", async (req, res) => {
     try {
-      const { email, userId, plan, coupon } = req.body || {};
+      const { email, userId, plan, coupon, couponCode } = req.body || {};
 
       if (!email || typeof email !== "string") {
         return res.status(400).json({ success: false, error: "E-mail do usuário não fornecido ou inválido." });
@@ -899,19 +1041,32 @@ async function startServer() {
 
       const payerEmail = email.trim().toLowerCase();
       const normalizedPlan = (plan === "anual") ? "anual" : "mensal";
-      const isCoupon50 = (coupon && String(coupon).trim().toUpperCase() === "FOCUS50");
-      const couponApplied = isCoupon50 ? "FOCUS50" : null;
+      const rawCoupon = couponCode || coupon;
 
-      let finalAmount = 19.90;
-      let description = "Nexus Focus Pro - Mensal";
+      let finalAmount = normalizedPlan === "anual" ? 238.80 : 19.90;
+      let description = normalizedPlan === "anual" ? "Nexus Focus Pro - Anual" : "Nexus Focus Pro - Mensal";
+      let couponApplied: string | null = null;
 
-      if (normalizedPlan === "anual") {
-        finalAmount = isCoupon50 ? 119.40 : 238.80;
-        description = isCoupon50 ? "Nexus Focus Pro - Anual (Cupom FOCUS50)" : "Nexus Focus Pro - Anual";
-      } else {
-        finalAmount = isCoupon50 ? 9.95 : 19.90;
-        description = isCoupon50 ? "Nexus Focus Pro - Mensal (Cupom FOCUS50)" : "Nexus Focus Pro - Mensal";
+      if (rawCoupon) {
+        const couponRes = await validateAndComputeCoupon(rawCoupon, normalizedPlan);
+        if (!couponRes.valid) {
+          return res.status(400).json({
+            success: false,
+            error: couponRes.error || "Cupom inválido ou expirado."
+          });
+        }
+        couponApplied = couponRes.code || null;
+        finalAmount = couponRes.finalAmount || finalAmount;
+        description = `Nexus Focus Pro - ${normalizedPlan === "anual" ? "Anual" : "Mensal"} (Cupom ${couponApplied} ${couponRes.discountPercentage}% OFF)`;
+
+        // Decrementa maxUses no Firestore após geração bem-sucedida
+        if (couponApplied) {
+          await decrementCouponUsage(couponApplied);
+        }
       }
+
+      // Regra técnica P0 Mercado Pago: Valor mínimo aceito é R$ 1,00
+      finalAmount = Math.max(1.00, Number(finalAmount.toFixed(2)));
 
       const externalRef = JSON.stringify({
         plan: normalizedPlan,
@@ -921,7 +1076,7 @@ async function startServer() {
         type: "pix"
       });
 
-      console.log(`[Pix MP] Solicitando cobrança Pix: plano=${normalizedPlan}, valor=R$ ${finalAmount}, cliente=${payerEmail}`);
+      console.log(`[Pix MP] Solicitando cobrança Pix: plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}, cliente=${payerEmail}`);
 
       if (mpPayment) {
         try {
@@ -994,6 +1149,174 @@ async function startServer() {
       return res.status(500).json({
         success: false,
         error: err?.message || "Erro interno ao gerar Pix"
+      });
+    }
+  });
+
+  // =========================================================================
+  // Rota de Validação de Cupons de Desconto (Firestore)
+  // =========================================================================
+  app.post("/api/coupons/validate", async (req, res) => {
+    try {
+      const { coupon, couponCode, plan } = req.body || {};
+      const code = couponCode || coupon;
+      const normalizedPlan = (plan === "anual") ? "anual" : "mensal";
+
+      const validation = await validateAndComputeCoupon(code, normalizedPlan);
+
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          valid: false,
+          error: validation.error || "Cupom inválido ou expirado."
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        valid: true,
+        coupon: validation.code,
+        discountPercentage: validation.discountPercentage,
+        originalAmount: validation.originalAmount,
+        finalAmount: validation.finalAmount,
+        discountAmount: validation.discountAmount,
+        message: `Cupom ${validation.code} aplicado com sucesso! ${validation.discountPercentage}% de desconto.`
+      });
+    } catch (err: any) {
+      console.error("[Coupons] Erro no endpoint de validação:", err);
+      return res.status(500).json({
+        success: false,
+        valid: false,
+        error: "Erro interno ao validar o cupom."
+      });
+    }
+  });
+
+  // =========================================================================
+  // Rota de Criação de Preferência de Checkout Mercado Pago (/api/checkout)
+  // Permite fluxo real de pagamento com cupons para utilizadores Elite
+  // =========================================================================
+  app.post("/api/checkout", async (req, res) => {
+    try {
+      const { couponCode, coupon, plan, email, userId } = req.body || {};
+      const payerEmail = (email && typeof email === "string" && email.includes("@")) 
+        ? email.trim().toLowerCase() 
+        : (req as any).user?.email || "contato@nexusfocus.com";
+
+      const normalizedPlan: "mensal" | "anual" = (plan === "anual") ? "anual" : "mensal";
+      const baseAmount = normalizedPlan === "anual" ? 238.80 : 19.90;
+      const rawCoupon = couponCode || coupon;
+
+      let finalAmount = baseAmount;
+      let couponApplied: string | null = null;
+      let discountPercentage = 0;
+
+      if (rawCoupon) {
+        const couponRes = await validateAndComputeCoupon(rawCoupon, normalizedPlan);
+        if (!couponRes.valid) {
+          return res.status(400).json({
+            success: false,
+            error: couponRes.error || "Cupom inválido ou expirado."
+          });
+        }
+        couponApplied = couponRes.code || null;
+        discountPercentage = couponRes.discountPercentage || 0;
+        finalAmount = couponRes.finalAmount || baseAmount;
+
+        // Decrementar maxUses após a geração da preferência
+        if (couponApplied) {
+          await decrementCouponUsage(couponApplied);
+        }
+      }
+
+      // Regra técnica P0: Piso mínimo de R$ 1,00 para garantir aceitação pelo gateway do Mercado Pago
+      finalAmount = Math.max(1.00, Number(finalAmount.toFixed(2)));
+
+      const appUrl = (process.env.APP_URL || "https://nexusfocus.web.app").replace(/\/+$/, "");
+      const serverUrl = (process.env.RENDER_EXTERNAL_URL || process.env.API_URL || "https://nexus-focus.onrender.com").replace(/\/+$/, "");
+
+      const itemTitle = couponApplied
+        ? `Nexus Focus Pro - ${normalizedPlan === "anual" ? "Anual" : "Mensal"} (Cupom ${couponApplied} ${discountPercentage}% OFF)`
+        : `Nexus Focus Pro - ${normalizedPlan === "anual" ? "Anual" : "Mensal"}`;
+
+      console.log(`[Checkout MP] Gerando preferência: plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}, cliente=${payerEmail}`);
+
+      const preferencePayload: any = {
+        items: [
+          {
+            id: normalizedPlan === "anual" ? "nexus-pro-anual" : "nexus-pro-mensal",
+            title: itemTitle,
+            unit_price: finalAmount,
+            quantity: 1,
+            currency_id: "BRL"
+          }
+        ],
+        payer: {
+          email: payerEmail
+        },
+        back_urls: {
+          success: `${appUrl}/dashboard?payment=success`,
+          failure: `${appUrl}/checkout?payment=failure`,
+          pending: `${appUrl}/dashboard?payment=pending`
+        },
+        auto_return: "approved",
+        notification_url: `${serverUrl}/api/webhooks/mercadopago`,
+        external_reference: JSON.stringify({
+          plan: normalizedPlan,
+          coupon: couponApplied,
+          userId: userId || null,
+          price: finalAmount
+        }),
+        metadata: {
+          plan: normalizedPlan,
+          coupon_code: couponApplied,
+          user_id: userId || null,
+          price: finalAmount,
+          discount_percentage: discountPercentage
+        }
+      };
+
+      let prefResult: any = null;
+
+      if (mpPreference) {
+        prefResult = await mpPreference.create({ body: preferencePayload });
+      } else {
+        const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${mpAccessToken}`
+          },
+          body: JSON.stringify(preferencePayload)
+        });
+
+        prefResult = await response.json();
+        if (!response.ok) {
+          throw new Error(prefResult?.message || prefResult?.cause?.[0]?.description || "Erro ao criar preferência de pagamento no Mercado Pago");
+        }
+      }
+
+      const initPoint = prefResult?.init_point;
+      const sandboxInitPoint = prefResult?.sandbox_init_point;
+      const preferenceId = prefResult?.id;
+
+      return res.status(200).json({
+        success: true,
+        preferenceId,
+        initPoint,
+        sandboxInitPoint,
+        plan: normalizedPlan,
+        couponApplied,
+        discountPercentage,
+        finalAmount,
+        originalAmount: baseAmount,
+        message: "Preferência de checkout gerada com sucesso!"
+      });
+    } catch (err: any) {
+      console.error("[Checkout MP] Erro ao criar preferência:", err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || "Erro interno ao processar o checkout."
       });
     }
   });

@@ -19,6 +19,14 @@ service cloud.firestore {
       }
     }
 
+    // =========================================================================
+    // COLEÇÃO DE CUPONS (Sistema de Descontos e Homologação)
+    // =========================================================================
+    match /coupons/{couponCode} {
+      allow read: if request.auth != null;
+      allow write: if false; // Escrita permitida exclusivamente via Firebase Admin SDK
+    }
+
     // Bloqueio categórico por padrão para todas as outras coleções não mapeadas
     match /{document=**} {
       allow read, write: if false;
