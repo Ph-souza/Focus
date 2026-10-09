@@ -18,7 +18,9 @@ import {
   CheckCircle2,
   ChevronRight,
   CheckSquare,
-  Timer
+  Timer,
+  Check,
+  Folder
 } from 'lucide-react';
 import { DeepModeScreen } from './DeepModeScreen';
 
@@ -27,19 +29,54 @@ interface TabFocusProps {
 }
 
 export function TabFocus({ onTabChange }: TabFocusProps) {
-  // Estado do Modo Profundo (Fullscreen Overlay)
+  // Estado do Modo Profundo
   const [isDeepModeActive, setIsDeepModeActive] = useState(false);
-  // Mode selection state: Pomodoro (25m), Timer (60m), Ritmo, Personalizado
   const [activeMode, setActiveMode] = useState<'pomodoro' | 'timer' | 'ritmo' | 'personalizado'>('pomodoro');
   
-  // Timer duration in seconds (25 mins for Pomodoro)
   const [totalTime, setTotalTime] = useState(25 * 60);
   const [timeRemaining, setTimeRemaining] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [session, setSession] = useState(1);
-  const [focusTask] = useState('Revisar finanças');
+  
+  // Carregar dados do localStorage
+  const [projects, setProjects] = useState<any[]>(() => {
+    try { return JSON.parse(localStorage.getItem('nexus_focus_projects_list') || '[]'); } catch { return []; }
+  });
+  
+  const [tasks, setTasks] = useState<any[]>(() => {
+    try { return JSON.parse(localStorage.getItem('nexus_focus_project_tasks') || '[]'); } catch { return []; }
+  });
 
-  // Change mode settings
+  // Filtramos apenas as tarefas pendentes de hoje
+  const todayTasks = tasks.filter(t => t.status !== 'done' && (t.group === 'today' || t.date === 'Hoje' || t.date === 'today'));
+  
+  // Agrupando por projeto
+  const tasksByProject = projects.map(p => ({
+    ...p,
+    tasks: todayTasks.filter(t => t.projectId === p.id)
+  })).filter(p => p.tasks.length > 0);
+
+  const [selectedTaskId, setSelectedTaskId] = useState<string | number>(todayTasks[0]?.id || '');
+
+  useEffect(() => {
+    if (!selectedTaskId && todayTasks.length > 0) {
+      setSelectedTaskId(todayTasks[0].id);
+    }
+  }, [todayTasks, selectedTaskId]);
+
+  const activeTask = tasks.find(t => t.id === selectedTaskId) || { title: 'Nenhuma tarefa pendente para hoje', description: '', status: 'todo', id: '' };
+  
+  const handleTaskComplete = (taskId: string | number) => {
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: 'done', completedAt: new Date().toISOString() } : t);
+    setTasks(updatedTasks);
+    localStorage.setItem('nexus_focus_project_tasks', JSON.stringify(updatedTasks));
+    // Quando concluída, caso a ativa seja ela mesma, reseta
+    if (taskId === selectedTaskId) {
+      const nextPending = updatedTasks.find(t => t.status !== 'done' && (t.group === 'today' || t.date === 'Hoje'));
+      setSelectedTaskId(nextPending?.id || '');
+    }
+  };
+
   const handleModeChange = (mode: 'pomodoro' | 'timer' | 'ritmo' | 'personalizado') => {
     setActiveMode(mode);
     setIsRunning(false);
@@ -58,7 +95,6 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
     }
   };
 
-  // Timer interval countdown
   useEffect(() => {
     let interval: any = null;
     if (isRunning && timeRemaining > 0) {
@@ -67,7 +103,6 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
       }, 1000);
     } else if (timeRemaining === 0) {
       setIsRunning(false);
-      // Advance session
       setSession(prev => (prev < 4 ? prev + 1 : 1));
       setTimeRemaining(totalTime);
     }
@@ -76,36 +111,88 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
     };
   }, [isRunning, timeRemaining, totalTime]);
 
-  // Format time MM:SS
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // SVG circular progress calculation
   const radius = 80;
-  const circumference = 2 * Math.PI * radius; // ~502.65
+  const circumference = 2 * Math.PI * radius;
   const progressPercent = ((totalTime - timeRemaining) / totalTime) * 100;
-  // If at starting time (0 progress), show a clean visual arc of ~60% like mockup, or active countdown
   const visualProgressPercent = !isRunning && timeRemaining === totalTime ? 65 : progressPercent;
   const strokeDashoffset = circumference - (circumference * visualProgressPercent) / 100;
 
-  // Timer controls
-  const handleTogglePlay = () => {
-    setIsRunning(running => !running);
-  };
+  const handleTogglePlay = () => setIsRunning(running => !running);
+  const handleStop = () => { setIsRunning(false); setTimeRemaining(totalTime); };
+  const handleSkip = () => { setIsRunning(false); setSession(prev => (prev < 4 ? prev + 1 : 1)); setTimeRemaining(totalTime); };
 
-  const handleStop = () => {
-    setIsRunning(false);
-    setTimeRemaining(totalTime);
-  };
-
-  const handleSkip = () => {
-    setIsRunning(false);
-    setSession(prev => (prev < 4 ? prev + 1 : 1));
-    setTimeRemaining(totalTime);
-  };
+  const renderTaskList = () => (
+    <div className="flex flex-col gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+      {tasksByProject.length === 0 ? (
+        <div className="p-8 text-center text-sm font-medium text-slate-500 glass-card">
+          Nenhuma tarefa agendada para hoje. Aproveite o dia livre!
+        </div>
+      ) : (
+        tasksByProject.map(project => (
+          <div key={project.id} className="mb-4">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Folder size={15} className="text-blue-500" />
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                {project.name}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2.5">
+              {project.tasks.map((task: any) => {
+                const isSelected = selectedTaskId === task.id;
+                return (
+                  <label key={task.id} className={`flex items-center gap-3 p-3.5 rounded-2xl cursor-pointer transition-all border ${
+                    isSelected
+                      ? 'bg-blue-50/70 dark:bg-blue-900/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/20'
+                      : 'bg-white/60 dark:bg-slate-900/40 border-slate-200/60 dark:border-slate-700/50 hover:border-blue-400/30 hover:bg-white/80'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="focusTask" 
+                      className="hidden" 
+                      checked={isSelected}
+                      onChange={() => {
+                        setSelectedTaskId(task.id);
+                        if (isRunning) {
+                          setTimeRemaining(totalTime);
+                        }
+                      }} 
+                    />
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                      isSelected ? 'border-blue-500 bg-blue-500/10' : 'border-slate-300 dark:border-slate-600'
+                    }`}>
+                      {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-blue-600"></div>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className={`text-sm font-bold truncate ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-800 dark:text-slate-200'}`}>
+                        {task.title}
+                      </h4>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-200/50 dark:bg-slate-800 text-slate-500">
+                          {task.tag || 'Geral'}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          task.priority === 'high' ? 'bg-rose-500/15 text-rose-600' : 
+                          task.priority === 'medium' ? 'bg-amber-500/15 text-amber-600' : 'bg-emerald-500/15 text-emerald-600'
+                        }`}>
+                          {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Média' : 'Baixa'}
+                        </span>
+                      </div>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
 
   return (
     <motion.div
@@ -113,593 +200,147 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col gap-4 md:gap-6 p-0 md:p-8"
     >
-      {/* ========================================================= */}
-      {/* MOBILE VIEW (Strictly matching Sprint 3 Mobile Mockup)    */}
-      {/* ========================================================= */}
+      {/* MOBILE VIEW */}
       <div className="block md:hidden space-y-4">
         
-        {/* Mobile Header */}
         <div className="flex items-center justify-between pt-1 pb-1">
           <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">
-              Foco
-            </h1>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">
-              Concentre-se no que importa
-            </p>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">Foco</h1>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">Concentre-se no que importa</p>
           </div>
-
           <div className="flex items-center gap-2">
             <button 
               onClick={() => setIsDeepModeActive(true)}
               className="h-11 px-3 rounded-2xl glass-card flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer"
-              aria-label="Ativar Modo Profundo"
-              title="Ativar Modo Profundo"
             >
               <Moon size={16} className="text-blue-500" />
-              <span className="hidden sm:inline">Modo profundo</span>
-            </button>
-            <button 
-              onClick={() => onTabChange?.('calendar')}
-              className="w-11 h-11 rounded-2xl glass-card flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer"
-              aria-label="Abrir agenda"
-            >
-              <Calendar size={20} />
             </button>
           </div>
         </div>
 
-        {/* 1. Mode Selector Pills */}
         <div className="flex items-center gap-2 overflow-x-auto pb-0.5 no-scrollbar">
-          <button
-            onClick={() => handleModeChange('pomodoro')}
-            className={`px-3.5 py-1.5 rounded-full text-xs flex items-center gap-1.5 transition-all shrink-0 ${
-              activeMode === 'pomodoro'
-                ? 'bg-blue-600 text-white font-bold shadow-[0_0_15px_rgba(59,130,246,0.5)]'
-                : 'glass-pill text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
-            }`}
-          >
-            <Timer size={14} />
-            Pomodoro
-          </button>
-
-          <button
-            onClick={() => handleModeChange('timer')}
-            className={`px-3.5 py-1.5 rounded-full text-xs flex items-center gap-1.5 transition-all shrink-0 ${
-              activeMode === 'timer'
-                ? 'bg-blue-600 text-white font-bold shadow-[0_0_15px_rgba(59,130,246,0.5)]'
-                : 'glass-pill text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
-            }`}
-          >
-            <Clock size={14} />
-            Timer
-          </button>
-
-          <button
-            onClick={() => handleModeChange('ritmo')}
-            className={`px-3.5 py-1.5 rounded-full text-xs flex items-center gap-1.5 transition-all shrink-0 ${
-              activeMode === 'ritmo'
-                ? 'bg-blue-600 text-white font-bold shadow-[0_0_15px_rgba(59,130,246,0.5)]'
-                : 'glass-pill text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
-            }`}
-          >
-            <BarChart2 size={14} />
-            Ritmo
-          </button>
-
-          <button
-            onClick={() => handleModeChange('personalizado')}
-            className={`px-3.5 py-1.5 rounded-full text-xs flex items-center gap-1.5 transition-all shrink-0 ${
-              activeMode === 'personalizado'
-                ? 'bg-blue-600 text-white font-bold shadow-[0_0_15px_rgba(59,130,246,0.5)]'
-                : 'glass-pill text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
-            }`}
-          >
-            <Sliders size={14} />
-            Personalizado
-          </button>
+          <button onClick={() => handleModeChange('pomodoro')} className={`px-3.5 py-1.5 rounded-full text-xs flex items-center gap-1.5 shrink-0 ${activeMode === 'pomodoro' ? 'bg-blue-600 text-white font-bold' : 'glass-pill text-slate-600'}`}><Timer size={14} />Pomodoro</button>
+          <button onClick={() => handleModeChange('timer')} className={`px-3.5 py-1.5 rounded-full text-xs flex items-center gap-1.5 shrink-0 ${activeMode === 'timer' ? 'bg-blue-600 text-white font-bold' : 'glass-pill text-slate-600'}`}><Clock size={14} />Timer</button>
         </div>
 
-        {/* 2. Central Circular Timer (Pomodoro) */}
+        {/* Central Timer */}
         <div className="glass-card p-6 flex flex-col items-center justify-center relative overflow-hidden shadow-sm">
-          {/* Subtle Ambient Glow */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
-
           <div className="relative w-56 h-56 flex flex-col items-center justify-center shrink-0">
-            {/* SVG Ring with Neon Blue Progress */}
             <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 200 200">
-              {/* Background Track */}
-              <circle 
-                cx="100" 
-                cy="100" 
-                r={radius} 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="7" 
-                className="text-slate-200/80 dark:text-slate-800/80" 
-              />
-              {/* Animated Progress Stroke */}
-              <circle 
-                cx="100" 
-                cy="100" 
-                r={radius} 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="8" 
-                strokeDasharray={circumference} 
-                strokeDashoffset={strokeDashoffset} 
-                strokeLinecap="round" 
-                className="text-blue-600 dark:text-blue-400 drop-shadow-[0_0_14px_rgba(59,130,246,0.85)] transition-all duration-500" 
-              />
+              <circle cx="100" cy="100" r={radius} fill="none" stroke="currentColor" strokeWidth="7" className="text-slate-200/80 dark:text-slate-800/80" />
+              <circle cx="100" cy="100" r={radius} fill="none" stroke="currentColor" strokeWidth="6" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" className="text-blue-600 dark:text-blue-400 transition-all duration-500" />
             </svg>
-
-            {/* Inner Content: Target Icon, Big Time, Focus Task */}
             <div className="flex flex-col items-center justify-center relative z-10 text-center px-4">
-              <div className="w-8 h-8 rounded-full bg-blue-500/15 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-1 shadow-sm">
-                <Target size={18} />
-              </div>
-              <span className="text-4xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums leading-none mt-1">
-                {formatTime(timeRemaining)}
-              </span>
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 mt-2 truncate max-w-[160px]">
-                {focusTask}
-              </span>
+              <span className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-1">Foco</span>
+              <span className="text-4xl font-black text-slate-900 dark:text-white tabular-nums leading-none mt-1">{formatTime(timeRemaining)}</span>
             </div>
           </div>
-
-          {/* Controls: Parar, Pausar / Iniciar, Pular */}
           <div className="flex items-center justify-center gap-7 mt-4 relative z-10">
-            {/* Parar */}
-            <div className="flex flex-col items-center">
-              <button 
-                onClick={handleStop}
-                className="w-12 h-12 rounded-2xl glass-card flex items-center justify-center text-rose-500 hover:text-rose-600 shadow-sm active:scale-95 transition-all"
-                aria-label="Parar foco"
-              >
-                <Square size={16} className="fill-rose-500 text-rose-500" />
-              </button>
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-1.5">
-                Parar
-              </span>
-            </div>
-
-            {/* Pausar / Iniciar (Highlight Central Button) */}
-            <div className="flex flex-col items-center">
-              <button 
-                onClick={handleTogglePlay}
-                className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shadow-[0_0_22px_rgba(59,130,246,0.65)] hover:shadow-[0_0_28px_rgba(59,130,246,0.8)] active:scale-95 transition-all"
-                aria-label={isRunning ? 'Pausar foco' : 'Iniciar foco'}
-              >
-                {isRunning ? (
-                  <Pause size={22} className="fill-current" />
-                ) : (
-                  <Play size={22} className="fill-current ml-0.5" />
-                )}
-              </button>
-              <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 mt-1.5">
-                {isRunning ? 'Pausar' : 'Iniciar'}
-              </span>
-            </div>
-
-            {/* Pular */}
-            <div className="flex flex-col items-center">
-              <button 
-                onClick={handleSkip}
-                className="w-12 h-12 rounded-2xl glass-card flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm active:scale-95 transition-all"
-                aria-label="Pular sessão"
-              >
-                <SkipForward size={18} />
-              </button>
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-1.5">
-                Pular
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Quick Metric Cards (Sessão, Foco hoje, Meta diária) */}
-        <div className="grid grid-cols-3 gap-2.5">
-          {/* Card 1: Sessão */}
-          <div className="glass-card p-3 flex flex-col items-start shadow-sm">
-            <Layers size={18} className="text-blue-500 mb-1" />
-            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 leading-none">
-              Sessão
-            </span>
-            <span className="text-xs font-black text-slate-900 dark:text-white mt-1.5 leading-none">
-              {session} de 4
-            </span>
-          </div>
-
-          {/* Card 2: Foco hoje */}
-          <div className="glass-card p-3 flex flex-col items-start shadow-sm">
-            <Clock size={18} className="text-blue-500 mb-1" />
-            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 leading-none">
-              Foco hoje
-            </span>
-            <span className="text-xs font-black text-slate-900 dark:text-white mt-1.5 leading-none">
-              1h 25min
-            </span>
-          </div>
-
-          {/* Card 3: Meta diária */}
-          <div className="glass-card p-3 flex flex-col items-start shadow-sm">
-            <Trophy size={18} className="text-blue-500 mb-1" />
-            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 leading-none">
-              Meta diária
-            </span>
-            <span className="text-xs font-black text-slate-900 dark:text-white mt-1.5 leading-none">
-              3h 00min
-            </span>
-          </div>
-        </div>
-
-        {/* 4. Blocos de Foco de Hoje */}
-        <div className="glass-card p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-bold text-slate-900 dark:text-white">
-              Blocos de foco de hoje
-            </h2>
-            <button 
-              onClick={() => onTabChange?.('calendar')}
-              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-            >
-              Ver agenda
+            <button onClick={handleStop} className="w-12 h-12 rounded-2xl glass-card flex items-center justify-center text-rose-500"><Square size={16} className="fill-rose-500" /></button>
+            <button onClick={handleTogglePlay} className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg">
+              {isRunning ? <Pause size={22} className="fill-current" /> : <Play size={22} className="fill-current ml-1" />}
             </button>
-          </div>
-
-          <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 no-scrollbar text-xs font-bold text-slate-700 dark:text-slate-300">
-            {/* Block 1: 08:30 (Done) */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.8)]"></span>
-              <span>08:30</span>
-              <span className="text-emerald-500 text-xs">✓</span>
-            </div>
-
-            {/* Block 2: 10:00 (Done) */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.8)]"></span>
-              <span>10:00</span>
-              <span className="text-emerald-500 text-xs">✓</span>
-            </div>
-
-            {/* Block 3: 14:00 (Active/Current) */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-blue-500/30"></span>
-              <span className="text-blue-600 dark:text-blue-400">14:00</span>
-            </div>
-
-            {/* Block 4: 16:00 (Pending) */}
-            <div className="flex items-center gap-1.5 shrink-0 text-slate-400">
-              <span className="w-2.5 h-2.5 rounded-full border-2 border-slate-300 dark:border-slate-600"></span>
-              <span>16:00</span>
-            </div>
+            <button onClick={handleSkip} className="w-12 h-12 rounded-2xl glass-card flex items-center justify-center text-blue-600"><SkipForward size={18} /></button>
           </div>
         </div>
 
-        {/* Produtividade Hoje & Resumo da Sessão */}
-        <div className="grid grid-cols-2 gap-3">
-          {/* Left: Produtividade Hoje */}
-          <div className="glass-card p-3.5 flex flex-col justify-between shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold text-slate-900 dark:text-white leading-tight">
-                Produtividade hoje
-              </span>
-              <span className="text-[11px] font-black text-blue-600 dark:text-blue-400 leading-tight">
-                78%
-              </span>
-            </div>
-
-            {/* Mini Bar Chart */}
-            <div className="flex items-end justify-between gap-1.5 h-16 pt-2">
-              {[
-                { h: 35, label: '6h' },
-                { h: 55, label: '9h' },
-                { h: 90, label: '12h', highlight: true },
-                { h: 60, label: '15h' },
-                { h: 75, label: '18h' }
-              ].map((bar, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
-                  <div 
-                    className={`w-full rounded-t-sm transition-all ${
-                      bar.highlight 
-                        ? 'bg-blue-600 shadow-[0_0_8px_rgba(59,130,246,0.6)]' 
-                        : 'bg-blue-500/30 dark:bg-blue-500/40'
-                    }`} 
-                    style={{ height: `${bar.h}%` }}
-                  />
-                  <span className="text-[9px] font-semibold text-slate-400">{bar.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Right: Resumo da Sessão */}
-          <div className="glass-card p-3.5 flex flex-col justify-between shadow-sm">
-            <span className="text-[11px] font-bold text-slate-900 dark:text-white mb-2 leading-tight">
-              Resumo da sessão
-            </span>
-
-            <div className="flex flex-col gap-2">
-              {/* Foco mantido */}
-              <div className="flex items-center justify-between text-[10px]">
-                <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
-                  <CheckCircle2 size={11} className="text-slate-400" />
-                  <span>Foco mantido</span>
-                </div>
-                <span className="font-bold text-slate-900 dark:text-white">25:00</span>
-              </div>
-
-              {/* Tarefas avançadas */}
-              <div className="flex items-center justify-between text-[10px]">
-                <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
-                  <Target size={11} className="text-slate-400" />
-                  <span>Tarefas avançadas</span>
-                </div>
-                <span className="font-bold text-slate-900 dark:text-white">1</span>
-              </div>
-
-              {/* Distrações evitadas */}
-              <div className="flex items-center justify-between text-[10px]">
-                <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
-                  <BarChart2 size={11} className="text-slate-400" />
-                  <span>Distrações evitadas</span>
-                </div>
-                <span className="font-bold text-slate-900 dark:text-white">3</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Insight do Mentor */}
-        <div 
-          onClick={() => onTabChange?.('chat')}
-          className="glass-card p-3.5 flex items-center gap-3 relative cursor-pointer group shadow-sm hover:scale-[1.01] transition-all"
-        >
-          <div className="w-8 h-8 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 shadow-sm">
-            <Bot size={18} />
-          </div>
-          <div className="flex-1 min-w-0 pr-1">
-            <h3 className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
-              Insight do Mentor
-            </h3>
-            <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-tight mt-0.5 line-clamp-2">
-              Ótimo foco! Você manteve a disciplina e avançou em uma tarefa importante.
-            </p>
-          </div>
-          <ChevronRight size={16} className="text-slate-400 ml-auto shrink-0 group-hover:translate-x-0.5 transition-transform" />
+        {/* Lista de Tarefas Mobile */}
+        <div className="glass-card p-5 shadow-sm mt-2">
+          <h2 className="text-sm font-black text-slate-900 dark:text-white mb-5 flex items-center gap-2">
+            <Target size={16} className="text-blue-600" /> Selecionar tarefa
+          </h2>
+          {renderTaskList()}
         </div>
 
       </div>
 
-
-      {/* ========================================================= */}
-      {/* DESKTOP VIEW (Preserved from high-fidelity Desktop Overhaul) */}
-      {/* ========================================================= */}
+      {/* DESKTOP VIEW */}
       <div className="hidden md:flex flex-col h-full">
-        {/* Desktop Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Foco</h1>
-            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-              Menos distração. Mais progresso.
-            </p>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Menos distração. Mais progresso.</p>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-slate-500 dark:text-slate-400">
-              {new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' })}
-            </span>
-            <button 
-              onClick={() => setIsDeepModeActive(true)}
-              className="flex items-center gap-2 px-4 py-2 glass-card text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-white dark:hover:bg-slate-900 transition-colors shadow-sm cursor-pointer"
-              title="Entrar em Foco Profundo Imersivo"
-            >
-              <Moon size={14} className="text-blue-500" /> Modo profundo
-            </button>
-          </div>
+          <button 
+            onClick={() => setIsDeepModeActive(true)}
+            className="flex items-center gap-2 px-4 py-2 glass-card text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-white shadow-sm cursor-pointer"
+          >
+            <Moon size={14} className="text-blue-500" /> Modo profundo
+          </button>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          {/* Left Column (Timer & Stats) */}
+          {/* Left Column (Timer) */}
           <div className="flex flex-col gap-8">
-            {/* Timer Section */}
             <div className="glass-card p-8 flex flex-col items-center relative overflow-hidden">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-32 bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
-              
-              {/* Type Tabs */}
               <div className="flex items-center gap-2 glass-pill p-1.5 rounded-2xl mb-12 relative z-10 w-max mx-auto shadow-sm">
-                <button 
-                  onClick={() => handleModeChange('pomodoro')} 
-                  className={`px-6 py-2 rounded-xl font-bold text-xs transition-all ${
-                    activeMode === 'pomodoro' 
-                      ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.4)]' 
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  Pomodoro
-                </button>
-                <button 
-                  onClick={() => handleModeChange('timer')} 
-                  className={`px-6 py-2 rounded-xl font-bold text-xs transition-all ${
-                    activeMode === 'timer' 
-                      ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.4)]' 
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  Tarefa
-                </button>
-                <button 
-                  onClick={() => handleModeChange('ritmo')} 
-                  className={`px-6 py-2 rounded-xl font-bold text-xs transition-all ${
-                    activeMode === 'ritmo' 
-                      ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.4)]' 
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  Estatísticas
-                </button>
+                <button onClick={() => handleModeChange('pomodoro')} className={`px-6 py-2 rounded-xl font-bold text-xs ${activeMode === 'pomodoro' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Pomodoro</button>
+                <button onClick={() => handleModeChange('timer')} className={`px-6 py-2 rounded-xl font-bold text-xs ${activeMode === 'timer' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Tarefa</button>
+                <button onClick={() => handleModeChange('ritmo')} className={`px-6 py-2 rounded-xl font-bold text-xs ${activeMode === 'ritmo' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Estatísticas</button>
               </div>
 
-              {/* Giant Timer */}
-              <div className="relative w-72 h-72 flex flex-col items-center justify-center mb-12 shrink-0">
-                {/* Outer Glow */}
-                <div className="absolute inset-0 rounded-full bg-blue-500/10 dark:bg-blue-500/15 scale-110 blur-xl"></div>
-                {/* SVG Ring */}
+              <div className="relative w-72 h-72 flex flex-col items-center justify-center mb-10 shrink-0">
                 <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-200/60 dark:text-slate-800" />
-                  <circle 
-                    cx="50" 
-                    cy="50" 
-                    r="46" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="8" 
-                    strokeDasharray="289" 
-                    strokeDashoffset={289 - (289 * visualProgressPercent) / 100} 
-                    strokeLinecap="round" 
-                    className="text-blue-600 dark:text-blue-400 drop-shadow-[0_0_12px_rgba(59,130,246,0.8)] transition-all duration-500" 
-                  />
+                  <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="6" strokeDasharray="289" strokeDashoffset={289 - (289 * visualProgressPercent) / 100} strokeLinecap="round" className="text-blue-600 transition-all duration-500" />
                 </svg>
-                
                 <div className="flex flex-col items-center justify-center relative z-10">
-                  <span className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-2">Foco</span>
-                  <span className="text-7xl font-black text-slate-900 dark:text-white tracking-tighter tabular-nums leading-none mb-6">
-                    {formatTime(timeRemaining)}
-                  </span>
+                  <span className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-2">Foco</span>
+                  <span className="text-7xl font-black text-slate-900 dark:text-white tabular-nums leading-none mb-6">{formatTime(timeRemaining)}</span>
                   
                   <div className="flex items-center gap-4">
-                    <button 
-                      onClick={handleTogglePlay}
-                      className="w-16 h-16 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.5)] hover:shadow-[0_0_30px_rgba(59,130,246,0.8)] hover:scale-105 active:scale-95 transition-all"
-                    >
-                      {isRunning ? (
-                        <Pause size={24} className="fill-current" />
-                      ) : (
-                        <Play size={24} className="ml-1 fill-current" />
-                      )}
+                    <button onClick={handleTogglePlay} className="w-16 h-16 rounded-full bg-blue-600 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_6px_16px_rgba(37,99,235,0.22)]">
+                      {isRunning ? <Pause size={24} className="fill-current" /> : <Play size={24} className="ml-1 fill-current" />}
                     </button>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-6">
-                <button 
-                  onClick={handleStop}
-                  className="text-sm font-bold text-slate-400 hover:text-rose-500 transition-colors flex items-center gap-2"
-                >
-                  <Square size={14} className="fill-current" /> Parar
-                </button>
-                <button 
-                  onClick={handleSkip}
-                  className="text-sm font-bold text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex items-center gap-2"
-                >
-                  <SkipForward size={16} /> Pular
-                </button>
-              </div>
-              
-              {/* Sessions today indicator */}
-              <div className="w-full flex items-center justify-between mt-8 pt-6 border-t border-slate-200/60 dark:border-blue-500/20">
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Sessões hoje</span>
-                  <span className="text-lg font-black text-slate-900 dark:text-white">{session}/4</span>
-                </div>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className={`w-12 h-2 rounded-full ${i <= session ? 'bg-blue-600 dark:bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-slate-200/80 dark:bg-white/10'}`}></div>
-                  ))}
-                </div>
+                <button onClick={handleStop} className="text-sm font-medium text-slate-500 hover:text-rose-500 flex items-center gap-2"><Square size={14} className="fill-current" /> Parar</button>
+                <button onClick={handleSkip} className="text-sm font-medium text-slate-500 hover:text-slate-700 flex items-center gap-2"><SkipForward size={16} /> Pular</button>
               </div>
             </div>
-
-            {/* Stats Bar */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="glass-card p-5 flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-blue-500/15 border border-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shadow-sm">
-                  <Clock size={20} />
+            
+            {/* Active task details */}
+            {activeTask.id && (
+              <div className="glass-card p-6 flex flex-col gap-4 border-l-4 border-l-blue-500">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-black text-slate-800 dark:text-white truncate pr-2 leading-tight">
+                    {activeTask.title}
+                  </h3>
+                  <button 
+                    onClick={() => handleTaskComplete(activeTask.id as string)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white text-xs font-bold transition-all cursor-pointer shrink-0 shadow-sm"
+                  >
+                    <Check size={14} className="stroke-[3]" /> Concluir tarefa
+                  </button>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Tempo focado</span>
-                  <span className="text-xl font-bold text-slate-900 dark:text-white">1h 25min</span>
-                </div>
+                {activeTask.description && <p className="text-sm font-medium text-slate-500">{activeTask.description}</p>}
               </div>
-              
-              <div className="glass-card p-5 flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-sm">
-                  <TrendingUp size={20} />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Produtividade</span>
-                  <span className="text-xl font-bold text-slate-900 dark:text-white">87%</span>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* Right Column (Task context) */}
+          {/* Right Column: Task Selection */}
           <div className="flex flex-col gap-6">
-            {/* Tarefa em Foco */}
-            <div className="glass-card p-8 h-full relative overflow-hidden">
-              <h2 className="font-bold text-sm text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                <Target size={16} className="text-blue-600 dark:text-blue-400" /> Tarefa em foco
+            <div className="glass-card p-8 h-full flex flex-col shadow-sm">
+              <h2 className="font-black text-xl text-slate-900 dark:text-white mb-6 flex items-center gap-3">
+                <Target size={22} className="text-blue-600 dark:text-blue-400" />
+                Selecione a Tarefa do Dia
               </h2>
               
-              <div className="mb-8">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-2xl font-black text-slate-900 dark:text-white leading-tight">Revisar finanças</h3>
-                  <span className="px-3 py-1 bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-lg border border-blue-500/30">Trabalho</span>
-                </div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">1 de 4 subtarefas concluídas (25%)</p>
-                
-                <div className="w-full h-2 bg-slate-200/60 dark:bg-slate-800 rounded-full mt-4 overflow-hidden">
-                  <div className="h-full bg-blue-600 dark:bg-blue-500 w-1/4 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.6)]"></div>
-                </div>
+              <div className="flex-1 rounded-2xl">
+                {renderTaskList()}
               </div>
-
-              <div className="flex flex-col gap-3">
-                {[
-                  { label: 'Verificar extratos do mês', done: true },
-                  { label: 'Categorizar transações pendentes', done: false },
-                  { label: 'Revisar metas e caixinhas', done: false },
-                  { label: 'Planejar orçamentos da próxima semana', done: false },
-                ].map((item, i) => (
-                  <label key={i} className={`flex items-center gap-3 p-4 rounded-2xl cursor-pointer transition-colors ${
-                    item.done 
-                      ? 'bg-slate-100/40 dark:bg-slate-900/30 opacity-70' 
-                      : 'bg-white/50 dark:bg-slate-900/40 border border-slate-200/50 dark:border-blue-500/20 hover:border-blue-500/50 dark:hover:border-blue-400/40 hover:bg-white/80'
-                  }`}>
-                    <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border-2 transition-colors ${
-                      item.done 
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-[0_0_8px_rgba(59,130,246,0.5)]' 
-                        : 'border-slate-300 dark:border-slate-600 bg-transparent'
-                    }`}>
-                      {item.done && <CheckSquare size={14} strokeWidth={3} />}
-                    </div>
-                    <span className={`text-sm font-semibold ${item.done ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-100'}`}>
-                      {item.label}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Insight Foco */}
-            <div className="glass-card p-6 relative overflow-hidden group">
-              <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-2xl group-hover:bg-blue-500/30 transition-all duration-500"></div>
-              <h3 className="font-bold text-xs text-slate-900 dark:text-slate-200 mb-2 uppercase tracking-widest flex items-center gap-2">
-                <Bot size={14} className="text-blue-500" /> Insight do Mentor
-              </h3>
-              <p className="text-sm text-slate-700 dark:text-slate-300 font-medium italic">
-                "Ótimo foco! Você manteve a disciplina e avançou em uma tarefa importante."
-              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Overlay de Tela Cheia do Modo Profundo */}
       <DeepModeScreen
         isOpen={isDeepModeActive}
         onClose={() => setIsDeepModeActive(false)}
-        taskTitle={focusTask}
+        taskTitle={activeTask.title}
         timeRemaining={timeRemaining}
         isRunning={isRunning}
         onTogglePlay={handleTogglePlay}

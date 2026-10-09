@@ -1682,9 +1682,9 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
   });
 
   const getMetaAccessToken = () =>
-    process.env.WHATSAPP_TOKEN?.trim() ||
-    process.env.WHATSAPP_ACCESS_TOKEN?.trim() ||
     process.env.META_ACCESS_TOKEN?.trim() ||
+    process.env.WHATSAPP_ACCESS_TOKEN?.trim() ||
+    process.env.WHATSAPP_TOKEN?.trim() ||
     process.env.META_USER_ACCESS_TOKEN?.trim() ||
     process.env.WHATSAPP_API_TOKEN?.trim() ||
     process.env.META_TOKEN?.trim() ||
@@ -2085,6 +2085,83 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
   }
 
   /**
+   * Localiza no Firestore o documento de usuário associado a um número de WhatsApp.
+   * Realiza buscas considerando variações brasileiras (com/sem 9º dígito e com/sem DDI 55).
+   */
+  async function findUserByWhatsAppNumber(
+    rawPhone: string
+  ): Promise<{ uid: string; data: FirebaseFirestore.DocumentData; ref: FirebaseFirestore.DocumentReference } | null> {
+    const cleanPhone = String(rawPhone).replace(/\D/g, "");
+    if (!cleanPhone) return null;
+
+    // Variações de formato para o Brasil (DDI 55, DDD e 9º dígito)
+    const candidatesSet = new Set<string>();
+    candidatesSet.add(cleanPhone);
+
+    if (cleanPhone.startsWith("55")) {
+      const ddd = cleanPhone.slice(2, 4);
+      const rest = cleanPhone.slice(4);
+      candidatesSet.add(cleanPhone.slice(2)); // sem 55
+
+      if (cleanPhone.length === 12) {
+        // 55 + DDD + 8 dígitos -> adiciona com o 9
+        candidatesSet.add(`55${ddd}9${rest}`);
+        candidatesSet.add(`${ddd}9${rest}`);
+      } else if (cleanPhone.length === 13 && rest.startsWith("9")) {
+        // 55 + DDD + 9 + 8 dígitos -> adiciona sem o 9
+        candidatesSet.add(`55${ddd}${rest.slice(1)}`);
+        candidatesSet.add(`${ddd}${rest.slice(1)}`);
+      }
+    } else if (cleanPhone.length === 10 || cleanPhone.length === 11) {
+      // Sem 55 (apenas DDD + número)
+      candidatesSet.add(`55${cleanPhone}`);
+      const ddd = cleanPhone.slice(0, 2);
+      const rest = cleanPhone.slice(2);
+      if (cleanPhone.length === 10) {
+        candidatesSet.add(`55${ddd}9${rest}`);
+        candidatesSet.add(`${ddd}9${rest}`);
+      } else if (cleanPhone.length === 11 && rest.startsWith("9")) {
+        candidatesSet.add(`55${ddd}${rest.slice(1)}`);
+        candidatesSet.add(`${ddd}${rest.slice(1)}`);
+      }
+    }
+
+    const candidates = Array.from(candidatesSet);
+    console.log(`[Busca Firestore] Buscando usuário para whatsappNumber nas variações:`, candidates);
+
+    try {
+      const snapshot = await withTimeout(
+        adminDb.collection("users").where("whatsappNumber", "in", candidates).limit(1).get(),
+        8000,
+        `Buscar usuário por whatsappNumber variações`
+      );
+
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        console.log(`[Busca Firestore] Usuário encontrado: uid=${doc.id}`);
+        return { uid: doc.id, data: doc.data(), ref: doc.ref };
+      }
+    } catch (queryErr: any) {
+      console.warn(`[Busca Firestore] Erro com operador 'in', tentando busca direta para '${cleanPhone}':`, queryErr?.message);
+      try {
+        const directSnapshot = await withTimeout(
+          adminDb.collection("users").where("whatsappNumber", "==", cleanPhone).limit(1).get(),
+          6000,
+          `Busca direta whatsappNumber ${cleanPhone}`
+        );
+        if (!directSnapshot.empty) {
+          const doc = directSnapshot.docs[0];
+          return { uid: doc.id, data: doc.data(), ref: doc.ref };
+        }
+      } catch (e: any) {
+        console.error(`[Busca Firestore] Erro na busca direta:`, e?.message);
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Helper para envio de mensagens de saída para o WhatsApp via Meta Cloud API.
    * Implementa a Trava de Segurança (Circuit Breaker) para respeitar a Janela de 24h da Meta.
    */
@@ -2096,7 +2173,7 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
     skipWindowCheck: boolean = false
   ): Promise<any> {
     const token = getMetaAccessToken();
-    const phoneId = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || "1262215520309953";
+    const phoneId = phoneNumberId || process.env.META_PHONE_NUMBER_ID?.trim() || process.env.WHATSAPP_PHONE_NUMBER_ID?.trim() || "1311385455400755";
 
     if (!token) {
       console.log(`[WhatsApp Outbound] Aviso: Token da Meta não configurado. Mensagem para ${to} não despachada na API externa.`);
@@ -2123,13 +2200,9 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
           }
         } else {
           console.log(`[Circuit Breaker] Verificando lastWaInteraction para whatsappNumber: ${to}...`);
-          const userQuery = await withTimeout(
-            adminDb.collection("users").where("whatsappNumber", "==", to).limit(1).get(),
-            8000,
-            `Circuit breaker query user ${to}`
-          );
-          if (!userQuery.empty) {
-            userData = userQuery.docs[0].data();
+          const userMatch = await findUserByWhatsAppNumber(to);
+          if (userMatch) {
+            userData = userMatch.data;
           }
         }
 
@@ -2156,7 +2229,7 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
     }
 
     try {
-      const url = `https://graph.facebook.com/v25.0/${phoneId}/messages`;
+      const url = `https://graph.facebook.com/v21.0/${phoneId}/messages`;
       const res = await fetch(url, {
         method: "POST",
         headers: {
@@ -2268,7 +2341,70 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
       // 5. Log de Sucesso formatado para monitoramento na Render
       console.log(`Mensagem recebida de [${from}] (Tipo: ${messageType}): [${text}]`);
 
-      // 6. Lógica do Token Mágico de Ativação (Handshake)
+      const cleanFrom = String(from).replace(/\D/g, "");
+
+      // 6. Fluxo de Ativação / Account Pairing (ex: 'Olá! Quero ativar o Mentor Focus')
+      const cleanText = (text || "").trim().toLowerCase();
+      const isActivationMessage =
+        (cleanText.includes("ativar") && (cleanText.includes("mentor") || cleanText.includes("focus") || cleanText.includes("ola") || cleanText.includes("olá"))) ||
+        cleanText.includes("quero ativar") ||
+        cleanText === "ativar";
+
+      if (isActivationMessage) {
+        console.log(`[Account Pairing] Mensagem inicial de ativação detectada de [${cleanFrom}]: "${text}"`);
+        const userMatch = await findUserByWhatsAppNumber(cleanFrom);
+
+        if (userMatch) {
+          const { uid, ref } = userMatch;
+          console.log(`[Account Pairing] Usuário vinculado encontrado no Firestore: uid=${uid}. Atualizando lastWaInteraction e whatsappVerified...`);
+
+          await withTimeout(
+            ref.set({
+              whatsappNumber: cleanFrom,
+              whatsappVerified: true,
+              lastWaInteraction: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true }),
+            10000,
+            `Atualizar status ativação users/${uid}`
+          );
+
+          const welcomeMessage =
+            "🎉 *Conexão estabelecida com sucesso!*\n\n" +
+            "O seu Mentor Focus está ativo e pronto para organizar sua rotina e finanças.\n\n" +
+            "A partir de agora, você pode me enviar diretamente por aqui:\n" +
+            "• *Gastos e finanças* (mensagens de texto, áudios ou fotos de comprovantes/PIX)\n" +
+            "• *Tarefas e rotinas* (afazeres e lembretes para o seu dia)\n\n" +
+            "Como posso te ajudar hoje?";
+
+          console.log(`[Account Pairing] Enviando resposta de confirmação de ativação para [${cleanFrom}]...`);
+          await sendWhatsAppTextMessage(
+            cleanFrom,
+            welcomeMessage,
+            phoneId,
+            uid,
+            true // skipWindowCheck
+          );
+          console.log(`[Account Pairing] Confirmação de ativação enviada com sucesso para [${cleanFrom}]!`);
+          return;
+        } else {
+          console.warn(`[Account Pairing] Nenhum usuário encontrado no Firestore para [${cleanFrom}].`);
+          const notFoundMessage =
+            "Olá! Não localizamos uma conta no Nexus Focus vinculada a este número de WhatsApp.\n\n" +
+            "Por favor, acesse seu painel web e cadastre o seu número no botão do WhatsApp para conectar com o Mentor.";
+
+          await sendWhatsAppTextMessage(
+            cleanFrom,
+            notFoundMessage,
+            phoneId,
+            undefined,
+            true // skipWindowCheck
+          );
+          return;
+        }
+      }
+
+      // 6.1. Lógica do Token Mágico de Ativação (Handshake legada via token)
       if (text) {
         const tokenMatch = text.match(/NEXUS-[A-Z0-9]+/i);
         if (tokenMatch) {
@@ -2302,7 +2438,7 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
                   console.log(`4. Atualizando documento do usuário users/${uId}...`);
                   await withTimeout(
                     adminDb.collection("users").doc(uId).set({
-                      whatsappNumber: from,
+                      whatsappNumber: cleanFrom,
                       whatsappVerified: true,
                       lastWaInteraction: FieldValue.serverTimestamp(),
                       updatedAt: FieldValue.serverTimestamp()
@@ -2318,15 +2454,15 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
                   });
                   console.log(`7. Token '${tokenStr}' deletado com sucesso.`);
 
-                  console.log(`8. Enviando mensagem de confirmação de ativação para [${from}] via Meta API...`);
+                  console.log(`8. Enviando mensagem de confirmação de ativação para [${cleanFrom}] via Meta API...`);
                   await sendWhatsAppTextMessage(
-                    from,
+                    cleanFrom,
                     "Conexão estabelecida com sucesso! O Mentor Focus está ativo e pronto para organizar sua rotina.",
                     phoneId,
                     uId,
                     true // skipWindowCheck já que acabou de ativar
                   );
-                  console.log(`9. Mensagem de ativação despachada com sucesso para [${from}]!`);
+                  console.log(`9. Mensagem de ativação despachada com sucesso para [${cleanFrom}]!`);
                   return;
                 } else {
                   console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} não possui userId associado.`);
@@ -2334,9 +2470,11 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
               } else {
                 console.warn(`⚠️ [WhatsApp Webhook] Token ${tokenStr} já está expirado.`);
                 await sendWhatsAppTextMessage(
-                  from,
+                  cleanFrom,
                   "Este código de ativação já expirou. Por favor, gere um novo código no Dashboard do Nexus Focus.",
-                  phoneId
+                  phoneId,
+                  undefined,
+                  true
                 );
                 return;
               }
@@ -2352,31 +2490,27 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
 
       // 7. Mensagem regular do usuário: Processar com a IA (Mentor Focus)
       try {
-        console.log(`[Mensagem Regular] Buscando usuário vinculado ao whatsappNumber [${from}]...`);
-        const userQuery = await withTimeout(
-          adminDb.collection("users").where("whatsappNumber", "==", from).limit(1).get(),
-          10000,
-          `Buscar usuário por whatsappNumber ${from}`
-        );
-        console.log(`[Mensagem Regular] Resultado da busca: encontrado = ${!userQuery.empty}`);
+        console.log(`[Mensagem Regular] Buscando usuário vinculado ao whatsappNumber [${cleanFrom}]...`);
+        const userMatch = await findUserByWhatsAppNumber(cleanFrom);
 
-        if (userQuery.empty) {
-          console.log(`[WhatsApp Webhook] Número não vinculado a nenhuma conta Nexus: ${from}`);
+        if (!userMatch) {
+          console.log(`[WhatsApp Webhook] Número não vinculado a nenhuma conta Nexus: ${cleanFrom}`);
           await sendWhatsAppTextMessage(
-            from,
-            "Olá! Não localizamos uma conta Nexus Focus vinculada a este número de WhatsApp. Acesse seu painel no Nexus Focus e gere o código de ativação na aba WhatsApp.",
-            phoneId
+            cleanFrom,
+            "Olá! Não localizamos uma conta no Nexus Focus vinculada a este número de WhatsApp. Por favor, acesse seu painel web e cadastre o seu número no botão do WhatsApp para conectar com o Mentor.",
+            phoneId,
+            undefined,
+            true // skipWindowCheck
           );
           return;
         }
 
-        const userDoc = userQuery.docs[0];
-        const linkedUserId = userDoc.id;
+        const linkedUserId = userMatch.uid;
 
         // 1. Registro da Interação (No Webhook POST):
         console.log(`[Mensagem Regular] Atualizando lastWaInteraction para users/${linkedUserId}...`);
         await withTimeout(
-          adminDb.collection("users").doc(linkedUserId).set({
+          userMatch.ref.set({
             lastWaInteraction: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp()
           }, { merge: true }),
@@ -2725,7 +2859,39 @@ Data e hora atual: ${new Date().toISOString()}`;
 
       console.log(`Mensagem recebida de [${from}]: [${text || (resolvedMedia ? 'MÍDIA' : '')}]`);
 
-      // Verificação de Handshake (Ativação de Token)
+      // Verificação de Handshake / Ativação
+      const cleanSimFrom = String(from).replace(/\D/g, "");
+      const cleanSimText = (text || "").trim().toLowerCase();
+      const isSimActivation =
+        (cleanSimText.includes("ativar") && (cleanSimText.includes("mentor") || cleanSimText.includes("focus") || cleanSimText.includes("ola") || cleanSimText.includes("olá"))) ||
+        cleanSimText.includes("quero ativar") ||
+        cleanSimText === "ativar";
+
+      if (isSimActivation) {
+        const userMatch = await findUserByWhatsAppNumber(cleanSimFrom);
+        if (userMatch) {
+          await userMatch.ref.set({
+            whatsappNumber: cleanSimFrom,
+            whatsappVerified: true,
+            lastWaInteraction: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+
+          return res.json({
+            success: true,
+            reply: "Conexão estabelecida com sucesso! 🎉 O Mentor Focus está ativo e pronto para organizar sua rotina.",
+            sender: from,
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          return res.json({
+            success: false,
+            reply: "Olá! Não localizamos uma conta no Nexus Focus vinculada a este número de WhatsApp. Por favor, acesse seu painel web e cadastre o seu número no botão do WhatsApp para conectar com o Mentor.",
+            sender: from
+          });
+        }
+      }
+
       const tokenMatch = text.match(/NEXUS-[A-Z0-9]+/i);
       if (tokenMatch) {
         const tokenStr = tokenMatch[0].toUpperCase();

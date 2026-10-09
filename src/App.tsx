@@ -6,13 +6,13 @@ import { TabHome } from './components/TabHome';
 import { TabTransactions } from './components/TabTransactions';
 import { TabReports } from './components/TabReports';
 import { TabGoals } from './components/TabGoals';
-import { TabTasks } from './components/TabTasks';
 import { TabChat } from './components/TabChat';
 import { TabMore } from './components/TabMore';
 import { TabCalendar } from './components/TabCalendar';
 import { TabProjetos } from './components/TabProjetos';
 import { TabFocus } from './components/TabFocus';
 import { TabFinances } from './components/TabFinances';
+import { TabHelp } from './components/TabHelp';
 import { ToastNotifications } from './components/ToastNotifications';
 import { ProfileModal } from './components/ProfileModal';
 import { FocusModeModal } from './components/FocusModeModal';
@@ -30,6 +30,8 @@ import { CheckoutScreen } from './components/CheckoutScreen';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfUse } from './components/TermsOfUse';
 import { LandingPage } from './components/LandingPage';
+import { ImportModule } from './components/ImportModule';
+import { WelcomeOverlay } from './components/WelcomeOverlay';
 import { AdminPanel } from './components/AdminPanel';
 import PainelPage from './app/painel/page';
 import { AdminProtectedRoute } from './components/AdminProtectedRoute';
@@ -336,12 +338,12 @@ function Dashboard() {
         return <TabReports transactions={transactions} />;
       case 'goals':
         return <TabGoals goals={goals} user={user} />;
-      case 'tasks':
-        return <TabTasks tasks={tasks} setTasks={setTasks} user={user} />;
       case 'chat':
         return <TabChat messages={chatMessages} setMessages={setChatMessages} transactions={transactions} tasks={tasks} setTasks={setTasks} onTabChange={setActiveTab} user={user} initialPrompt={initialChatPrompt} onPromptHandled={() => setInitialChatPrompt(null)} />;
       case 'more':
         return <TabMore user={user} onTabChange={setActiveTab} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} onToggleDarkMode={() => setIsDarkMode(!isDarkMode)} onLogout={handleLogout} isDarkMode={isDarkMode} />;
+      case 'help':
+        return <TabHelp />;
       default:
         return <TabHome transactions={transactions} goals={goals} tasks={tasks} rotinas={rotinas} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
     }
@@ -371,6 +373,7 @@ function Dashboard() {
       }}
     >
       <ToastNotifications notifications={notifications} onDismiss={dismissNotification} />
+      <WelcomeOverlay onStartTour={() => window.dispatchEvent(new CustomEvent('start-tour'))} />
       <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} user={user} onLogout={handleLogout} />
       <WhatsAppModal isOpen={isWhatsAppModalOpen} onClose={() => setIsWhatsAppModalOpen(false)} user={user} />
       <FocusModeModal 
@@ -426,6 +429,7 @@ export default function App() {
           <Route path="/page" element={<Navigate to="/homepage" replace />} />
           <Route path="/login" element={<LoginScreen />} />
           <Route path="/checkout" element={<CheckoutScreen />} />
+          <Route path="/import" element={<ImportModule />} />
           <Route path="/privacidade" element={<PrivacyPolicy />} />
           <Route path="/termos" element={<TermsOfUse />} />
           <Route

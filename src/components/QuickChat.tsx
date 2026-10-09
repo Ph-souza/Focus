@@ -171,6 +171,7 @@ ${recentTasks || 'Nenhuma tarefa pendente/recente.'}`;
                 priority: priority || 'medium',
                 deadline: deadline || '',
                 description: description || '',
+                projectId: 'nexus-focus',
                 createdAt: serverTimestamp()
               };
               await setDoc(doc(db, `users/${user.id}/tasks`, newTaskId), newTask);

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Smartphone, MessageCircle, ArrowRight, Check, ShieldCheck, Sparkles, Loader2 } from 'lucide-react';
+import { X, Smartphone, MessageCircle, ArrowRight, Check, ShieldCheck, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { User } from '../types';
 import { db, auth } from '../lib/firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 interface WhatsAppModalProps {
   isOpen: boolean;
@@ -12,22 +12,23 @@ interface WhatsAppModalProps {
 }
 
 export const WHATSAPP_BOT_NUMBER = (import.meta.env.VITE_WHATSAPP_BOT_PHONE as string)?.replace(/\D/g, '') || '15553757186';
-export const WHATSAPP_BOT_DISPLAY = '+1 (555) 375-7186';
+export const WHATSAPP_BOT_DISPLAY = (import.meta.env.VITE_WHATSAPP_BOT_PHONE as string) || '+1 (555) 375-7186';
 
 export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Carregar número do usuário do Firestore com isolamento estrito de UID
   useEffect(() => {
-    const activeUid = auth.currentUser?.uid;
+    const activeUid = auth.currentUser?.uid || user?.id;
     if (!isOpen || !activeUid) return;
 
     const fetchUserPhone = async () => {
       try {
         const userDoc = await getDoc(doc(db, 'users', activeUid));
-        if (auth.currentUser?.uid !== activeUid) return;
+        if (auth.currentUser?.uid && auth.currentUser.uid !== activeUid) return;
         if (userDoc.exists()) {
           const data = userDoc.data();
           const savedNum = data?.whatsappFormatted || data?.whatsappNumber;
@@ -46,6 +47,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
   // Formatação automática do telefone (+55 BR ou +1 EUA)
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value;
+    if (errorMessage) setErrorMessage(null);
     
     // Se o usuário apagar tudo
     if (!val) {
@@ -95,44 +97,72 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
     e.preventDefault();
     if (!phoneNumber.trim() || isLoading) return;
 
+    setErrorMessage(null);
     setIsLoading(true);
 
     try {
+      // Garantir apenas dígitos limpos
       const cleanDigits = phoneNumber.replace(/\D/g, '');
+      if (!cleanDigits) {
+        setErrorMessage('Por favor, informe um número de telefone válido.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Padronização do número: para números do Brasil (10 ou 11 dígitos), garante DDI 55
       let standardizedNumber = cleanDigits;
       if (cleanDigits.startsWith('1') && cleanDigits.length === 11) {
         standardizedNumber = cleanDigits;
-      } else if (!cleanDigits.startsWith('55') && cleanDigits.length <= 11) {
+      } else if (!cleanDigits.startsWith('55') && (cleanDigits.length === 10 || cleanDigits.length === 11)) {
         standardizedNumber = `55${cleanDigits}`;
       }
 
-      // a) A vinculação do WhatsApp no Firestore é realizada exclusivamente pelo Admin SDK via handshake (QA security).
-      // Salvar no localStorage local para rapidez e consistência visual da interface
-      localStorage.setItem('nexus_whatsapp_number', phoneNumber.trim());
+      const activeUid = auth.currentUser?.uid || user?.id;
+      if (!activeUid) {
+        setErrorMessage('Usuário não autenticado. Faça login para continuar.');
+        setIsLoading(false);
+        return;
+      }
+
+      // REGRA CRÍTICA: Atualizar primeiro o documento do usuário autenticado no Firestore (whatsappNumber limpo, ex: 553191695240)
+      console.log(`[Account Pairing] Gravando whatsappNumber [${standardizedNumber}] para usuário [${activeUid}] no Firestore...`);
+      await setDoc(
+        doc(db, 'users', activeUid),
+        {
+          whatsappNumber: standardizedNumber,
+          whatsappFormatted: phoneNumber.trim(),
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+      console.log(`[Account Pairing] Documento do usuário atualizado com sucesso no Firestore!`);
+
+      // Salva no localStorage local para rapidez e consistência visual
+      localStorage.setItem('nexus_whatsapp_number', standardizedNumber);
 
       setIsSuccess(true);
 
-      // b) Redirecionamento imediato para a API oficial do WhatsApp
+      // Apenas após a confirmação (await da escrita no Firestore) executar o redirecionamento window.open
       const botPhone = WHATSAPP_BOT_NUMBER;
       const welcomeText = encodeURIComponent('Olá! Quero ativar o Mentor Focus');
       const waUrl = `https://wa.me/${botPhone}?text=${welcomeText}`;
 
-      // Pequeno delay visual para o usuário ver o feedback de sucesso antes de abrir
+      // Abre imediatamente a URL do WhatsApp para não perder o contexto do clique
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+
+      // Pequeno timeout visual para fechar o modal com animação de sucesso
       setTimeout(() => {
-        window.open(waUrl, '_blank', 'noopener,noreferrer');
         setIsLoading(false);
         setIsSuccess(false);
         onClose();
-      }, 700);
+      }, 1000);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao salvar número do WhatsApp no Firestore:', error);
-      // Mesmo com erro de gravação, abrir o WhatsApp para não bloquear o utilizador
-      const botPhone = WHATSAPP_BOT_NUMBER;
-      const welcomeText = encodeURIComponent('Olá! Quero ativar o Mentor Focus');
-      window.open(`https://wa.me/${botPhone}?text=${welcomeText}`, '_blank', 'noopener,noreferrer');
       setIsLoading(false);
-      onClose();
+      setIsSuccess(false);
+      setErrorMessage(error?.message || 'Falha ao salvar seu número no sistema. Tente novamente.');
+      // Importante: NÃO redireciona em caso de erro na gravação do Firestore
     }
   };
 
@@ -211,6 +241,14 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
             </p>
           </div>
 
+          {/* Feedback de Erro */}
+          {errorMessage && (
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle size={16} className="shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           {/* PASSO 2: Diga Olá! */}
           <div className="space-y-2 pt-1">
             <div className="flex items-center gap-2 px-1">
@@ -224,18 +262,19 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
 
             <button
               type="submit"
+              onClick={handleSaveAndOpenWhatsApp}
               disabled={!phoneNumber.trim() || isLoading}
               className="w-full py-3.5 px-6 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] disabled:opacity-50 text-white font-black text-sm shadow-[0_8px_25px_rgba(37,211,102,0.35)] hover:shadow-[0_12px_30px_rgba(37,211,102,0.45)] active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 cursor-pointer"
             >
               {isLoading ? (
                 <>
                   <Loader2 size={18} className="animate-spin" />
-                  <span>Conectando...</span>
+                  <span>Salvando e Conectando...</span>
                 </>
               ) : isSuccess ? (
                 <>
                   <Check size={18} className="stroke-[3]" />
-                  <span>Conectado! Abrindo WhatsApp...</span>
+                  <span>Salvo! Abrindo WhatsApp...</span>
                 </>
               ) : (
                 <>

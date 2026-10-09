@@ -16,7 +16,8 @@ export default defineConfig(() => {
           skipWaiting: true,
           cleanupOutdatedCaches: true,
           navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/api/]
+          navigateFallbackDenylist: [/^\/api/],
+          maximumFileSizeToCacheInBytes: 5000000
         },
         devOptions: {
           enabled: true

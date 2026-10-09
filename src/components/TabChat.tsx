@@ -203,6 +203,7 @@ ${recentTasks || 'Nenhuma tarefa pendente/recente.'}`;
                 priority: priority || 'medium',
                 deadline: deadline || '',
                 description: description || '',
+                projectId: 'nexus-focus',
                 createdAt: serverTimestamp()
               };
               await setDoc(doc(db, `users/${user.id}/tasks`, newTaskId), newTask);
@@ -279,6 +280,7 @@ ${recentTasks || 'Nenhuma tarefa pendente/recente.'}`;
         completed: false,
         priority: 'medium',
         description: 'Criado via Nexus Focus Chat',
+        projectId: 'nexus-focus',
         userId: user.id,
         createdAt: serverTimestamp()
       };
@@ -319,6 +321,7 @@ ${recentTasks || 'Nenhuma tarefa pendente/recente.'}`;
           completed: false,
           priority: 'high',
           description: 'Revisão de Assinaturas',
+          projectId: 'nexus-focus',
           userId: user.id,
           createdAt: serverTimestamp()
         };
@@ -331,10 +334,10 @@ ${recentTasks || 'Nenhuma tarefa pendente/recente.'}`;
     
     setDetectedSubscriptions([]);
     
-    await addMessageToDb(`Excelente! Adicionei tarefas na sua aba de Tarefas para você revisar suas assinaturas. Fique de olho e economize!`, 'ai');
+    await addMessageToDb(`Excelente! Adicionei tarefas na sua aba de Projetos para você revisar suas assinaturas. Fique de olho e economize!`, 'ai');
     
     setTimeout(() => {
-      onTabChange('tasks');
+      onTabChange('projects');
     }, 2500);
   };
 

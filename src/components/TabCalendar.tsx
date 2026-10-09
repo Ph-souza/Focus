@@ -345,7 +345,7 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
     };
   }, [user?.id, format(displayedMonthDate || selectedDate, 'yyyy-MM')]);
 
-  // 1. Fonte Única da Verdade: Firestore Listener contextual via calendarRotinas
+  // 1. Fonte Única da Verdade: Firestore Listener contextual via calendarRotinas + Projetos do LocalStorage
   const dayActivities: ActivityItem[] = useMemo(() => {
     const firestoreItems = calendarRotinas
       .filter(r => r.date === selectedDateStr)
@@ -373,13 +373,33 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
         };
       });
 
-    // Se houver rotinas cadastradas para o dia no Firestore, retorna ordenado
-    if (firestoreItems.length > 0) {
-      return firestoreItems.sort((a, b) => a.time.localeCompare(b.time));
+    let localProjects: any[] = [];
+    try {
+      const saved = localStorage.getItem('nexus_focus_projects_list');
+      if (saved) localProjects = JSON.parse(saved);
+    } catch {}
+
+    const projectActivities = localProjects
+      .filter(p => p.deadline === selectedDateStr)
+      .map(p => ({
+        id: `proj-deadline-${p.id}`,
+        time: '23:59',
+        title: `Prazo Final: ${p.name}`,
+        subtitle: `Entrega do projeto na categoria ${p.category}`,
+        category: p.category === 'Trabalho' || p.category === 'Pessoal' || p.category === 'Estudos' ? p.category : 'Trabalho',
+        completed: false, // You cannot check off a project deadline directly from the calendar yet
+        date: p.deadline
+      } as ActivityItem));
+
+    const mergedItems = [...firestoreItems, ...projectActivities];
+
+    // Se houver rotinas cadastradas para o dia no Firestore ou Prazos de Projetos, retorna ordenado
+    if (mergedItems.length > 0) {
+      return mergedItems.sort((a, b) => a.time.localeCompare(b.time));
     }
 
     // Se o usuário possui rotinas no Firestore (mas nenhuma para a data selecionada), exibe vazio
-    if (calendarRotinas.length > 0) {
+    if (calendarRotinas.length > 0 || localProjects.length > 0) {
       return [];
     }
 
@@ -387,23 +407,41 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
     return defaultMockActivities.sort((a, b) => a.time.localeCompare(b.time));
   }, [calendarRotinas, selectedDateStr, defaultMockActivities]);
 
-  // Próximos compromissos futuros (> selectedDateStr) derivados unicamente do Firestore
+  // Próximos compromissos futuros (> selectedDateStr) derivados unicamente do Firestore + Projetos Locais
   const upcomingActivities = useMemo(() => {
-    const validRoutines = calendarRotinas
-      .filter(r => r.date && r.date > selectedDateStr)
-      .sort((a, b) => {
-        const dateCompare = a.date.localeCompare(b.date);
-        if (dateCompare !== 0) return dateCompare;
-        return (a.time || '').localeCompare(b.time || '');
-      });
+    let localProjects: any[] = [];
+    try {
+      const saved = localStorage.getItem('nexus_focus_projects_list');
+      if (saved) localProjects = JSON.parse(saved);
+    } catch {}
 
-    return validRoutines.slice(0, 3).map(r => ({
-      id: r.id,
-      title: r.title,
-      date: r.date,
-      time: r.time,
-      category: ((r as any).category || 'Trabalho') as 'Trabalho' | 'Pessoal' | 'Estudos'
-    }));
+    const projectUpcoming = localProjects
+      .filter(p => p.deadline && p.deadline > selectedDateStr)
+      .map(p => ({
+        id: `proj-deadline-${p.id}`,
+        title: `Prazo Final: ${p.name}`,
+        date: p.deadline,
+        time: '23:59',
+        category: p.category === 'Trabalho' || p.category === 'Pessoal' || p.category === 'Estudos' ? p.category : 'Trabalho'
+      }));
+
+    const firestoreUpcoming = calendarRotinas
+      .filter(r => r.date && r.date > selectedDateStr)
+      .map(r => ({
+        id: r.id,
+        title: r.title,
+        date: r.date,
+        time: r.time,
+        category: ((r as any).category || 'Trabalho') as 'Trabalho' | 'Pessoal' | 'Estudos'
+      }));
+
+    const mergedUpcoming = [...firestoreUpcoming, ...projectUpcoming].sort((a, b) => {
+      const dateCompare = a.date.localeCompare(b.date);
+      if (dateCompare !== 0) return dateCompare;
+      return (a.time || '').localeCompare(b.time || '');
+    });
+
+    return mergedUpcoming.slice(0, 3);
   }, [calendarRotinas, selectedDateStr]);
 
   // Helper para formatar a data dos próximos compromissos (ex: 'Sex, 18')

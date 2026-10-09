@@ -56,7 +56,6 @@ export function TabMore({
   
   // Modais complementares para máxima interatividade
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
-  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
 
   // Estado das Notas rápidas com persistência local
@@ -104,7 +103,7 @@ export function TabMore({
       desc: 'Seus projetos e tarefas', 
       icon: <Folder className="w-5 h-5 text-blue-500" />, 
       iconBg: 'bg-blue-500/15 border-blue-500/20',
-      action: () => onTabChange('tasks') 
+      action: () => onTabChange('projects') 
     },
     { 
       id: 'metas', 
@@ -180,10 +179,10 @@ export function TabMore({
     { 
       id: 'help', 
       name: 'Ajuda', 
-      desc: 'Central de suporte', 
+      desc: 'Central de suporte e guias interativos', 
       icon: <HelpCircle className="w-4 h-4 text-sky-500" />, 
       iconBg: 'bg-sky-500/10 border-sky-500/20',
-      action: () => setIsHelpModalOpen(true) 
+      action: () => onTabChange('help') 
     },
   ];
 
@@ -502,60 +501,6 @@ export function TabMore({
                   ))
                 )}
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal de Ajuda & Suporte */}
-      <AnimatePresence>
-        {isHelpModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="glass-card w-full max-w-sm p-5 shadow-2xl relative"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-sky-500/15 flex items-center justify-center text-sky-500">
-                    <LifeBuoy size={18} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-900 dark:text-white">Central de Ajuda</h3>
-                    <p className="text-[10px] text-slate-400">Suporte e orientações</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setIsHelpModalOpen(false)}
-                  className="w-8 h-8 rounded-xl hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 mb-4">
-                <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                  <p className="font-bold text-slate-900 dark:text-white mb-1">Como sincronizar com o WhatsApp?</p>
-                  <p className="text-[11px] text-slate-400">Clique na opção &quot;Mentor no WhatsApp&quot; para escanear o QR Code e interagir com seu assistente diretamente no chat.</p>
-                </div>
-                <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                  <p className="font-bold text-slate-900 dark:text-white mb-1">Como registrar despesas do mês?</p>
-                  <p className="text-[11px] text-slate-400">Acesse a aba Finanças e use o seletor de mês dinâmico no topo para visualizar e cadastrar gastos do período.</p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  setIsHelpModalOpen(false);
-                  onOpenWhatsApp();
-                }}
-                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all"
-              >
-                <MessageCircle size={15} />
-                Falar com Suporte no WhatsApp
-              </button>
             </motion.div>
           </div>
         )}

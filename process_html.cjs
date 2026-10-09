@@ -1,14 +1,45 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+const fs = require('fs');
+const path = require('path');
+
+const inputPath = 'C:/Users/phillipe.pimenta/Downloads/nexus_focus_landing_phone_mockup_focus.html';
+const html = fs.readFileSync(inputPath, 'utf8');
+
+// 1. Extract styles
+const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/g);
+let cssContent = '';
+if (styleMatch) {
+  cssContent = styleMatch.map(s => s.replace(/<\/?style[^>]*>/g, '')).join('\n');
+}
+
+// 2. Extract body
+let bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+let bodyContent = bodyMatch ? bodyMatch[1] : html;
+
+// 3. Extract and remove scripts
+const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+let scripts = [];
+let match;
+while ((match = scriptRegex.exec(bodyContent)) !== null) {
+  if (match[1].trim()) {
+    scripts.push(match[1]);
+  }
+}
+bodyContent = bodyContent.replace(scriptRegex, '');
+
+// Clean up references to the removed head/body
+fs.writeFileSync('public/assets/landing.html', bodyContent);
+fs.writeFileSync('src/components/LandingPage.css', cssContent);
+
+// 4. Generate TSX
+const tsxContent = `import React, { useEffect, useRef, useState } from 'react';
 import './LandingPage.css';
 
 export function LandingPage() {
-  const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const [html, setHtml] = useState<string>('');
 
   useEffect(() => {
-    fetch('/assets/landing.html?v=monitor-20261009')
+    fetch('/assets/landing.html')
       .then(res => res.text())
       .then(text => {
         setHtml(text);
@@ -33,8 +64,8 @@ export function LandingPage() {
         const scale = Math.min(1, stage.clientWidth / 600);
         const height = window.innerWidth <= 680 ? 960 : 835;
         (scene as HTMLElement).style.setProperty('--scene-scale', String(scale));
-        (stage as HTMLElement).style.height = `${height * scale}px`;
-        (stage as HTMLElement).style.minHeight = `${height * scale}px`;
+        (stage as HTMLElement).style.height = \`\${height * scale}px\`;
+        (stage as HTMLElement).style.minHeight = \`\${height * scale}px\`;
       };
       
       new ResizeObserver(fit).observe(stage);
@@ -62,8 +93,8 @@ export function LandingPage() {
         cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => {
           const rect = stage.getBoundingClientRect();
-          (scene as HTMLElement).style.setProperty('--mx', `${((e.clientX - rect.left) / rect.width - .5) * 13}px`);
-          (scene as HTMLElement).style.setProperty('--my', `${((e.clientY - rect.top) / rect.height - .5) * 10}px`);
+          (scene as HTMLElement).style.setProperty('--mx', \`\${((e.clientX - rect.left) / rect.width - .5) * 13}px\`);
+          (scene as HTMLElement).style.setProperty('--my', \`\${((e.clientY - rect.top) / rect.height - .5) * 10}px\`);
         });
       });
       
@@ -122,57 +153,11 @@ export function LandingPage() {
       });
     });
 
-    const ctaButtons = document.querySelectorAll('a.btn[href="#oferta"], a.btn[href="#cta-final"], a.btn[data-checkout], a[data-checkout]');
-    ctaButtons.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        navigate('/login?intent=checkout');
-      });
-    });
-
-  }, [html, navigate]);
-
-  useEffect(() => {
-    const video = containerRef.current?.querySelector<HTMLVideoElement>('#ecosystem-motion');
-    const toggle = containerRef.current?.querySelector<HTMLButtonElement>('.ecosystem-motion-toggle');
-    if (!video || !toggle) return;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let userPaused = reduced.matches;
-    let visible = true;
-    video.controls = false;
-    video.muted = true;
-    const updateLabel = () => {
-      toggle.textContent = video.paused ? 'Retomar animação' : 'Pausar animação';
-      toggle.setAttribute('aria-pressed', String(video.paused));
-    };
-    const sync = () => {
-      if (userPaused || !visible || document.hidden) video.pause();
-      else void video.play().catch(updateLabel);
-      updateLabel();
-    };
-    const onToggle = () => { userPaused = !video.paused; sync(); };
-    const onPreference = () => { userPaused = reduced.matches; sync(); };
-    const observer = new IntersectionObserver(entries => {
-      visible = entries[0].isIntersecting;
-      sync();
-    }, { threshold: 0.05 });
-    video.addEventListener('play', updateLabel);
-    video.addEventListener('pause', updateLabel);
-    toggle.addEventListener('click', onToggle);
-    reduced.addEventListener('change', onPreference);
-    document.addEventListener('visibilitychange', sync);
-    observer.observe(video);
-    sync();
-    return () => {
-      observer.disconnect();
-      video.pause();
-      video.removeEventListener('play', updateLabel);
-      video.removeEventListener('pause', updateLabel);
-      toggle.removeEventListener('click', onToggle);
-      reduced.removeEventListener('change', onPreference);
-      document.removeEventListener('visibilitychange', sync);
-    };
   }, [html]);
 
   return <div ref={containerRef} className="landing-page-container" dangerouslySetInnerHTML={{ __html: html }} />;
 }
+`;
+
+fs.writeFileSync('src/components/LandingPage.tsx', tsxContent);
+console.log('Done!');

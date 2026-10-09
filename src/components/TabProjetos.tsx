@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Folder, 
@@ -21,9 +21,12 @@ import {
   Layers,
   ArrowRight,
   TrendingUp,
-  Search
+  Search,
+  AlertCircle
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { User } from '../types';
+
 
 export interface ProjectTask {
   id: string | number;
@@ -59,7 +62,7 @@ const INITIAL_PROJECTS: ProjectItem[] = [
     name: 'Nexus Focus',
     description: 'Desenvolvimento e melhorias contínuas do app',
     category: 'Trabalho',
-    deadline: '30 de setembro',
+    deadline: '2026-09-30',
     tags: ['Desenvolvimento', 'Design', 'Backend', 'Marketing', 'Teste']
   },
   {
@@ -67,7 +70,7 @@ const INITIAL_PROJECTS: ProjectItem[] = [
     name: 'Marketing',
     description: 'Conteúdo, campanhas e crescimento',
     category: 'Trabalho',
-    deadline: '15 de outubro',
+    deadline: '2026-10-15',
     tags: ['Marketing', 'Conteúdo', 'Copywriting']
   },
   {
@@ -75,7 +78,7 @@ const INITIAL_PROJECTS: ProjectItem[] = [
     name: 'Pessoal',
     description: 'Tarefas, rotinas e metas pessoais',
     category: 'Pessoal',
-    deadline: 'Sem prazo',
+    deadline: '',
     tags: ['Saúde', 'Hábitos', 'Finanças']
   },
   {
@@ -83,7 +86,7 @@ const INITIAL_PROJECTS: ProjectItem[] = [
     name: 'Estudos',
     description: 'Cursos de tecnologia e inteligência artificial',
     category: 'Estudos',
-    deadline: '28 de setembro',
+    deadline: '2026-09-28',
     tags: ['IA', 'React', 'TypeScript']
   },
   {
@@ -91,7 +94,7 @@ const INITIAL_PROJECTS: ProjectItem[] = [
     name: 'Financeiro',
     description: 'Planejamento e organização orçamentária',
     category: 'Geral',
-    deadline: '31 de outubro',
+    deadline: '2026-10-31',
     tags: ['Investimentos', 'Orçamento']
   }
 ];
@@ -201,6 +204,7 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
   });
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>('nexus-focus');
+  const [isProjectDetailsVisible, setIsProjectDetailsVisible] = useState<boolean>(true);
   const [projectCategoryFilter, setProjectCategoryFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'recent' | 'progress' | 'progress-asc' | 'deadline'>('recent');
   const [activeProjectTab, setActiveProjectTab] = useState<'tasks' | 'overview' | 'files' | 'notes'>('tasks');
@@ -367,7 +371,7 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
       name: newProjectName.trim(),
       description: newProjectDesc.trim() || 'Sem descrição definida',
       category: newProjectCategory,
-      deadline: newProjectDeadline ? formatDisplayDate(newProjectDeadline) : 'Sem prazo',
+      deadline: newProjectDeadline || '',
       tags: ['Geral', newProjectCategory]
     };
 
@@ -417,10 +421,11 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
     showNotification(`Projeto duplicado com sucesso!`);
   };
 
-  const formatDisplayDate = (dStr: string) => {
+  const formatDateDisplay = (dStr: string) => {
+    if (!dStr) return 'Sem prazo';
     try {
       const parts = dStr.split('-');
-      if (parts.length === 3) return `${parts[2]}/${parts[1]}`;
+      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
       return dStr;
     } catch {
       return dStr;
@@ -458,248 +463,12 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
   const ringCircumference = 2 * Math.PI * ringRadius; // ~289.02
   const ringOffset = ringCircumference - (ringCircumference * projectStats.percent) / 100;
 
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col gap-6 p-0 md:p-8 max-w-[1560px] mx-auto w-full pb-16"
-    >
-      {/* Toast de notificação suave */}
-      <AnimatePresence>
-        {notificationMsg && (
-          <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="fixed top-6 right-6 z-50 px-4 py-3 rounded-2xl glass-card border border-blue-500/40 shadow-xl flex items-center gap-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100"
-          >
-            <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center">
-              <Check size={14} className="stroke-[3]" />
-            </div>
-            {notificationMsg}
-          </motion.div>
-        )}
-      </AnimatePresence>
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-      {/* ======================================================= */}
-      {/* 1. HERO SECTION                                         */}
-      {/* ======================================================= */}
-      <section className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-1">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-500 mb-1.5">
-            <Folder size={15} />
-            <span>Módulo de Projetos</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">
-            Seus projetos, mais resultados.
-          </h1>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
-            Organize suas ideias, divida em tarefas e acompanhe o progresso de forma simples e visual.
-          </p>
-        </div>
-
-        <button
-          onClick={() => setIsNewProjectModalOpen(true)}
-          className="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-[0_8px_22px_rgba(52,120,255,0.3)] hover:shadow-[0_12px_28px_rgba(52,120,255,0.45)] transition-all flex items-center gap-2 shrink-0 active:scale-95 cursor-pointer"
-        >
-          <Plus size={18} className="stroke-[2.5]" />
-          <span>Novo projeto</span>
-        </button>
-      </section>
-
-      {/* ======================================================= */}
-      {/* 2. SUMMARY GRID (4 cards estatísticos)                 */}
-      {/* ======================================================= */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Card 1: Todos os projetos */}
-        <div className="glass-card p-4 sm:p-5 flex items-center gap-3.5 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl shrink-0 font-bold">
-            ◈
-          </div>
-          <div className="min-w-0">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block truncate leading-none">Todos os projetos</span>
-            <strong className="text-2xl font-black text-slate-900 dark:text-white mt-1 block leading-tight tracking-tight">
-              {globalSummary.totalProjects}
-            </strong>
-            <small className="text-[11px] text-slate-400 dark:text-slate-500 block leading-none mt-0.5">Projetos ativos</small>
-          </div>
-        </div>
-
-        {/* Card 2: Tarefas de hoje */}
-        <div className="glass-card p-4 sm:p-5 flex items-center gap-3.5 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl shrink-0 font-bold">
-            ▣
-          </div>
-          <div className="min-w-0">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block truncate leading-none">Tarefas de hoje</span>
-            <strong className="text-2xl font-black text-slate-900 dark:text-white mt-1 block leading-tight tracking-tight">
-              {globalSummary.todayTasksCount}
-            </strong>
-            <small className="text-[11px] text-slate-400 dark:text-slate-500 block leading-none mt-0.5">De todos os projetos</small>
-          </div>
-        </div>
-
-        {/* Card 3: Em andamento */}
-        <div className="glass-card p-4 sm:p-5 flex items-center gap-3.5 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl shrink-0 font-bold">
-            ▷
-          </div>
-          <div className="min-w-0">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block truncate leading-none">Em andamento</span>
-            <strong className="text-2xl font-black text-slate-900 dark:text-white mt-1 block leading-tight tracking-tight">
-              {globalSummary.inProgressProjects}
-            </strong>
-            <small className="text-[11px] text-slate-400 dark:text-slate-500 block leading-none mt-0.5">Projetos</small>
-          </div>
-        </div>
-
-        {/* Card 4: Concluídos */}
-        <div className="glass-card p-4 sm:p-5 flex items-center gap-3.5 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center text-xl shrink-0 font-bold">
-            ✓
-          </div>
-          <div className="min-w-0">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block truncate leading-none">Concluídos</span>
-            <strong className="text-2xl font-black text-slate-900 dark:text-white mt-1 block leading-tight tracking-tight">
-              {globalSummary.completedProjects}
-            </strong>
-            <small className="text-[11px] text-slate-400 dark:text-slate-500 block leading-none mt-0.5">Projetos</small>
-          </div>
-        </div>
-      </section>
-
-      {/* ======================================================= */}
-      {/* 3. TOOLBAR: FILTERS & SORT                             */}
-      {/* ======================================================= */}
-      <section className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
-          {[
-            { id: 'all', label: 'Meus projetos' },
-            { id: 'geral', label: 'Geral' },
-            { id: 'pessoal', label: 'Pessoal' },
-            { id: 'trabalho', label: 'Trabalho' },
-            { id: 'estudos', label: 'Estudos' },
-          ].map(f => {
-            const isActive = projectCategoryFilter === f.id;
-            return (
-              <button
-                key={f.id}
-                onClick={() => setProjectCategoryFilter(f.id)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.35)]'
-                    : 'glass-pill text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                {f.label}
-              </button>
-            );
-          })}
-
-          <button
-            onClick={() => setIsNewProjectModalOpen(true)}
-            className="w-8 h-8 rounded-xl glass-pill flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors shrink-0 cursor-pointer"
-            title="Adicionar projeto"
-          >
-            <Plus size={15} />
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          {/* Busca rápida */}
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar..."
-              className="text-xs pl-8 pr-3 py-1.5 rounded-xl glass-pill text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 w-32 sm:w-44"
-            />
-          </div>
-
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
-            className="text-xs px-3 py-1.5 rounded-xl glass-pill text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
-          >
-            <option value="recent">Mais recentes</option>
-            <option value="progress">Maior progresso</option>
-            <option value="progress-asc">Menor progresso</option>
-            <option value="deadline">Prazo mais próximo</option>
-          </select>
-        </div>
-      </section>
-
-      {/* ======================================================= */}
-      {/* 4. PROJECT CARDS (Horizontal Scroll / Grid)            */}
-      {/* ======================================================= */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
-        {displayedProjects.map((project) => {
-          const isSelected = project.id === selectedProject.id;
-          const pTasks = tasks.filter(t => t.projectId === project.id);
-          const pDone = pTasks.filter(t => t.status === 'done').length;
-          const pTotal = pTasks.length;
-          const pProgress = pTotal > 0 ? Math.round((pDone / pTotal) * 100) : 0;
-
-          return (
-            <motion.article
-              key={project.id}
-              onClick={() => setSelectedProjectId(project.id)}
-              whileHover={{ y: -2 }}
-              className={`glass-card p-4 flex flex-col justify-between cursor-pointer transition-all duration-200 relative overflow-hidden group ${
-                isSelected 
-                  ? 'border-blue-500 ring-2 ring-blue-500/30 shadow-[0_8px_30px_rgba(59,130,246,0.2)]' 
-                  : 'hover:border-slate-300 dark:hover:border-blue-500/40'
-              }`}
-            >
-              {isSelected && (
-                <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/10 rounded-bl-full pointer-events-none"></div>
-              )}
-
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-md">
-                    {project.name.charAt(0)}
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                    {project.category}
-                  </span>
-                </div>
-
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                  {project.name}
-                </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 min-h-[32px] leading-tight">
-                  {project.description}
-                </p>
-              </div>
-
-              <div className="mt-4 pt-1">
-                {/* Progress bar */}
-                <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700/60 overflow-hidden mb-2">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-500"
-                    style={{ width: `${pProgress}%` }}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                  <span>{pDone}/{pTotal} tarefas</span>
-                  <span className="truncate max-w-[90px]">{project.deadline}</span>
-                </div>
-              </div>
-            </motion.article>
-          );
-        })}
-      </section>
-
-      {/* ======================================================= */}
-      {/* 5. PROJECT MAIN CONTENT & SIDEBAR                       */}
-      {/* ======================================================= */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
+  const renderProjectDetails = (isMobile = false) => (
+      <section className={`${isMobile ? "flex flex-col gap-4 scale-[0.97] origin-top p-1" : "hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-6"} pt-2`}>
         {/* ==================== COLUNA ESQUERDA (8 COLS) ==================== */}
-        <article className="lg:col-span-8 glass-card p-5 sm:p-6 flex flex-col justify-between shadow-sm min-h-[550px]">
+        <article className={`${isMobile ? "p-4" : "lg:col-span-8 p-5 sm:p-6"} glass-card flex flex-col justify-between shadow-sm min-h-[550px]`}>
           <div>
             {/* Project Header */}
             <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/60 dark:border-slate-800">
@@ -965,9 +734,11 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
                     <span className="text-[10px] text-slate-400 font-bold uppercase block">Categoria</span>
                     <strong className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-1 block">{selectedProject.category}</strong>
                   </div>
-                  <div className="p-3.5 rounded-xl bg-white/50 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800 text-center">
+                  <div className="p-3.5 rounded-xl bg-white/50 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800 text-center flex flex-col justify-center">
                     <span className="text-[10px] text-slate-400 font-bold uppercase block">Prazo Final</span>
-                    <strong className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-1 block">{selectedProject.deadline}</strong>
+                    <strong className={`text-sm font-bold mt-1 block ${selectedProject.deadline && selectedProject.deadline < todayStr ? 'text-rose-500' : 'text-slate-800 dark:text-slate-200'}`}>
+                      {formatDateDisplay(selectedProject.deadline)}
+                    </strong>
                   </div>
                   <div className="p-3.5 rounded-xl bg-white/50 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800 text-center">
                     <span className="text-[10px] text-slate-400 font-bold uppercase block">Conclusão</span>
@@ -1018,7 +789,7 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
         </article>
 
         {/* ==================== COLUNA DIREITA (4 COLS SIDEBAR) ==================== */}
-        <aside className="lg:col-span-4 flex flex-col gap-4">
+        <aside className={`${isMobile ? "flex flex-col gap-3" : "lg:col-span-4 flex flex-col gap-4"}`}>
           {/* Card 1: Progresso do Projeto com Anel SVG */}
           <section className="glass-card p-5 shadow-sm">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-4">
@@ -1118,8 +889,8 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
                 <Edit3 size={13} />
               </button>
             </div>
-            <strong className="text-sm font-black text-slate-900 dark:text-white block">
-              {selectedProject.deadline}
+            <strong className={`text-sm font-black block ${selectedProject.deadline && selectedProject.deadline < todayStr ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
+              {formatDateDisplay(selectedProject.deadline)} {selectedProject.deadline && selectedProject.deadline < todayStr && '(Atrasado)'}
             </strong>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
               Acompanhamento contínuo no Nexus Focus
@@ -1206,6 +977,291 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
           </section>
         </aside>
       </section>
+  );
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col gap-6 p-0 md:p-8 max-w-[1560px] mx-auto w-full pb-16"
+    >
+      {/* Toast de notificação suave */}
+      <AnimatePresence>
+        {notificationMsg && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-6 right-6 z-50 px-4 py-3 rounded-2xl glass-card border border-blue-500/40 shadow-xl flex items-center gap-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100"
+          >
+            <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center">
+              <Check size={14} className="stroke-[3]" />
+            </div>
+            {notificationMsg}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ======================================================= */}
+      {/* 1. HERO SECTION                                         */}
+      {/* ======================================================= */}
+      <section className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-1">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-500 mb-1.5">
+            <Folder size={15} />
+            <span>Módulo de Projetos</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">
+            Seus projetos, mais resultados.
+          </h1>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+            Organize suas ideias, divida em tarefas e acompanhe o progresso de forma simples e visual.
+          </p>
+        </div>
+
+        <button
+          onClick={() => setIsNewProjectModalOpen(true)}
+          className="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-[0_8px_22px_rgba(52,120,255,0.3)] hover:shadow-[0_12px_28px_rgba(52,120,255,0.45)] transition-all flex items-center gap-2 shrink-0 active:scale-95 cursor-pointer"
+        >
+          <Plus size={18} className="stroke-[2.5]" />
+          <span>Novo projeto</span>
+        </button>
+      </section>
+
+      {/* ======================================================= */}
+      {/* 2. SUMMARY GRID (4 cards estatísticos)                 */}
+      {/* ======================================================= */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Card 1: Todos os projetos */}
+        <div className="glass-card p-4 sm:p-5 flex items-center gap-3.5 shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl shrink-0 font-bold">
+            ◈
+          </div>
+          <div className="min-w-0">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block truncate leading-none">Todos os projetos</span>
+            <strong className="text-2xl font-black text-slate-900 dark:text-white mt-1 block leading-tight tracking-tight">
+              {globalSummary.totalProjects}
+            </strong>
+            <small className="text-[11px] text-slate-400 dark:text-slate-500 block leading-none mt-0.5">Projetos ativos</small>
+          </div>
+        </div>
+
+        {/* Card 2: Tarefas de hoje */}
+        <div className="glass-card p-4 sm:p-5 flex items-center gap-3.5 shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl shrink-0 font-bold">
+            ▣
+          </div>
+          <div className="min-w-0">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block truncate leading-none">Tarefas de hoje</span>
+            <strong className="text-2xl font-black text-slate-900 dark:text-white mt-1 block leading-tight tracking-tight">
+              {globalSummary.todayTasksCount}
+            </strong>
+            <small className="text-[11px] text-slate-400 dark:text-slate-500 block leading-none mt-0.5">De todos os projetos</small>
+          </div>
+        </div>
+
+        {/* Card 3: Em andamento */}
+        <div className="glass-card p-4 sm:p-5 flex items-center gap-3.5 shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl shrink-0 font-bold">
+            ▷
+          </div>
+          <div className="min-w-0">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block truncate leading-none">Em andamento</span>
+            <strong className="text-2xl font-black text-slate-900 dark:text-white mt-1 block leading-tight tracking-tight">
+              {globalSummary.inProgressProjects}
+            </strong>
+            <small className="text-[11px] text-slate-400 dark:text-slate-500 block leading-none mt-0.5">Projetos</small>
+          </div>
+        </div>
+
+        {/* Card 4: Concluídos */}
+        <div className="glass-card p-4 sm:p-5 flex items-center gap-3.5 shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center text-xl shrink-0 font-bold">
+            ✓
+          </div>
+          <div className="min-w-0">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block truncate leading-none">Concluídos</span>
+            <strong className="text-2xl font-black text-slate-900 dark:text-white mt-1 block leading-tight tracking-tight">
+              {globalSummary.completedProjects}
+            </strong>
+            <small className="text-[11px] text-slate-400 dark:text-slate-500 block leading-none mt-0.5">Projetos</small>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================================= */}
+      {/* 3. TOOLBAR: FILTERS & SORT                             */}
+      {/* ======================================================= */}
+      <section className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
+          {[
+            { id: 'all', label: 'Meus projetos' },
+            { id: 'geral', label: 'Geral' },
+            { id: 'pessoal', label: 'Pessoal' },
+            { id: 'trabalho', label: 'Trabalho' },
+            { id: 'estudos', label: 'Estudos' },
+          ].map(f => {
+            const isActive = projectCategoryFilter === f.id;
+            return (
+              <button
+                key={f.id}
+                onClick={() => setProjectCategoryFilter(f.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.35)]'
+                    : 'glass-pill text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+
+          <button
+            onClick={() => setIsNewProjectModalOpen(true)}
+            className="w-8 h-8 rounded-xl glass-pill flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors shrink-0 cursor-pointer"
+            title="Adicionar projeto"
+          >
+            <Plus size={15} />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {/* Busca rápida */}
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar..."
+              className="text-xs pl-8 pr-3 py-1.5 rounded-xl glass-pill text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 w-32 sm:w-44"
+            />
+          </div>
+
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="text-xs px-3 py-1.5 rounded-xl glass-pill text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
+          >
+            <option value="recent">Mais recentes</option>
+            <option value="progress">Maior progresso</option>
+            <option value="progress-asc">Menor progresso</option>
+            <option value="deadline">Prazo mais próximo</option>
+          </select>
+        </div>
+      </section>
+
+      {/* ======================================================= */}
+      {/* 4. PROJECT CARDS (Horizontal Scroll / Grid)            */}
+      {/* ======================================================= */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        {displayedProjects.map((project) => {
+          const isSelected = project.id === selectedProject.id;
+          const pTasks = tasks.filter(t => t.projectId === project.id);
+          const pDone = pTasks.filter(t => t.status === 'done').length;
+          const pTotal = pTasks.length;
+          const pProgress = pTotal > 0 ? Math.round((pDone / pTotal) * 100) : 0;
+          const isAtrasado = project.deadline && project.deadline < todayStr;
+
+          return (
+            <React.Fragment key={project.id}>
+              <motion.article
+                onClick={() => {
+                  if (isSelected) {
+                    setIsProjectDetailsVisible(!isProjectDetailsVisible);
+                  } else {
+                    setSelectedProjectId(project.id);
+                    setIsProjectDetailsVisible(true);
+                  }
+                }}
+              whileHover={{ y: -2 }}
+              className={`glass-card p-4 flex flex-col justify-between cursor-pointer transition-all duration-200 relative overflow-hidden group ${
+                isSelected 
+                  ? 'border-blue-500 ring-2 ring-blue-500/30 shadow-[0_8px_30px_rgba(59,130,246,0.2)]' 
+                  : 'hover:border-slate-300 dark:hover:border-blue-500/40'
+              }`}
+            >
+              {isSelected && (
+                <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/10 rounded-bl-full pointer-events-none"></div>
+              )}
+
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-md">
+                    {project.name.charAt(0)}
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                    {project.category}
+                  </span>
+                </div>
+
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                  {project.name}
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 min-h-[32px] leading-tight">
+                  {project.description}
+                </p>
+              </div>
+
+              <div className="mt-4 pt-1">
+                {/* Progress bar */}
+                <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700/60 overflow-hidden mb-2">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-500"
+                    style={{ width: `${pProgress}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-1.5">
+                  <span>{pDone}/{pTotal} tarefas</span>
+                  <div className="flex items-center gap-1.5">
+                    {isAtrasado && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 flex items-center gap-0.5">
+                        <AlertCircle size={9} /> Atrasado
+                      </span>
+                    )}
+                    <span className="truncate max-w-[80px]">{formatDateDisplay(project.deadline)}</span>
+                  </div>
+                </div>
+              </div>
+            </motion.article>
+
+            {/* Mobile Expand: Show Tasks */}
+            <AnimatePresence>
+              {isSelected && isProjectDetailsVisible && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="col-span-1 sm:col-span-2 md:col-span-3 lg:hidden overflow-hidden"
+                >
+                  <div className="mt-2 mb-4 overflow-hidden rounded-2xl border border-blue-500/20 bg-slate-50/50 dark:bg-slate-900/30 shadow-inner">
+                    {renderProjectDetails(true)}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            </React.Fragment>
+          );
+        })}
+      </section>
+
+      {/* ======================================================= */}
+      {/* 5. PROJECT MAIN CONTENT & SIDEBAR                       */}
+      {/* ======================================================= */}
+      {/* Desktop view now uses the function */}
+      <AnimatePresence>
+        {isProjectDetailsVisible && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            {renderProjectDetails(false)}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ======================================================= */}
       {/* MODAL: NOVO PROJETO                                    */}
