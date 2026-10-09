@@ -142,8 +142,8 @@ export function TabMore({
     },
     { 
       id: 'whatsapp', 
-      name: 'Mentor no WhatsApp', 
-      desc: 'Conectado • final 5240', 
+      name: 'Integração WhatsApp', 
+      desc: 'Conecte seu WhatsApp ao Mentor', 
       isWhatsApp: true,
       icon: <MessageCircle className="w-5 h-5 text-emerald-500" />, 
       iconBg: 'bg-emerald-500/15 border-emerald-500/20',
@@ -204,9 +204,11 @@ export function TabMore({
     const q = searchQuery.toLowerCase();
     return ferramentas.filter(f => 
       f.name.toLowerCase().includes(q) || 
-      f.desc.toLowerCase().includes(q)
+      f.desc.toLowerCase().includes(q) ||
+      (f.id === 'whatsapp' && 'whatsapp wpp zap bot mentor mensageiro'.includes(q)) ||
+      (f.id === 'ios-shortcuts' && 'ios siri atalhos shortcuts iphone apple'.includes(q))
     );
-  }, [searchQuery]);
+  }, [searchQuery, user?.whatsappNumber, user?.iosShortcutToken]);
 
   const filteredConta = useMemo(() => {
     if (!searchQuery.trim()) return conta;
@@ -308,16 +310,18 @@ export function TabMore({
                 {/* Subtítulo discreto */}
                 {item.isWhatsApp ? (
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)] animate-pulse" />
+                    <span className={`w-1.5 h-1.5 rounded-full ${user?.whatsappNumber ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]' : 'bg-emerald-400'} animate-pulse`} />
                     <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                      Conectado • final 5240
+                      {user?.whatsappNumber 
+                        ? `Conectado • final ${user.whatsappNumber.slice(-4)}` 
+                        : 'Configurar conexão'}
                     </span>
                   </div>
                 ) : item.isIos ? (
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_6px_rgba(168,85,247,0.8)] animate-pulse" />
+                    <span className={`w-1.5 h-1.5 rounded-full ${user?.iosShortcutToken ? 'bg-purple-500 shadow-[0_0_6px_rgba(168,85,247,0.8)]' : 'bg-purple-400'} animate-pulse`} />
                     <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                      Atalhos Siri • iPhone
+                      {user?.iosShortcutToken ? 'Atalho Siri • Configurado' : 'Atalhos Siri • iPhone'}
                     </span>
                   </div>
                 ) : (

@@ -79,6 +79,7 @@ export interface User {
   monthlyBudget?: number;
   isDemo?: boolean;
   iosShortcutToken?: string;
+  whatsappNumber?: string;
 }
 
 export interface Notification {

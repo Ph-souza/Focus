@@ -6,18 +6,14 @@ import { User } from '../types';
 import { db, auth } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { isAdmin } from '../contexts/AuthContext';
-import { IosShortcutCard } from './IosShortcutCard';
-
 interface ProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: User;
   onLogout: () => void;
-  onOpenWhatsApp?: () => void;
-  onSwitchToRealAccount?: () => void;
 }
 
-export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, onSwitchToRealAccount }: ProfileModalProps) {
+export function ProfileModal({ isOpen, onClose, user, onLogout }: ProfileModalProps) {
   const [name, setName] = useState(user.name);
   const [dateOfBirth, setDateOfBirth] = useState(user.dateOfBirth || '');
   const [isSaving, setIsSaving] = useState(false);
@@ -142,33 +138,6 @@ export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, 
                 </p>
               </div>
 
-              {/* Seção de Integrações */}
-              <div className="pt-2 space-y-3">
-                <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                  Automações &amp; Integrações
-                </span>
-
-                {/* 1. Card de Configuração 'Siri & Atalhos do iOS' */}
-                <IosShortcutCard user={user} />
-
-                {/* 2. Botão Integração WhatsApp Nexus Focus */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    if (onOpenWhatsApp) onOpenWhatsApp();
-                  }}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-2 font-semibold">
-                    <span className="text-base">💬</span>
-                    <span>Integração WhatsApp - Nexus Focus</span>
-                  </div>
-                  <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
-                    Configurar
-                  </span>
-                </button>
-              </div>
 
               {/* Painel Administrativo (Exclusivo Administrador) */}
               {isAdmin(user?.email) && (

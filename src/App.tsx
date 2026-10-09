@@ -44,6 +44,8 @@ function Dashboard() {
     name?: string;
     dateOfBirth?: string;
     photoURL?: string;
+    whatsappNumber?: string;
+    iosShortcutToken?: string;
   }>({});
 
   // 1. Perfil do Usuário com validação direta de auth.currentUser.uid
@@ -62,7 +64,9 @@ function Dashboard() {
         setUserProfile({
           name: data.name,
           dateOfBirth: data.dateOfBirth,
-          photoURL: data.photoURL
+          photoURL: data.photoURL,
+          whatsappNumber: data.whatsappNumber || data.whatsappFormatted,
+          iosShortcutToken: data.iosShortcutToken
         });
       }
     }, (error) => {
@@ -83,6 +87,8 @@ function Dashboard() {
     email: currentUser?.email || '',
     photoURL: userProfile.photoURL || currentUser?.photoURL || undefined,
     dateOfBirth: userProfile.dateOfBirth || '',
+    whatsappNumber: userProfile.whatsappNumber || '',
+    iosShortcutToken: userProfile.iosShortcutToken || '',
     isDemo: false
   };
 
