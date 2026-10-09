@@ -8,7 +8,7 @@ export function LandingPage() {
   const [html, setHtml] = useState<string>('');
 
   useEffect(() => {
-    fetch('/assets/landing.html?v=monitor-20261009')
+    fetch('/assets/landing.html?v=prova-social-20261009')
       .then(res => res.text())
       .then(text => {
         setHtml(text);
