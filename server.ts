@@ -3089,6 +3089,212 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
     }
   });
 
+  // =========================================================================
+  // 4. Webhook Dedicado para Siri & Atalhos do iOS (Apple Shortcuts)
+  // Endpoints: POST /api/webhooks/ios e POST /api/webhook/ios
+  // =========================================================================
+  app.get(["/api/webhooks/ios", "/api/webhook/ios"], (req, res) => {
+    return res.json({
+      status: "online",
+      service: "Nexus Focus iOS Shortcuts Webhook",
+      method: "POST",
+      endpoint: "/api/webhooks/ios",
+      instructions: "Envie requisições POST com header Authorization: Bearer <token> ou token no body, contendo a mensagem ou comando no campo 'text'."
+    });
+  });
+
+  app.post(["/api/webhooks/ios", "/api/webhook/ios"], async (req, res) => {
+    try {
+      let body = req.body;
+      if (typeof body === "string") {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          body = { text: body };
+        }
+      }
+      if (!body || typeof body !== "object") {
+        body = {};
+      }
+
+      // 1. Extração e Validação do Token de Acesso (iosShortcutToken)
+      const authHeader = req.headers.authorization || req.headers.Authorization;
+      let token = "";
+      if (typeof authHeader === "string" && authHeader.toLowerCase().startsWith("bearer ")) {
+        token = authHeader.slice(7).trim();
+      }
+      if (!token) {
+        token = (req.headers["x-ios-token"] || req.headers["x-shortcut-token"] || body.token || body.iosShortcutToken || req.query.token || "") as string;
+      }
+      token = String(token || "").trim();
+
+      if (!token) {
+        console.warn("[iOS Webhook] Requisição rejeitada: Token de acesso ausente.");
+        return res.status(401).json({
+          success: false,
+          error: "Token de acesso ausente. Informe seu token no cabeçalho Authorization: Bearer <token> ou no campo 'token' do JSON."
+        });
+      }
+
+      // Busca usuário vinculado no Firestore
+      const userSnap = await adminDb.collection("users").where("iosShortcutToken", "==", token).limit(1).get();
+      if (userSnap.empty) {
+        console.warn(`[iOS Webhook] Token não encontrado no Firestore: ${token.slice(0, 5)}...`);
+        return res.status(401).json({
+          success: false,
+          error: "Token de acesso inválido ou revogado. Acesse o Nexus Focus > Mais > Siri & Atalhos iOS para gerar um novo token."
+        });
+      }
+
+      const userDoc = userSnap.docs[0];
+      const userId = userDoc.id;
+      const userData = userDoc.data();
+      console.log(`[iOS Webhook] Usuário autenticado: ${userId} (${userData?.email || 'sem email'})`);
+
+      // 2. Extração da Mensagem / Comando
+      let text = body.text || body.message || body.prompt || body.dictation || body.input || body.transcription || body.content || body.Body || "";
+      if (typeof text !== "string") {
+        text = String(text || "");
+      }
+      text = text.trim();
+
+      // 3. Suporte a envio de dados estruturados diretos (Despesa / Receita direta)
+      if (body.amount !== undefined || body.valor !== undefined) {
+        const amount = Number(body.amount || body.valor);
+        if (!isNaN(amount) && amount > 0) {
+          const title = String(body.title || body.titulo || body.description || text || "Lançamento via Atalho iOS");
+          const type = (body.type || body.tipo || "expense") as "income" | "expense";
+          const category = String(body.category || body.categoria || "Outros");
+          const date = String(body.date || body.data || new Date().toISOString().split("T")[0]);
+
+          await saveTransactionToFirestore(userId, {
+            title,
+            amount,
+            type,
+            category,
+            date
+          });
+
+          const reply = `Lançamento de R$ ${amount.toFixed(2)} (${title}) registrado com sucesso!`;
+          return res.json({
+            success: true,
+            reply,
+            message: reply,
+            data: { title, amount, type, category, date }
+          });
+        }
+      }
+
+      // 4. Suporte a criação de Tarefa estruturada direta
+      if (body.task || body.tarefa) {
+        const taskTitle = String(body.task || body.tarefa);
+        await saveTaskToFirestore(userId, {
+          title: taskTitle,
+          deadline: body.deadline || body.dueDate || body.data,
+          description: body.description || "Criada via Atalho iOS"
+        });
+        const reply = `Tarefa "${taskTitle}" criada com sucesso!`;
+        return res.json({
+          success: true,
+          reply,
+          message: reply,
+          data: { title: taskTitle }
+        });
+      }
+
+      // 5. Se nenhuma mensagem ou campo foi enviado (ex: ping/teste de handshake do atalho)
+      if (!text) {
+        return res.json({
+          success: true,
+          reply: "Conexão com o Nexus Focus estabelecida com sucesso! Você pode ditar despesas ou tarefas para a Siri.",
+          message: "Conexão com o Nexus Focus estabelecida com sucesso!"
+        });
+      }
+
+      // 6. Processamento inteligente com Gemini AI
+      console.log(`[iOS Webhook] Processando comando com IA: "${text}" para usuário ${userId}`);
+      const apiKey = getGeminiApiKey();
+      if (!apiKey) {
+        console.error("[iOS Webhook] GEMINI_API_KEY não configurada.");
+        return res.status(500).json({ error: "GEMINI_API_KEY não configurada no servidor" });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const baseInstruction = `${GLOBAL_SYSTEM_PROMPT}
+
+Sua missão na integração Siri & Atalhos do iOS é entender comandos de voz ou texto rápidos do usuário do iPhone.
+- Ao identificar gastos, despesas ou receitas: extraia amount, title, category ('Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Moradia', 'Lazer', 'Serviços', 'Outros'), type ('expense' ou 'income') e data no formato YYYY-MM-DD. Use OBRIGATORIAMENTE add_transaction.
+- Ao identificar tarefas ou afazeres: use add_task.
+- Se o usuário especificar horário exato ou reunião/compromisso (ex: às 14h): use criarCompromissoRotina.
+- Ao solicitar conclusão de tarefa: use complete_task.
+- Retorne SEMPRE uma confirmação em texto CURTA, DIRETA e CLARA (1 frase simples), pois ela será falada pela Siri ou exibida em uma notificação compacta no iPhone.
+Data e hora atual: ${new Date().toISOString()}`;
+
+      const response = await generateContentWithRetry(ai, {
+        model: GEMINI_MAIN_MODEL,
+        contents: [{ role: 'user', parts: [{ text: `${baseInstruction}\n\nComando do usuário: ${text}` }] }],
+        config: {
+          temperature: 0.3,
+          tools: [{ functionDeclarations: [addTaskTool, addTransactionTool, completeTaskTool, criarCompromissoRotinaTool] }]
+        }
+      }, 3);
+
+      const functionCalls = response.functionCalls || [];
+      let mentorReply = response.text || "Comando registrado com sucesso no Nexus Focus.";
+
+      if (functionCalls.length > 0) {
+        for (const call of functionCalls) {
+          if (call.name === "add_transaction") {
+            await saveTransactionToFirestore(userId, call.args as any);
+          } else if (call.name === "add_task") {
+            await saveTaskToFirestore(userId, call.args as any);
+          } else if (call.name === "criarCompromissoRotina") {
+            await saveAppointmentToFirestore(userId, call.args as any);
+          } else if (call.name === "complete_task") {
+            await completeTaskInFirestore(userId, (call.args as any)?.taskTitle);
+          }
+        }
+      } else {
+        const parsedActions = tryParseJsonActions(mentorReply);
+        for (const item of parsedActions) {
+          if (item.amount !== undefined || item.valor !== undefined) {
+            await saveTransactionToFirestore(userId, {
+              title: item.title || item.titulo || item.estabelecimento || "Lançamento via Atalho iOS",
+              amount: item.amount || item.valor,
+              type: item.type || item.tipo || "expense",
+              category: item.category || item.categoria || "Outros",
+              date: item.date || item.data
+            });
+          } else if (item.title || item.titulo || item.tarefa) {
+            await saveTaskToFirestore(userId, {
+              title: item.title || item.titulo || item.tarefa,
+              deadline: item.deadline || item.data || item.dueDate,
+              description: item.description || item.descricao
+            });
+          }
+        }
+      }
+
+      // Limpa tags e markdown desnecessários para a síntese de voz da Siri
+      const cleanReply = mentorReply.replace(/[*#_`]/g, '').trim();
+
+      console.log(`[iOS Webhook] Resposta despachada com sucesso: "${cleanReply}"`);
+      return res.json({
+        success: true,
+        reply: cleanReply,
+        message: cleanReply,
+        functionCalls
+      });
+    } catch (err: any) {
+      console.error("[iOS Webhook] Erro ao processar requisição:", err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || "Erro interno ao processar requisição do atalho iOS",
+        reply: "Ops! Ocorreu um erro ao registrar sua solicitação. Tente novamente."
+      });
+    }
+  });
+
 
 
   // Auto-seed Pro Admin Account into Cloud Firestore (Validação rigorosa de Auth e Claims contra Spoofing)
