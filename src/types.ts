@@ -78,6 +78,7 @@ export interface User {
   dateOfBirth?: string;
   monthlyBudget?: number;
   isDemo?: boolean;
+  iosShortcutToken?: string;
 }
 
 export interface Notification {

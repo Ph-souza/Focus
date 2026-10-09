@@ -6,6 +6,7 @@ import { User } from '../types';
 import { db, auth } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { isAdmin } from '../contexts/AuthContext';
+import { IosShortcutCard } from './IosShortcutCard';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -78,19 +79,20 @@ export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, 
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-xl z-50 overflow-hidden border border-slate-100 dark:border-slate-700"
+            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg max-h-[92vh] flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden border border-slate-100 dark:border-slate-700"
           >
-            <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-700">
+            <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-700 shrink-0">
               <h2 className="font-bold text-slate-800 dark:text-slate-100">Configurações de Perfil</h2>
               <button 
                 onClick={onClose}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                aria-label="Fechar"
               >
                 <X size={20} />
               </button>
             </div>
             
-            <form onSubmit={handleSave} className="p-6 space-y-4">
+            <form onSubmit={handleSave} className="p-6 space-y-4 overflow-y-auto">
               <div className="flex flex-col items-center justify-center pb-2">
                 <div className="w-16 h-16 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center overflow-hidden text-emerald-500 font-bold text-xl shadow-md">
                   {user?.photoURL ? (
@@ -140,15 +142,23 @@ export function ProfileModal({ isOpen, onClose, user, onLogout, onOpenWhatsApp, 
                 </p>
               </div>
 
-              {/* WhatsApp Nexus Focus Integration Button */}
-              <div className="pt-2">
+              {/* Seção de Integrações */}
+              <div className="pt-2 space-y-3">
+                <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                  Automações &amp; Integrações
+                </span>
+
+                {/* 1. Card de Configuração 'Siri & Atalhos do iOS' */}
+                <IosShortcutCard user={user} />
+
+                {/* 2. Botão Integração WhatsApp Nexus Focus */}
                 <button
                   type="button"
                   onClick={() => {
                     onClose();
                     if (onOpenWhatsApp) onOpenWhatsApp();
                   }}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                  className="w-full flex items-center justify-between px-4 py-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-2 font-semibold">
                     <span className="text-base">💬</span>

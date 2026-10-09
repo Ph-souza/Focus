@@ -24,8 +24,10 @@ import {
   ShieldCheck,
   Shield,
   LifeBuoy,
-  Database
+  Database,
+  Smartphone
 } from 'lucide-react';
+import { IosShortcutModal } from './IosShortcutModal';
 
 interface TabMoreProps {
   user: User | null;
@@ -57,6 +59,7 @@ export function TabMore({
   // Modais complementares para máxima interatividade
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+  const [isIosModalOpen, setIsIosModalOpen] = useState(false);
 
   // Estado das Notas rápidas com persistência local
   const [notes, setNotes] = useState<NoteItem[]>(() => {
@@ -145,6 +148,15 @@ export function TabMore({
       icon: <MessageCircle className="w-5 h-5 text-emerald-500" />, 
       iconBg: 'bg-emerald-500/15 border-emerald-500/20',
       action: onOpenWhatsApp 
+    },
+    { 
+      id: 'ios-shortcuts', 
+      name: 'Siri & Atalhos iOS', 
+      desc: 'Lançamentos rápidos no iPhone', 
+      isIos: true,
+      icon: <Smartphone className="w-5 h-5 text-purple-500" />, 
+      iconBg: 'bg-purple-500/15 border-purple-500/20',
+      action: () => setIsIosModalOpen(true) 
     },
   ];
 
@@ -299,6 +311,13 @@ export function TabMore({
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)] animate-pulse" />
                     <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
                       Conectado • final 5240
+                    </span>
+                  </div>
+                ) : item.isIos ? (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_6px_rgba(168,85,247,0.8)] animate-pulse" />
+                    <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                      Atalhos Siri • iPhone
                     </span>
                   </div>
                 ) : (
@@ -601,6 +620,13 @@ export function TabMore({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal Dedicado Siri & Atalhos do iOS */}
+      <IosShortcutModal
+        isOpen={isIosModalOpen}
+        onClose={() => setIsIosModalOpen(false)}
+        user={user}
+      />
     </motion.div>
   );
 }
