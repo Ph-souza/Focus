@@ -23,12 +23,11 @@ import {
   CircleDot,
   Circle,
   Pin,
-  Trash2,
-  ArrowDownRight,
-  Minus
+  Trash2
 } from 'lucide-react';
 import { BalanceStatementModal } from './BalanceStatementModal';
 import { NotificationsModal } from './NotificationsModal';
+import { calculateHomeBalance } from '../lib/homeBalance';
 
 interface DailyNote {
   id: string;
@@ -127,35 +126,10 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
     else setGreeting('Boa noite');
   }, []);
 
-  const totalIncome = transactions.filter(t => t.type === 'income' || t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta').reduce((acc, t) => acc + t.amount, 0);
-  const balance = totalIncome - totalExpense;
-
-  // Cálculo MoM para Saldo
-  const balanceMoM = useMemo(() => {
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevMonthKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
-
-    const curTx = transactions.filter(t => t.date && t.date.startsWith(currentMonthKey));
-    const prvTx = transactions.filter(t => t.date && t.date.startsWith(prevMonthKey));
-
-    const curInc = curTx.filter(t => t.type === 'income' || t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
-    const curExp = curTx.filter(t => t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta').reduce((acc, t) => acc + t.amount, 0);
-    const curBal = curInc - curExp;
-
-    const prvInc = prvTx.filter(t => t.type === 'income' || t.type === 'receita').reduce((acc, t) => acc + t.amount, 0);
-    const prvExp = prvTx.filter(t => t.type === 'expense' || t.type === 'despesa' || t.type === 'investimento_meta').reduce((acc, t) => acc + t.amount, 0);
-    const prvBal = prvInc - prvExp;
-
-    if (prvBal === 0) {
-      if (curBal > 0) return 100;
-      if (curBal < 0) return -100;
-      return 0;
-    }
-    return Math.round(((curBal - prvBal) / Math.abs(prvBal)) * 100);
-  }, [transactions]);
+  // Balance carries the entire history; the secondary indicators cover this month.
+  const { balance, totalIncome, totalExpense } = calculateHomeBalance(
+    transactions, format(new Date(), 'yyyy-MM-dd')
+  );
 
   const pendingTasks = tasks.filter(t => !t.completed).length;
   const completedTasks = tasks.filter(t => t.completed).length;
@@ -331,7 +305,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
               <div className="w-7 h-7 rounded-xl bg-blue-500/15 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm">
                 <Banknote size={15} />
               </div>
-              <span className="font-bold text-sm text-slate-900 dark:text-white">Saldo disponível</span>
+              <span className="font-bold text-sm text-slate-900 dark:text-white">Saldo total</span>
             </div>
             <button onClick={() => onTabChange('finances')} className="text-slate-400 hover:text-blue-500 transition-colors" aria-label="Ir para finanças">
               <ChevronRight size={18} />
@@ -341,9 +315,9 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
           {/* Balance and Sparkline */}
           <div className="flex items-end justify-between mb-5">
             <div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Saldo disponível</p>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Acumulado até hoje</p>
               <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                R$ {balance ? balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '500,00'}
+                R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h3>
             </div>
             
@@ -366,9 +340,9 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                 <ArrowUp size={14} className="stroke-[2.5]" />
               </div>
               <div className="overflow-hidden">
-                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">Receitas</span>
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">Receitas do mês</span>
                 <span className="text-xs font-bold text-slate-900 dark:text-white block leading-tight mt-0.5 truncate">
-                  R$ {totalIncome ? totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '1.250,00'}
+                  R$ {totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -378,9 +352,9 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                 <ArrowDown size={14} className="stroke-[2.5]" />
               </div>
               <div className="overflow-hidden">
-                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">Despesas</span>
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block leading-tight">Despesas do mês</span>
                 <span className="text-xs font-bold text-slate-900 dark:text-white block leading-tight mt-0.5 truncate">
-                  R$ {totalExpense ? totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '750,00'}
+                  R$ {totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -643,40 +617,14 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
           {/* Coluna 2: Saldo disponível */}
           <div className="glass-card p-6 h-full relative overflow-hidden group flex flex-col">
             <div className="flex justify-between items-start mb-2 relative z-10">
-              <h2 className="font-bold text-sm text-slate-700 dark:text-slate-300">Saldo disponível</h2>
+              <h2 className="font-bold text-sm text-slate-700 dark:text-slate-300">Saldo total</h2>
               <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-500/20">
                 <Banknote size={16} />
               </div>
             </div>
             <div className="relative z-10">
-              <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">R$ {balance.toFixed(2).replace('.', ',')}</h3>
-              <div className="mt-2">
-                {(() => {
-                  const abs = Math.abs(balanceMoM);
-                  if (balanceMoM === 0) {
-                    return (
-                      <div className="flex items-center gap-1 text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-500/10 border border-slate-500/20 w-max px-2.5 py-1 rounded-lg">
-                        <Minus size={13} strokeWidth={2.5} />
-                        <span>0%</span>
-                      </div>
-                    );
-                  }
-                  if (balanceMoM > 0) {
-                    return (
-                      <div className="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 w-max px-2.5 py-1 rounded-lg">
-                        <ArrowUpRight size={13} strokeWidth={2.5} />
-                        <span>{abs}%</span>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div className="flex items-center gap-1 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/20 w-max px-2.5 py-1 rounded-lg">
-                      <ArrowDownRight size={13} strokeWidth={2.5} />
-                      <span>{abs}%</span>
-                    </div>
-                  );
-                })()}
-              </div>
+              <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Acumulado de todas as movimentações até hoje</p>
             </div>
             
             {/* Sparkline Graph */}

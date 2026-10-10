@@ -96,6 +96,7 @@ function Dashboard() {
 
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -145,6 +146,7 @@ function Dashboard() {
 
     // Purga imediata de qualquer resíduo em memória da sessão anterior
     setTransactions([]);
+    setAllTransactions([]);
     setGoals([]);
     setTasks([]);
     setChatMessages([]);
@@ -156,16 +158,16 @@ function Dashboard() {
       return;
     }
 
-    // 1. Transactions Listener (Limit 5 mais recentes)
+    // Full history for the Home balance; recent lists still receive only five entries.
     const transQuery = query(
       collection(db, 'users', activeUid, 'transactions'),
-      orderBy('date', 'desc'),
-      limit(5)
+      orderBy('date', 'desc')
     );
     const unsubTrans = onSnapshot(transQuery, (snapshot) => {
       if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
-      setTransactions(docs);
+      setAllTransactions(docs);
+      setTransactions(docs.slice(0, 5));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/transactions`);
     });
@@ -229,6 +231,7 @@ function Dashboard() {
       unsubRotinas();
       // Purga estrita na desmontagem do efeito
       setTransactions([]);
+      setAllTransactions([]);
       setGoals([]);
       setTasks([]);
       setChatMessages([]);
@@ -331,7 +334,7 @@ function Dashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
-        return <TabHome transactions={transactions} goals={goals} tasks={tasks} rotinas={rotinas} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
+        return <TabHome transactions={allTransactions} goals={goals} tasks={tasks} rotinas={rotinas} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
       case 'calendar':
         return <TabCalendar rotinas={rotinas} user={user} />;
       case 'projects':
@@ -353,7 +356,7 @@ function Dashboard() {
       case 'help':
         return <TabHelp />;
       default:
-        return <TabHome transactions={transactions} goals={goals} tasks={tasks} rotinas={rotinas} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
+        return <TabHome transactions={allTransactions} goals={goals} tasks={tasks} rotinas={rotinas} onTabChange={setActiveTab} user={user} onOpenProfile={() => setIsProfileModalOpen(true)} onOpenWhatsApp={() => setIsWhatsAppModalOpen(true)} latestMentorFeedback={latestMentorFeedback} />;
     }
   };
 
