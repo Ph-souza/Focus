@@ -16,8 +16,17 @@ import webpush from "web-push";
 import Stripe from "stripe";
 import QRCode from "qrcode";
 
+// Tratamento global de erros assíncronos para manter o servidor Node sempre online na Render
+process.on("unhandledRejection", (reason: any) => {
+  console.warn("⚠️ [Server] Unhandled Rejection capturado:", reason?.message || reason);
+});
+process.on("uncaughtException", (error: any) => {
+  console.error("❌ [Server] Uncaught Exception capturado:", error?.message || error);
+});
+
 // Firebase Admin SDK initialization (Singleton)
 let adminApp: App;
+let hasServiceAccount = false;
 
 if (!getApps().length) {
   let serviceAccount: any = null;
@@ -67,6 +76,7 @@ if (!getApps().length) {
         credential: cert(serviceAccount),
         projectId: serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID || "planner-com-ia-assistant"
       });
+      hasServiceAccount = true;
       console.log("✅ [Firebase Admin] Inicializado com sucesso via Service Account Key (credential.cert).");
     } catch (initError: any) {
       console.error("❌ [Firebase Admin] Erro ao inicializar com credential.cert:", initError?.message);
@@ -98,6 +108,11 @@ const adminAuth = getAuth(adminApp);
  * Campos: discountPercentage (número), maxUses (número), active (booleano).
  */
 async function initCouponsCollection() {
+  if (!hasServiceAccount) {
+    console.warn("⚠️ [Firestore] Sem Service Account configurada. Ignorando initCouponsCollection no startup para evitar NO_ADC_FOUND.");
+    return;
+  }
+
   try {
     const eliteRef = adminDb.collection("coupons").doc("NEXUSELITE");
     const snap = await eliteRef.get();
@@ -158,19 +173,60 @@ async function validateAndComputeCoupon(
     return { valid: false, originalAmount, finalAmount: originalAmount, error: "Código do cupom inválido." };
   }
 
+  // Cupons clássicos embutidos com garantia total de funcionamento
+  const BUILTIN_COUPONS: Record<string, { discountPercentage: number; description: string }> = {
+    NEXUSELITE: { discountPercentage: 99, description: "Cupom exclusivo Nexus Elite (99% de desconto)" },
+    FOCUS50: { discountPercentage: 50, description: "Cupom padrão (50% de desconto)" }
+  };
+
+  const computeDiscount = (discountPercentage: number, couponCode: string) => {
+    const rawDiscounted = Number((originalAmount * (1 - discountPercentage / 100)).toFixed(2));
+    const finalAmount = Math.max(1.00, rawDiscounted);
+    const discountAmount = Number((originalAmount - finalAmount).toFixed(2));
+    return {
+      valid: true,
+      code: couponCode,
+      discountPercentage,
+      originalAmount,
+      finalAmount,
+      discountAmount
+    };
+  };
+
+  // 1. Cupons embutidos essenciais (NEXUSELITE e FOCUS50)
+  if (BUILTIN_COUPONS[code]) {
+    if (hasServiceAccount) {
+      try {
+        const couponRef = adminDb.collection("coupons").doc(code);
+        const snap = await couponRef.get();
+        if (snap.exists) {
+          const data = snap.data() || {};
+          if (data.active === false) {
+            return { valid: false, originalAmount, finalAmount: originalAmount, error: "Este cupom não está mais ativo." };
+          }
+          if (typeof data.maxUses === "number" && data.maxUses <= 0) {
+            return { valid: false, originalAmount, finalAmount: originalAmount, error: "Limite de utilizações deste cupom foi atingido." };
+          }
+          const pct = Number(data.discountPercentage) || BUILTIN_COUPONS[code].discountPercentage;
+          return computeDiscount(pct, code);
+        }
+      } catch (e: any) {
+        console.warn(`[Coupons] Aviso ao consultar Firestore para ${code}:`, e?.message);
+      }
+    }
+    return computeDiscount(BUILTIN_COUPONS[code].discountPercentage, code);
+  }
+
+  // 2. Cupons dinâmicos adicionados no Firestore
+  if (!hasServiceAccount) {
+    return { valid: false, originalAmount, finalAmount: originalAmount, error: "Cupom inválido ou não encontrado." };
+  }
+
   try {
     const couponRef = adminDb.collection("coupons").doc(code);
     const snap = await couponRef.get();
 
     if (!snap.exists) {
-      // Compatibilidade retroativa para cupom padrão FOCUS50 se ainda não semeado
-      if (code === "FOCUS50") {
-        const discountPercentage = 50;
-        const rawDiscounted = Number((originalAmount * 0.5).toFixed(2));
-        const finalAmount = Math.max(1.00, rawDiscounted);
-        const discountAmount = Number((originalAmount - finalAmount).toFixed(2));
-        return { valid: true, code: "FOCUS50", discountPercentage, originalAmount, finalAmount, discountAmount };
-      }
       return { valid: false, originalAmount, finalAmount: originalAmount, error: "Cupom inválido ou não encontrado." };
     }
 
@@ -188,19 +244,7 @@ async function validateAndComputeCoupon(
       return { valid: false, originalAmount, finalAmount: originalAmount, error: "Cupom sem percentual de desconto válido configurado." };
     }
 
-    // Regra técnica P0 Mercado Pago: Valor mínimo aceito é R$ 1,00 para não quebrar a transação
-    const rawDiscounted = Number((originalAmount * (1 - discountPercentage / 100)).toFixed(2));
-    const finalAmount = Math.max(1.00, rawDiscounted);
-    const discountAmount = Number((originalAmount - finalAmount).toFixed(2));
-
-    return {
-      valid: true,
-      code,
-      discountPercentage,
-      originalAmount,
-      finalAmount,
-      discountAmount
-    };
+    return computeDiscount(discountPercentage, code);
   } catch (err: any) {
     console.error(`[Coupons] Erro ao validar cupom ${code}:`, err);
     return { valid: false, originalAmount, finalAmount: originalAmount, error: "Erro interno ao validar cupom no servidor." };
@@ -211,6 +255,8 @@ async function validateAndComputeCoupon(
  * Decrementa a quantidade de utilizações (maxUses) de um cupom no Firestore
  */
 async function decrementCouponUsage(code: string) {
+  if (!hasServiceAccount) return;
+
   try {
     const normalizedCode = code.trim().toUpperCase();
     const couponRef = adminDb.collection("coupons").doc(normalizedCode);

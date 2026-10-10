@@ -285,6 +285,8 @@ export function CheckoutScreen() {
       if (response.ok && data.success && data.valid) {
         setAppliedCoupon(data.coupon);
         setDiscountPercentage(data.discountPercentage || 0);
+        setPixData(null);
+        setPixQrDataUrl(null);
         setCouponStatus({
           message: `Cupom ${data.coupon} aplicado! ${data.discountPercentage}% de desconto concedido com sucesso.`,
           type: 'success'
@@ -294,6 +296,8 @@ export function CheckoutScreen() {
         if (code === 'FOCUS50') {
           setAppliedCoupon('FOCUS50');
           setDiscountPercentage(50);
+          setPixData(null);
+          setPixQrDataUrl(null);
           setCouponStatus({
             message: 'Cupom FOCUS50 aplicado! 50% de desconto concedido.',
             type: 'success'
@@ -301,6 +305,8 @@ export function CheckoutScreen() {
         } else if (code === 'NEXUSELITE') {
           setAppliedCoupon('NEXUSELITE');
           setDiscountPercentage(99);
+          setPixData(null);
+          setPixQrDataUrl(null);
           setCouponStatus({
             message: 'Cupom NEXUSELITE aplicado! 99% de desconto (Elite Member).',
             type: 'success'
@@ -317,6 +323,8 @@ export function CheckoutScreen() {
       if (code === 'FOCUS50') {
         setAppliedCoupon('FOCUS50');
         setDiscountPercentage(50);
+        setPixData(null);
+        setPixQrDataUrl(null);
         setCouponStatus({
           message: 'Cupom FOCUS50 aplicado! 50% de desconto concedido.',
           type: 'success'
@@ -324,6 +332,8 @@ export function CheckoutScreen() {
       } else if (code === 'NEXUSELITE') {
         setAppliedCoupon('NEXUSELITE');
         setDiscountPercentage(99);
+        setPixData(null);
+        setPixQrDataUrl(null);
         setCouponStatus({
           message: 'Cupom NEXUSELITE aplicado! 99% de desconto (Elite Member).',
           type: 'success'
@@ -343,6 +353,8 @@ export function CheckoutScreen() {
     setAppliedCoupon(null);
     setDiscountPercentage(0);
     setCouponCode('');
+    setPixData(null);
+    setPixQrDataUrl(null);
     setCouponStatus({
       message: 'Cupom removido. Valor do plano atualizado.',
       type: ''
@@ -391,6 +403,13 @@ export function CheckoutScreen() {
         throw new Error(data.error || 'Não foi possível gerar a cobrança Pix.');
       }
 
+      // Proteção de integridade: se há cupom ativo e o backend retornou valor cheio (ex: versão antiga),
+      // descartamos a cobrança errada para garantir que o cliente pague somente o valor com desconto
+      if (hasDiscount && Number(data.amount) > Number(currentAmount) + 0.05) {
+        console.warn(`[Pix] Backend retornou valor desatualizado (R$ ${data.amount}) em vez de R$ ${currentAmount.toFixed(2)}. Ativando cobrança corrigida.`);
+        throw new Error(`O servidor retornou o valor sem desconto (R$ ${Number(data.amount).toFixed(2)}). Gerando cobrança com o desconto aplicado...`);
+      }
+
       setPixData(data);
     } catch (err: any) {
       console.warn('[Pix] Fallback de geração local:', err);
@@ -403,7 +422,7 @@ export function CheckoutScreen() {
     } finally {
       setIsGeneratingPix(false);
     }
-  }, [userEmail, currentUser?.email, currentUser?.uid, billingCycle, appliedCoupon, currentAmount]);
+  }, [userEmail, currentUser?.email, currentUser?.uid, billingCycle, appliedCoupon, currentAmount, hasDiscount]);
 
   const handleCopyPix = () => {
     if (!pixData?.qrCode) return;
@@ -785,7 +804,11 @@ export function CheckoutScreen() {
                         type="button"
                         id="cycle-monthly"
                         className={`cycle-btn ${billingCycle === 'mensal' ? 'active' : ''}`}
-                        onClick={() => setBillingCycle('mensal')}
+                        onClick={() => {
+                          setBillingCycle('mensal');
+                          setPixData(null);
+                          setPixQrDataUrl(null);
+                        }}
                       >
                         Mensal
                       </button>
@@ -793,7 +816,11 @@ export function CheckoutScreen() {
                         type="button"
                         id="cycle-annual"
                         className={`cycle-btn ${billingCycle === 'anual' ? 'active' : ''}`}
-                        onClick={() => setBillingCycle('anual')}
+                        onClick={() => {
+                          setBillingCycle('anual');
+                          setPixData(null);
+                          setPixQrDataUrl(null);
+                        }}
                       >
                         Anual
                         <span className="cycle-badge">Melhor valor</span>
