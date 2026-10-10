@@ -11,8 +11,8 @@ interface WhatsAppModalProps {
   user: User | null;
 }
 
-export const WHATSAPP_BOT_NUMBER = (import.meta.env.VITE_WHATSAPP_BOT_PHONE as string)?.replace(/\D/g, '') || '15553757186';
-export const WHATSAPP_BOT_DISPLAY = (import.meta.env.VITE_WHATSAPP_BOT_PHONE as string) || '+1 (555) 375-7186';
+export const WHATSAPP_BOT_NUMBER = (import.meta.env.VITE_WHATSAPP_BOT_PHONE as string)?.replace(/\D/g, '') || '553190054794';
+export const WHATSAPP_BOT_DISPLAY = (import.meta.env.VITE_WHATSAPP_BOT_PHONE as string) || '+55 (31) 9005-4794';
 
 export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
   const [phoneNumber, setPhoneNumber] = useState<string>('');
@@ -231,7 +231,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
                 required
                 value={phoneNumber}
                 onChange={handlePhoneChange}
-                placeholder="+1 (555) 375-7186 ou +55 (11) 99999-9999"
+                placeholder="+55 (31) 9005-4794 ou (31) 99999-9999"
                 className="w-full pl-10 pr-3 py-3 text-sm font-semibold rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#25D366]/50 transition-all tracking-wide"
               />
             </div>
