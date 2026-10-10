@@ -646,6 +646,52 @@ function sanitizeGeminiHistory(rawHistory: any[], currentText?: string): { role:
   return sanitized;
 }
 
+
+/** Resolve payments only through a server-owned order or an explicitly scoped recovery. */
+async function applyApprovedPayment(payment: any, expectedUid?: string) {
+  let ref: any = {};
+  try { ref = JSON.parse(payment.external_reference || "{}"); } catch {}
+  const orderId = typeof ref.orderId === "string" && /^[a-f0-9-]{36}$/.test(ref.orderId) ? ref.orderId : null;
+  const order = orderId ? (await adminDb.collection("payment_orders").doc(orderId).get()).data() : null;
+  let uid = order?.userId;
+  if (!uid && String(payment.id) === process.env.MP_RECOVERY_PAYMENT_ID && process.env.MP_RECOVERY_EMAIL) {
+    const account = await adminAuth.getUserByEmail(process.env.MP_RECOVERY_EMAIL.trim());
+    if (ref.userId !== account.uid) throw new Error("Recovery account does not match payment reference");
+    uid = account.uid;
+  }
+  if (!uid || (expectedUid && uid !== expectedUid)) throw new Error("Payment ownership could not be verified");
+  if (payment.status !== "approved") return { approved: false, status: payment.status };
+  if (payment.currency_id !== "BRL" || !Number.isFinite(Number(payment.transaction_amount)) ||
+      Number(payment.transaction_amount) <= 0) throw new Error("Invalid payment currency or amount");
+  if (order && Math.round(Number(order.amount) * 100) !== Math.round(Number(payment.transaction_amount) * 100))
+    throw new Error("Payment amount does not match order");
+  if (!order && Number(payment.transaction_amount) !== Number(process.env.MP_RECOVERY_AMOUNT))
+    throw new Error("Recovery amount does not match");
+  const account = await adminAuth.getUser(uid);
+  const userRef = adminDb.collection("users").doc(uid);
+  const paymentRef = adminDb.collection("confirmed_payments").doc(String(payment.id));
+  await adminDb.runTransaction(async tx => {
+    const receipt = await tx.get(paymentRef);
+    if (receipt.exists) {
+      if (receipt.data()?.userId !== uid) throw new Error("Payment already belongs to another account");
+      return;
+    }
+    const data = {
+      isPremium: true, email: account.email || "", plan: order?.plan || ref.plan || "mensal",
+      couponApplied: order?.coupon || ref.coupon || null,
+      currentPrice: Number(payment.transaction_amount), lastPaymentId: String(payment.id),
+      paymentMethod: payment.payment_method_id || "mercadopago",
+      approvedAt: payment.date_approved || new Date().toISOString(),
+      updatedAt: FieldValue.serverTimestamp()
+    };
+    tx.set(userRef, data, { merge: true });
+    tx.set(paymentRef, { userId: uid, amount: Number(payment.transaction_amount), status: "approved",
+      orderId, createdAt: FieldValue.serverTimestamp() });
+  });
+  console.log("[Payment reconciliation] Approved payment linked to authenticated account:", payment.id);
+  return { approved: true, status: "approved" };
+}
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
@@ -684,7 +730,7 @@ async function startServer() {
   // Endpoint principal do Webhook (POST)
   app.post("/api/webhooks/mercadopago", async (req, res) => {
     // 1. Responder status 200 IMEDIATAMENTE para evitar timeout e retentativas do Mercado Pago
-    res.status(200).json({ received: true, status: "processing", timestamp: new Date().toISOString() });
+    // Acknowledge only after durable processing so failures can be retried.
 
     try {
       const body = req.body || {};
@@ -696,13 +742,13 @@ async function startServer() {
 
       if (!rawId) {
         console.log("[Webhook MP] Notificação recebida sem ID de recurso.");
-        return;
+        return res.status(400).json({ error: "Missing resource ID" });
       }
 
       // Filtra apenas eventos relacionados a pagamento
       if (topic && !topic.includes("payment") && topic !== "payment.created" && topic !== "payment.updated") {
         console.log(`[Webhook MP] Tópico ignorado (${topic}) para ID ${rawId}.`);
-        return;
+        return res.status(200).json({ ignored: true });
       }
 
       const paymentId = String(rawId);
@@ -716,8 +762,8 @@ async function startServer() {
       if (mpWebhookSecret) {
         const isSignatureValid = verifyMercadoPagoSignature(xSignature, xRequestId, paymentId, mpWebhookSecret);
         if (!isSignatureValid) {
-          console.warn(`[Webhook MP] ALERTA DE SEGURANÇA: Assinatura x-signature inválida para o pagamento ${paymentId}!`);
-          return;
+          console.warn(`[Webhook MP] Invalid signature for ${paymentId}`);
+          return res.status(401).json({ error: "Invalid signature" });
         }
         console.log(`[Webhook MP] Assinatura criptográfica x-signature validada para o pagamento ${paymentId}.`);
       }
@@ -751,102 +797,30 @@ async function startServer() {
       }
 
       if (!paymentData) {
-        console.error(`[Webhook MP] Não foi possível obter os dados do pagamento ${paymentId}.`);
-        return;
+        console.error(`[Webhook MP] Unable to fetch ${paymentId}`);
+        return res.status(502).json({ error: "Gateway unavailable" });
       }
 
       const paymentStatus = paymentData.status;
       console.log(`[Webhook MP] Pagamento ${paymentId} status: "${paymentStatus}"`);
 
-      // 3. Processar apenas pagamentos aprovados ("approved")
-      if (paymentStatus !== "approved") {
-        console.log(`[Webhook MP] Pagamento ${paymentId} não está aprovado (status: "${paymentStatus}"). Ignorando.`);
-        return;
-      }
-
-      // 4. Extrair o e-mail do cliente (payer.email)
-      const rawEmail = paymentData.payer?.email || paymentData.external_reference || paymentData.metadata?.email;
-      if (!rawEmail || typeof rawEmail !== "string") {
-        console.error(`[Webhook MP] Pagamento ${paymentId} aprovado, porém sem e-mail do comprador!`);
-        return;
-      }
-
-      const payerEmail = rawEmail.trim().toLowerCase();
-      console.log(`[Webhook MP] Pagamento APROVADO! Aplicando Guest Checkout Binding para o e-mail: ${payerEmail}`);
-
-      // 5. Firebase Admin SDK: Criar/atualizar documento na coleção 'users' com o ID sendo o e-mail
-      const emailDocRef = adminDb.collection("users").doc(payerEmail);
-
-      // Recupera metadados ou informações salvas anteriormente para preservar plan e cupom
-      let parsedPlan: "mensal" | "anual" = "mensal";
-      let parsedCoupon: string | null = null;
-      let parsedPrice = Number(paymentData.transaction_amount || 19.90);
-
-      if (paymentData.external_reference) {
-        try {
-          const extRef = JSON.parse(paymentData.external_reference);
-          if (extRef.plan === "anual") parsedPlan = "anual";
-          if (extRef.coupon) parsedCoupon = String(extRef.coupon).trim().toUpperCase();
-          if (extRef.price) parsedPrice = Number(extRef.price);
-        } catch (_) {}
-      }
-
-      const existingDoc = await emailDocRef.get();
-      if (existingDoc.exists) {
-        const d = existingDoc.data() || {};
-        if (d.plan === "anual" || d.plan === "mensal") parsedPlan = d.plan;
-        if (d.couponApplied && !parsedCoupon) parsedCoupon = String(d.couponApplied);
-        if (d.currentPrice && !paymentData.transaction_amount) parsedPrice = Number(d.currentPrice);
-      }
-
-      const webhookUserData = {
-        email: payerEmail,
-        isPremium: true,
-        role: "premium_user",
-        plan: parsedPlan,
-        couponApplied: parsedCoupon,
-        currentPrice: parsedPrice,
-        lastPaymentId: paymentId,
-        paymentMethod: paymentData.payment_method_id || "mercadopago",
-        transactionAmount: paymentData.transaction_amount || parsedPrice,
-        approvedAt: paymentData.date_approved || new Date().toISOString(),
-        updatedAt: FieldValue.serverTimestamp()
-      };
-
-      await emailDocRef.set(webhookUserData, { merge: true });
-
-      console.log(`[Webhook MP] Documento users/${payerEmail} atualizado com isPremium: true, plan: ${parsedPlan}, couponApplied: ${parsedCoupon}, currentPrice: ${parsedPrice}!`);
-
-      // 6. Vinculação Adicional com Contas UID (Google Sign-In)
-      try {
-        const matchingUsersSnap = await adminDb.collection("users").where("email", "==", payerEmail).get();
-        const batch = adminDb.batch();
-        let boundCount = 0;
-
-        matchingUsersSnap.forEach((userDoc) => {
-          if (userDoc.id !== payerEmail) {
-            batch.set(userDoc.ref, {
-              isPremium: true,
-              plan: parsedPlan,
-              couponApplied: parsedCoupon,
-              currentPrice: parsedPrice,
-              lastPaymentId: paymentId,
-              updatedAt: FieldValue.serverTimestamp()
-            }, { merge: true });
-            boundCount++;
-          }
-        });
-
-        if (boundCount > 0) {
-          await batch.commit();
-          console.log(`[Webhook MP] Guest Checkout sincronizado com ${boundCount} conta(s) existente(s) do usuário (UIDs).`);
-        }
-      } catch (bindError: any) {
-        console.warn("[Webhook MP] Erro ao sincronizar contas com UID:", bindError?.message);
-      }
-
+      await applyApprovedPayment(paymentData);
+      return res.status(200).json({ received: true });
     } catch (error: any) {
-      console.error("[Webhook MP] Erro inesperado ao processar webhook:", error);
+      console.error("[Webhook MP] Processing failed:", error?.message);
+      return res.status(500).json({ error: "Payment processing failed; retry notification." });
+    }
+  });
+
+  app.get("/api/payments/:id/status", requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!/^\\d+$/.test(req.params.id)) return res.status(400).json({ error: "Pagamento inválido." });
+      if (!mpPayment) return res.status(503).json({ error: "Gateway indisponível." });
+      const payment = await mpPayment.get({ id: req.params.id });
+      const result = await applyApprovedPayment(payment, req.user.uid);
+      return res.json(result);
+    } catch {
+      return res.status(403).json({ error: "Não foi possível confirmar este pagamento para sua conta." });
     }
   });
 
@@ -920,12 +894,15 @@ async function startServer() {
       const appUrl = process.env.APP_URL || "https://nexusfocus.web.app";
 
       // Montar corpo da requisição de PreApproval com metadados para auditoria e webhook
+      const orderId = crypto.randomUUID();
+      await adminDb.collection("payment_orders").doc(orderId).set({ userId, amount: finalAmount, plan: normalizedPlan, coupon: couponApplied, createdAt: FieldValue.serverTimestamp() });
       const preapprovalPayload: any = {
         payer_email: payerEmail,
         ...(hostedCheckout ? {} : { card_token_id: token }),
         back_url: `${appUrl}/dashboard`,
         status: hostedCheckout ? "pending" : "authorized",
         external_reference: JSON.stringify({
+          orderId,
           plan: normalizedPlan,
           coupon: couponApplied,
           userId: userId || null,
@@ -1077,9 +1054,11 @@ async function startServer() {
   // =========================================================================
   // Rota Mercado Pago: Criação de Pagamento PIX Instantâneo
   // =========================================================================
-  app.post("/api/payments/pix", async (req, res) => {
+  app.post("/api/payments/pix", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
-      const { email, userId, plan, coupon, couponCode } = req.body || {};
+      const { plan, coupon, couponCode } = req.body || {};
+      const email = req.user.email;
+      const userId = req.user.uid;
 
       if (!email || typeof email !== "string") {
         return res.status(400).json({ success: false, error: "E-mail do usuário não fornecido ou inválido." });
@@ -1114,7 +1093,10 @@ async function startServer() {
       // Regra técnica P0 Mercado Pago: Valor mínimo aceito é R$ 1,00
       finalAmount = Math.max(1.00, Number(finalAmount.toFixed(2)));
 
+      const orderId = crypto.randomUUID();
+      await adminDb.collection("payment_orders").doc(orderId).set({ userId, amount: finalAmount, plan: normalizedPlan, coupon: couponApplied, createdAt: FieldValue.serverTimestamp() });
       const externalRef = JSON.stringify({
+        orderId,
         plan: normalizedPlan,
         coupon: couponApplied,
         userId: userId || null,
@@ -1135,7 +1117,7 @@ async function startServer() {
                 email: payerEmail,
               },
               external_reference: externalRef,
-              notification_url: `${process.env.APP_URL || "https://nexus-focus.onrender.com"}/api/webhooks/mercadopago`
+              notification_url: `${process.env.RENDER_EXTERNAL_URL || "https://nexus-focus.onrender.com"}/api/webhooks/mercadopago`
             }
           });
 
@@ -1170,25 +1152,7 @@ async function startServer() {
         }
       }
 
-      // Fallback amigável de chave Pix caso Mercado Pago SDK não esteja com credenciais de produção
-      const fallbackPayload = `00020126580014br.gov.bcb.pix0136${payerEmail}5204000053039865405${finalAmount.toFixed(2)}5802BR5911Nexus Focus6009Sao Paulo62070503***6304`;
-      let fallbackBase64 = "";
-      try {
-        const genDataUrl = await QRCode.toDataURL(fallbackPayload, { width: 300, margin: 1 });
-        fallbackBase64 = genDataUrl.replace(/^data:image\/png;base64,/, "");
-      } catch (errFallbackQr: any) {
-        console.warn("[Pix Fallback] Erro ao sintetizar base64:", errFallbackQr?.message);
-      }
-
-      return res.status(200).json({
-        success: true,
-        id: `pix_${Date.now()}`,
-        status: "pending",
-        amount: finalAmount,
-        qrCode: fallbackPayload,
-        qrCodeBase64: fallbackBase64,
-        ticketUrl: ""
-      });
+      return res.status(502).json({ success: false, error: "Não foi possível gerar o Pix no Mercado Pago. Tente novamente." });
 
     } catch (err: any) {
       console.error("[Pix MP] Erro geral ao processar Pix:", err);
@@ -1242,9 +1206,11 @@ async function startServer() {
   // Rota de Criação de Preferência de Checkout Mercado Pago (/api/checkout)
   // Permite fluxo real de pagamento com cupons para utilizadores Elite
   // =========================================================================
-  app.post("/api/checkout", async (req, res) => {
+  app.post("/api/checkout", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
-      const { couponCode, coupon, plan, email, userId } = req.body || {};
+      const { couponCode, coupon, plan } = req.body || {};
+      const email = req.user.email;
+      const userId = req.user.uid;
       const payerEmail = (email && typeof email === "string" && email.includes("@")) 
         ? email.trim().toLowerCase() 
         : (req as any).user?.email || "contato@nexusfocus.com";
@@ -1287,6 +1253,8 @@ async function startServer() {
 
       console.log(`[Checkout MP] Gerando preferência: plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}, cliente=${payerEmail}`);
 
+      const orderId = crypto.randomUUID();
+      await adminDb.collection("payment_orders").doc(orderId).set({ userId, amount: finalAmount, plan: normalizedPlan, coupon: couponApplied, createdAt: FieldValue.serverTimestamp() });
       const preferencePayload: any = {
         items: [
           {
@@ -1301,13 +1269,14 @@ async function startServer() {
           email: payerEmail
         },
         back_urls: {
-          success: `${appUrl}/dashboard?payment=success`,
+          success: `${appUrl}/checkout?payment=success`,
           failure: `${appUrl}/checkout?payment=failure`,
-          pending: `${appUrl}/dashboard?payment=pending`
+          pending: `${appUrl}/checkout?payment=pending`
         },
         auto_return: "approved",
         notification_url: `${serverUrl}/api/webhooks/mercadopago`,
         external_reference: JSON.stringify({
+          orderId,
           plan: normalizedPlan,
           coupon: couponApplied,
           userId: userId || null,
@@ -3927,6 +3896,12 @@ Data e hora atual: ${new Date().toISOString()}`;
       return res.status(500).json({ success: false, error: err?.message });
     }
   });
+
+  if (process.env.MP_RECOVERY_PAYMENT_ID && mpPayment) {
+    try {
+      await applyApprovedPayment(await mpPayment.get({ id: process.env.MP_RECOVERY_PAYMENT_ID }));
+    } catch (err: any) { console.error("[Payment recovery] Failed:", err?.message); }
+  }
 
   // Health Check Route
   app.get('/', (req, res) => res.status(200).json({ status: 'Nexus Focus API Online', version: '1.0' }));

@@ -361,33 +361,63 @@ export function CheckoutScreen() {
     });
   };
 
-  const handleRefreshStatus = async () => {
-    try {
-      setIsCheckingStatus(true);
-      setErrorMessage('');
-      await new Promise((r) => setTimeout(r, 1200));
-
-      if (isWhitelistedPro(userEmail)) {
-        window.location.href = '/dashboard';
-        return;
+  const confirmPayment = useCallback(async () => {
+    if (!currentUser) return false;
+    const params = new URLSearchParams(window.location.search);
+    const paymentId = pixData?.id || params.get('payment_id') || params.get('collection_id') || sessionStorage.getItem('nexus-pending-payment');
+    if (paymentId && /^\d+$/.test(String(paymentId))) {
+      const token = await currentUser.getIdToken();
+      const response = await fetch(getApiUrl('/api/payments/' + paymentId + '/status'), {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await response.json();
+      if (response.ok && data.approved) {
+        sessionStorage.removeItem('nexus-pending-payment');
+        window.location.replace('/dashboard');
+        return true;
       }
-      setErrorMessage('Nenhum pagamento aprovado recente foi encontrado ainda.');
-    } catch {
-      setErrorMessage('Não foi possível verificar o status agora.');
-    } finally {
-      setIsCheckingStatus(false);
     }
+    if (isPremium) {
+      window.location.replace('/dashboard');
+      return true;
+    }
+    return false;
+  }, [currentUser, pixData?.id, isPremium]);
+
+  const handleRefreshStatus = async () => {
+    setIsCheckingStatus(true);
+    setErrorMessage('');
+    try {
+      if (!await confirmPayment()) setErrorMessage('Aguardando confirmação do pagamento. Não é necessário pagar novamente.');
+    } catch { setErrorMessage('Não foi possível consultar agora. Tente novamente.'); }
+    finally { setIsCheckingStatus(false); }
   };
+
+  useEffect(() => {
+    if (!currentUser) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const check = async () => {
+      if (stopped) return;
+      try { if (await confirmPayment()) return; } catch {}
+      if (!stopped) timer = setTimeout(check, 5000);
+    };
+    void check();
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [currentUser, confirmPayment]);
 
   const generatePix = useCallback(async () => {
     try {
       setIsGeneratingPix(true);
       setErrorMessage('');
       const email = userEmail || currentUser?.email || 'contato@nexusfocus.com';
+      if (!currentUser) throw new Error('Entre na sua conta para pagar.');
+      const authToken = await currentUser.getIdToken();
       const response = await fetch(getApiUrl('/api/payments/pix'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + authToken,
         },
         body: JSON.stringify({
           email,
@@ -410,15 +440,11 @@ export function CheckoutScreen() {
         throw new Error(`O servidor retornou o valor sem desconto (R$ ${Number(data.amount).toFixed(2)}). Gerando cobrança com o desconto aplicado...`);
       }
 
+      if (data.id) sessionStorage.setItem('nexus-pending-payment', String(data.id));
       setPixData(data);
     } catch (err: any) {
-      console.warn('[Pix] Fallback de geração local:', err);
-      const mockPixCode = `00020126580014br.gov.bcb.pix0136${userEmail || 'pagamento@nexusfocus.com'}5204000053039865405${currentAmount.toFixed(2)}5802BR5911Nexus Focus6009Sao Paulo62070503***6304`;
-      setPixData({
-        id: `local_${Date.now()}`,
-        qrCode: mockPixCode,
-        amount: currentAmount
-      });
+      setPixData(null);
+      setErrorMessage(err?.message || 'Não foi possível gerar o Pix. Tente novamente.');
     } finally {
       setIsGeneratingPix(false);
     }
@@ -479,7 +505,7 @@ export function CheckoutScreen() {
 
   // Se o usuário entrar no passo 3 com Pix e ainda não gerou, gera automaticamente
   useEffect(() => {
-    if (step === 3 && paymentMethod === 'pix' && !pixData && !isGeneratingPix) {
+    if (step === 3 && paymentMethod === 'pix' && !pixData && !isGeneratingPix && !errorMessage) {
       generatePix();
     }
   }, [step, paymentMethod, pixData, isGeneratingPix, generatePix]);
@@ -501,6 +527,7 @@ export function CheckoutScreen() {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              Authorization: 'Bearer ' + await currentUser!.getIdToken(),
             },
             body: JSON.stringify({
               couponCode: appliedCoupon || undefined,
