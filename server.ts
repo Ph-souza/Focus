@@ -403,6 +403,104 @@ webpush.setVapidDetails(
 // Armazenamento em memória de inscrições WebPush indexadas por UID do usuário autenticado (QA-01 e QA-07)
 const userSubscriptions = new Map<string, any[]>();
 
+// =========================================================================
+// Modelos de E-mail Transacionais do Resend (Templates Oficiais Publicados)
+// =========================================================================
+type ResendTemplateEntry = {
+  readonly id: string;
+  readonly alias: string;
+  readonly subject: string;
+};
+
+const RESEND_TEMPLATES: Record<"ELITE" | "FOCUS50" | "STANDARD", ResendTemplateEntry> = {
+  ELITE: {
+    id: "a9cae834-76a0-4311-948c-712bde1ec6c7",
+    alias: "plano-elite",
+    subject: "🎁 Bem-vindo à Elite do Nexus Focus! (Acesso Vitalício + Os teus 3 Bónus)"
+  },
+  FOCUS50: {
+    id: "132b40b0-f443-425e-8225-1e9380ddafd4",
+    alias: "cupao-focus50",
+    subject: "🚀 Bem-vindo ao Nexus Focus! (Plano 50% OFF + Os teus 3 Bónus)"
+  },
+  STANDARD: {
+    id: "e8de92f0-3fc4-4322-bc40-576d3d8b0cc0",
+    alias: "assinatura-standard",
+    subject: "Bem-vindo ao Nexus Focus! A tua assinatura está ativa."
+  }
+};
+
+interface OnboardingEmailOptions {
+  to: string;
+  name: string;
+  plan?: string;
+  coupon?: string | null;
+  dashboardUrl?: string;
+  whatsappUrl?: string;
+  ebookPoderHabitoUrl?: string;
+  ebookSutilArteUrl?: string;
+  ebookEspertoDiaboUrl?: string;
+}
+
+async function dispatchResendOnboardingEmail(options: OnboardingEmailOptions) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn("[Resend] AVISO: RESEND_API_KEY não configurada. E-mail de onboarding ignorado.");
+    return { success: false, error: "RESEND_API_KEY ausente" };
+  }
+
+  const rawCoupon = (options.coupon || "").trim().toUpperCase();
+  let template: ResendTemplateEntry = RESEND_TEMPLATES.STANDARD;
+  if (rawCoupon === "NEXUSELITE") {
+    template = RESEND_TEMPLATES.ELITE;
+  } else if (rawCoupon === "FOCUS50") {
+    template = RESEND_TEMPLATES.FOCUS50;
+  }
+
+  const variables = {
+    nome: options.name || "Membro Focus",
+    link_painel: options.dashboardUrl || "https://nexusfocus.web.app/dashboard",
+    link_whatsapp: options.whatsappUrl || "https://wa.me/553190054794?text=Ol%C3%A1!%20Quero%20ativar%20o%20Mentor%20Focus",
+    link_poder_habito: options.ebookPoderHabitoUrl || "https://nexusfocus.web.app/bonus/o-poder-do-habito.pdf",
+    link_sutil_arte: options.ebookSutilArteUrl || "https://nexusfocus.web.app/bonus/a-sutil-arte-de-ligar-o-foda-se.pdf",
+    link_esperto_diabo: options.ebookEspertoDiaboUrl || "https://nexusfocus.web.app/bonus/mais-esperto-que-o-diabo.pdf"
+  };
+
+  try {
+    const fromSender = process.env.RESEND_FROM_EMAIL || "Nexus Focus <onboarding@resend.dev>";
+    console.log(`[Resend] Disparando e-mail transacional (${template.alias}) para [${options.to}]...`);
+
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: fromSender,
+        to: [options.to],
+        subject: template.subject,
+        template: {
+          id: template.id,
+          variables
+        }
+      })
+    });
+
+    const resData = await res.json();
+    if (res.ok) {
+      console.log(`[Resend] E-mail (${template.alias}) enviado com sucesso para ${options.to}! ID: ${resData.id}`);
+      return { success: true, id: resData.id, data: resData };
+    } else {
+      console.warn(`[Resend] Falha na API ao enviar para ${options.to}:`, resData);
+      return { success: false, error: resData };
+    }
+  } catch (err: any) {
+    console.error(`[Resend] Exceção ao enviar e-mail para ${options.to}:`, err?.message);
+    return { success: false, error: err?.message };
+  }
+}
+
 // Cliente Stripe para validação de webhooks e checkout (QA-03)
 const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || "dummy_key", {
   apiVersion: "2025-02-24.acacia" as any
@@ -689,6 +787,23 @@ async function applyApprovedPayment(payment: any, expectedUid?: string) {
       orderId, createdAt: FieldValue.serverTimestamp() });
   });
   console.log("[Payment reconciliation] Approved payment linked to authenticated account:", payment.id);
+
+  // Disparo do E-mail Transacional de Boas-Vindas via Resend
+  const recipientEmail = account.email || payment.payer?.email;
+  if (recipientEmail && typeof recipientEmail === "string") {
+    try {
+      const recipientName = account.displayName || `${payment.payer?.first_name || ""} ${payment.payer?.last_name || ""}`.trim() || "Membro Focus";
+      await dispatchResendOnboardingEmail({
+        to: recipientEmail.trim().toLowerCase(),
+        name: recipientName,
+        plan: order?.plan || ref.plan || "mensal",
+        coupon: order?.coupon || ref.coupon || null
+      });
+    } catch (emailErr: any) {
+      console.warn("[Payment reconciliation] Erro ao disparar e-mail de onboarding via Resend:", emailErr?.message);
+    }
+  }
+
   return { approved: true, status: "approved" };
 }
 
@@ -1026,6 +1141,21 @@ async function startServer() {
           console.warn("[Assinaturas MP] Aviso na sincronização secundária:", e?.message);
         }
 
+        // Envio do e-mail de onboarding transacional caso o cartão tenha sido autorizado imediatamente
+        if (status === "authorized") {
+          try {
+            const recipientName = req.user?.displayName || req.user?.name || "Membro Focus";
+            await dispatchResendOnboardingEmail({
+              to: payerEmail,
+              name: recipientName,
+              plan: normalizedPlan,
+              coupon: couponApplied
+            });
+          } catch (subEmailErr: any) {
+            console.warn("[Assinaturas MP] Erro ao disparar e-mail de onboarding:", subEmailErr?.message);
+          }
+        }
+
         return res.status(200).json({
           success: true,
           status,
@@ -1048,6 +1178,37 @@ async function startServer() {
         success: false,
         error: err?.message || "Erro interno ao processar assinatura."
       });
+    }
+  });
+
+  // =========================================================================
+  // Rota de Teste de E-mails Transacionais do Resend
+  // =========================================================================
+  app.post("/api/emails/test-onboarding", async (req, res) => {
+    try {
+      const { to, name, plan, coupon } = req.body || {};
+      if (!to || typeof to !== "string") {
+        return res.status(400).json({ success: false, error: "O campo 'to' (e-mail destinatário) é obrigatório." });
+      }
+
+      const result = await dispatchResendOnboardingEmail({
+        to: to.trim().toLowerCase(),
+        name: name || "Membro Focus",
+        plan: plan || "mensal",
+        coupon: coupon || null
+      });
+
+      if (!result.success) {
+        return res.status(500).json(result);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "E-mail de onboarding despachado com sucesso via Resend!",
+        data: result.data
+      });
+    } catch (testErr: any) {
+      return res.status(500).json({ success: false, error: testErr?.message });
     }
   });
 
