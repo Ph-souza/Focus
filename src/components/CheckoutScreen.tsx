@@ -1,3 +1,4 @@
+import { useAccountStorage } from '../hooks/useAccountStorage';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
@@ -36,6 +37,7 @@ if (typeof window !== 'undefined' && MP_PUBLIC_KEY) {
 }
 
 export function CheckoutScreen() {
+  const accountSession = useAccountStorage('session');
   const { currentUser, isPremium, userDocExists, logout } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix' | 'mercadopago'>('card');
@@ -364,7 +366,7 @@ export function CheckoutScreen() {
   const confirmPayment = useCallback(async () => {
     if (!currentUser) return false;
     const params = new URLSearchParams(window.location.search);
-    const paymentId = pixData?.id || params.get('payment_id') || params.get('collection_id') || sessionStorage.getItem('nexus-pending-payment');
+    const paymentId = pixData?.id || params.get('payment_id') || params.get('collection_id') || accountSession.getItem('nexus-pending-payment');
     if (paymentId && /^\d+$/.test(String(paymentId))) {
       const token = await currentUser.getIdToken();
       const response = await fetch(getApiUrl('/api/payments/' + paymentId + '/status'), {
@@ -372,7 +374,7 @@ export function CheckoutScreen() {
       });
       const data = await response.json();
       if (response.ok && data.approved) {
-        sessionStorage.removeItem('nexus-pending-payment');
+        accountSession.removeItem('nexus-pending-payment');
         window.location.replace('/dashboard');
         return true;
       }
@@ -440,7 +442,7 @@ export function CheckoutScreen() {
         throw new Error(`O servidor retornou o valor sem desconto (R$ ${Number(data.amount).toFixed(2)}). Gerando cobrança com o desconto aplicado...`);
       }
 
-      if (data.id) sessionStorage.setItem('nexus-pending-payment', String(data.id));
+      if (data.id) accountSession.setItem('nexus-pending-payment', String(data.id));
       setPixData(data);
     } catch (err: any) {
       setPixData(null);

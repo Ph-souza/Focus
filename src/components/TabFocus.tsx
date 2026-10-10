@@ -1,3 +1,4 @@
+import { useAccountStorage } from '../hooks/useAccountStorage';
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
@@ -29,6 +30,7 @@ interface TabFocusProps {
 }
 
 export function TabFocus({ onTabChange }: TabFocusProps) {
+  const accountStorage = useAccountStorage();
   // Estado do Modo Profundo
   const [isDeepModeActive, setIsDeepModeActive] = useState(false);
   const [activeMode, setActiveMode] = useState<'pomodoro' | 'timer' | 'ritmo' | 'personalizado'>('pomodoro');
@@ -40,11 +42,11 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
   
   // Carregar dados do localStorage
   const [projects, setProjects] = useState<any[]>(() => {
-    try { return JSON.parse(localStorage.getItem('nexus_focus_projects_list') || '[]'); } catch { return []; }
+    try { return JSON.parse(accountStorage.getItem('nexus_focus_projects_list') || '[]'); } catch { return []; }
   });
   
   const [tasks, setTasks] = useState<any[]>(() => {
-    try { return JSON.parse(localStorage.getItem('nexus_focus_project_tasks') || '[]'); } catch { return []; }
+    try { return JSON.parse(accountStorage.getItem('nexus_focus_project_tasks') || '[]'); } catch { return []; }
   });
 
   // Filtramos apenas as tarefas pendentes de hoje
@@ -69,7 +71,7 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
   const handleTaskComplete = (taskId: string | number) => {
     const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: 'done', completedAt: new Date().toISOString() } : t);
     setTasks(updatedTasks);
-    localStorage.setItem('nexus_focus_project_tasks', JSON.stringify(updatedTasks));
+    accountStorage.setItem('nexus_focus_project_tasks', JSON.stringify(updatedTasks));
     // Quando concluída, caso a ativa seja ela mesma, reseta
     if (taskId === selectedTaskId) {
       const nextPending = updatedTasks.find(t => t.status !== 'done' && (t.group === 'today' || t.date === 'Hoje'));

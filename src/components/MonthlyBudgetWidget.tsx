@@ -1,3 +1,4 @@
+import { useAccountStorage } from '../hooks/useAccountStorage';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Target, Edit2, Check, X, AlertCircle } from 'lucide-react';
@@ -11,13 +12,14 @@ interface MonthlyBudgetWidgetProps {
 }
 
 export function MonthlyBudgetWidget({ transactions, user }: MonthlyBudgetWidgetProps) {
+  const accountStorage = useAccountStorage();
   const [isEditing, setIsEditing] = useState(false);
   const [currentBudget, setCurrentBudget] = useState<number>(() => {
     if (typeof user.monthlyBudget === 'number' && user.monthlyBudget > 0) {
       return user.monthlyBudget;
     }
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nexus_monthly_budget');
+      const saved = accountStorage.getItem('nexus_monthly_budget');
       if (saved) {
         const parsed = parseFloat(saved);
         if (!isNaN(parsed)) return parsed;

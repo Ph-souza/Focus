@@ -1,3 +1,4 @@
+import { useAccountStorage } from '../hooks/useAccountStorage';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Smartphone, MessageCircle, ArrowRight, Check, ShieldCheck, Sparkles, Loader2, AlertCircle } from 'lucide-react';
@@ -15,6 +16,7 @@ export const WHATSAPP_BOT_NUMBER = (import.meta.env.VITE_WHATSAPP_BOT_PHONE as s
 export const WHATSAPP_BOT_DISPLAY = (import.meta.env.VITE_WHATSAPP_BOT_PHONE as string) || '+55 (31) 9005-4794';
 
 export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
+  const accountStorage = useAccountStorage();
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -138,7 +140,7 @@ export function WhatsAppModal({ isOpen, onClose, user }: WhatsAppModalProps) {
       console.log(`[Account Pairing] Documento do usuário atualizado com sucesso no Firestore!`);
 
       // Salva no localStorage local para rapidez e consistência visual
-      localStorage.setItem('nexus_whatsapp_number', standardizedNumber);
+      accountStorage.setItem('nexus_whatsapp_number', standardizedNumber);
 
       setIsSuccess(true);
 

@@ -1,3 +1,4 @@
+import { useAccountStorage } from '../hooks/useAccountStorage';
 import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -54,6 +55,7 @@ export function TabMore({
   onLogout, 
   isDarkMode 
 }: TabMoreProps) {
+  const accountStorage = useAccountStorage();
   const [searchQuery, setSearchQuery] = useState('');
   
   // Modais complementares para máxima interatividade
@@ -64,10 +66,8 @@ export function TabMore({
   // Estado das Notas rápidas com persistência local
   const [notes, setNotes] = useState<NoteItem[]>(() => {
     try {
-      const saved = localStorage.getItem('nexus_quick_notes');
-      return saved ? JSON.parse(saved) : [
-        { id: '1', text: 'Revisar metas trimestrais do Nexus Focus', createdAt: 'Hoje' }
-      ];
+      const saved = accountStorage.getItem('nexus_quick_notes');
+      return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
@@ -76,7 +76,7 @@ export function TabMore({
 
   useEffect(() => {
     try {
-      localStorage.setItem('nexus_quick_notes', JSON.stringify(notes));
+      accountStorage.setItem('nexus_quick_notes', JSON.stringify(notes));
     } catch (e) {
       console.error(e);
     }

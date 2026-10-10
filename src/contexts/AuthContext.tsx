@@ -51,8 +51,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let unsubscribeFirestore: (() => void) | null = null;
+    let generation = 0;
+    let disposed = false;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      const session = ++generation;
+      const isCurrentSession = () => !disposed && session === generation && auth.currentUser?.uid === user?.uid;
+      setCurrentUser(user);
+      setIsPremium(false);
+      setUserDocExists(user ? null : false);
+      setIsLoading(Boolean(user));
       if (unsubscribeFirestore) {
         unsubscribeFirestore();
         unsubscribeFirestore = null;
@@ -78,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Garante integridade do documento do usuário no Firestore apenas se já cadastrado ou for admin
         try {
           const snap = await getDoc(userDocRef);
+          if (!isCurrentSession()) return;
 
           const name = user.displayName || user.providerData?.[0]?.displayName || user.email?.split('@')[0] || 'Usuário';
           const email = user.email || '';
@@ -106,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Se !snap.exists() e não for Pro, NÃO criamos o documento aqui.
           // O documento só será criado após a conclusão do checkout/onboarding.
         } catch (err) {
+          if (!isCurrentSession()) return;
           console.warn('Notice ensuring user doc exists:', err);
           if (isPro) {
             setIsPremium(true);
@@ -113,8 +123,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
+        if (!isCurrentSession()) return;
         // Realtime listener for isPremium status changes
         unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
+          if (!isCurrentSession()) return;
           const exists = docSnap.exists();
           setUserDocExists(isPro ? true : exists);
 
@@ -128,6 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           setIsLoading(false);
         }, (err) => {
+          if (!isCurrentSession()) return;
           console.error('Firestore user snapshot error:', err);
           if (isPro) {
             setIsPremium(true);
@@ -147,6 +160,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
+      disposed = true;
+      generation++;
       if (unsubscribeFirestore) unsubscribeFirestore();
       unsubscribeAuth();
     };
@@ -156,9 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const result = await signInWithGoogle();
-      if (result?.user) {
-        setCurrentUser(result.user);
-      }
+      // onAuthStateChanged owns the session transition and resets the previous state.
       return result?.user || null;
     } catch (error) {
       setIsLoading(false);
@@ -176,8 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsPremium(false);
     setUserDocExists(false);
     try {
-      localStorage.clear();
-      sessionStorage.clear();
+      sessionStorage.removeItem('nexus-pending-payment');
     } catch (_) {}
     // Purga de Estado Absoluta: força destruição de toda memória do processo e recarrega /login
     window.location.href = '/login';
@@ -198,7 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout
       }}
     >
-      {children}
+      <React.Fragment key={currentUser?.uid || "signed-out"}>{children}</React.Fragment>
     </AuthContext.Provider>
   );
 }

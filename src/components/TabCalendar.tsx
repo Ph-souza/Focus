@@ -1,3 +1,4 @@
+import { useAccountStorage } from '../hooks/useAccountStorage';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -222,6 +223,7 @@ function SwipeableActivityCard({
 }
 
 export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
+  const accountStorage = useAccountStorage();
   // 1 & 4. Gestão de Estado centralizada com date-fns
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => 
@@ -301,15 +303,6 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
     setCurrentWeekStart(startOfWeek(day, { weekStartsOn: 1 }));
   };
 
-  // Default mock activities matching mockup pixel-by-pixel if date has no Firestore routines
-  const defaultMockActivities: ActivityItem[] = useMemo(() => [
-    { id: 'mock-1', time: '08:30', title: 'Reunião com o time', subtitle: 'Alinhar objetivos do projeto', category: 'Trabalho', completed: true },
-    { id: 'mock-2', time: '10:00', title: 'Revisar finanças', subtitle: 'Verificar gastos e atualizar planilha', category: 'Pessoal', completed: true },
-    { id: 'mock-3', time: '14:00', title: 'Estudo / Curso', subtitle: 'NEXUS Focus Academy', category: 'Estudos', completed: true },
-    { id: 'mock-4', time: '16:00', title: 'Planejamento da semana', subtitle: 'Organizar prioridades', category: 'Trabalho', completed: false },
-    { id: 'mock-5', time: '18:30', title: 'Leitura', subtitle: 'Ler 30 minutos', category: 'Pessoal', completed: false },
-  ], []);
-
   // Contextual Firestore Listener: busca exclusivamente o intervalo do mês visível
   const [calendarRotinas, setCalendarRotinas] = useState<Rotina[]>(rotinas);
 
@@ -375,7 +368,7 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
 
     let localProjects: any[] = [];
     try {
-      const saved = localStorage.getItem('nexus_focus_projects_list');
+      const saved = accountStorage.getItem('nexus_focus_projects_list');
       if (saved) localProjects = JSON.parse(saved);
     } catch {}
 
@@ -403,15 +396,15 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
       return [];
     }
 
-    // Apenas para onboarding/usuário novo sem nenhuma rotina no Firestore, exibe atividades de exemplo
-    return defaultMockActivities.sort((a, b) => a.time.localeCompare(b.time));
-  }, [calendarRotinas, selectedDateStr, defaultMockActivities]);
+    // Contas sem registros começam vazias.
+    return [];
+  }, [calendarRotinas, selectedDateStr, accountStorage]);
 
   // Próximos compromissos futuros (> selectedDateStr) derivados unicamente do Firestore + Projetos Locais
   const upcomingActivities = useMemo(() => {
     let localProjects: any[] = [];
     try {
-      const saved = localStorage.getItem('nexus_focus_projects_list');
+      const saved = accountStorage.getItem('nexus_focus_projects_list');
       if (saved) localProjects = JSON.parse(saved);
     } catch {}
 
@@ -478,7 +471,7 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
   // Notas e Avisos do Dia com persistência local
   const [dailyNotes, setDailyNotes] = useState<DailyNote[]>(() => {
     try {
-      const saved = localStorage.getItem('nexus_calendar_daily_notes');
+      const saved = accountStorage.getItem('nexus_calendar_daily_notes');
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -489,7 +482,7 @@ export function TabCalendar({ rotinas = [], user }: TabCalendarProps) {
 
   useEffect(() => {
     try {
-      localStorage.setItem('nexus_calendar_daily_notes', JSON.stringify(dailyNotes));
+      accountStorage.setItem('nexus_calendar_daily_notes', JSON.stringify(dailyNotes));
     } catch (e) {
       console.error(e);
     }

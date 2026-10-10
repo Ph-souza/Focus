@@ -1,3 +1,4 @@
+import { useAccountStorage } from '../hooks/useAccountStorage';
 import React, { useState, useEffect } from 'react';
 import { Rocket, FileSpreadsheet, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -7,11 +8,12 @@ interface WelcomeOverlayProps {
 }
 
 export function WelcomeOverlay({ onStartTour }: WelcomeOverlayProps) {
+  const accountStorage = useAccountStorage();
   const [isVisible, setIsVisible] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const hasSeen = localStorage.getItem('nexus_welcome_seen');
+    const hasSeen = accountStorage.getItem('nexus_welcome_seen');
     if (!hasSeen) {
       setIsVisible(true);
     }
@@ -19,7 +21,7 @@ export function WelcomeOverlay({ onStartTour }: WelcomeOverlayProps) {
 
   const handleClose = () => {
     setIsVisible(false);
-    localStorage.setItem('nexus_welcome_seen', 'true');
+    accountStorage.setItem('nexus_welcome_seen', 'true');
   };
 
   const handleStartTour = () => {

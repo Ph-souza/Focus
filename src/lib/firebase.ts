@@ -176,8 +176,8 @@ export const signOutUser = async () => {
   }
   cachedAccessToken = null;
   try {
-    localStorage.clear();
-    sessionStorage.clear();
+    // Keep isolated account data; clearing all storage used to delete unrelated account projects.
+    sessionStorage.removeItem('nexus-pending-payment');
   } catch (_) {}
 };
 

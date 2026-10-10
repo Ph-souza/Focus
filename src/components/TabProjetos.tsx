@@ -1,3 +1,4 @@
+import { useAccountStorage } from '../hooks/useAccountStorage';
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -56,154 +57,31 @@ interface TabProjetosProps {
   onTabChange?: (tab: any) => void;
 }
 
-const INITIAL_PROJECTS: ProjectItem[] = [
-  {
-    id: 'nexus-focus',
-    name: 'Nexus Focus',
-    description: 'Desenvolvimento e melhorias contínuas do app',
-    category: 'Trabalho',
-    deadline: '2026-09-30',
-    tags: ['Desenvolvimento', 'Design', 'Backend', 'Marketing', 'Teste']
-  },
-  {
-    id: 'marketing',
-    name: 'Marketing',
-    description: 'Conteúdo, campanhas e crescimento',
-    category: 'Trabalho',
-    deadline: '2026-10-15',
-    tags: ['Marketing', 'Conteúdo', 'Copywriting']
-  },
-  {
-    id: 'pessoal',
-    name: 'Pessoal',
-    description: 'Tarefas, rotinas e metas pessoais',
-    category: 'Pessoal',
-    deadline: '',
-    tags: ['Saúde', 'Hábitos', 'Finanças']
-  },
-  {
-    id: 'estudos',
-    name: 'Estudos',
-    description: 'Cursos de tecnologia e inteligência artificial',
-    category: 'Estudos',
-    deadline: '2026-09-28',
-    tags: ['IA', 'React', 'TypeScript']
-  },
-  {
-    id: 'financeiro',
-    name: 'Financeiro',
-    description: 'Planejamento e organização orçamentária',
-    category: 'Geral',
-    deadline: '2026-10-31',
-    tags: ['Investimentos', 'Orçamento']
-  }
-];
-
-const INITIAL_TASKS: ProjectTask[] = [
-  {
-    id: 1,
-    projectId: 'nexus-focus',
-    title: 'Ajustar responsividade mobile',
-    group: 'today',
-    status: 'todo',
-    priority: 'high',
-    tag: 'Desenvolvimento',
-    date: 'Hoje'
-  },
-  {
-    id: 2,
-    projectId: 'nexus-focus',
-    title: 'Revisar tela de projetos e navegação',
-    group: 'today',
-    status: 'doing',
-    priority: 'medium',
-    tag: 'Design',
-    date: 'Hoje'
-  },
-  {
-    id: 3,
-    projectId: 'nexus-focus',
-    title: 'Testar fluxos principais da aplicação',
-    group: 'today',
-    status: 'todo',
-    priority: 'medium',
-    tag: 'Teste',
-    date: 'Hoje'
-  },
-  {
-    id: 4,
-    projectId: 'nexus-focus',
-    title: 'Implementar notificações push e automações',
-    group: 'tomorrow',
-    status: 'todo',
-    priority: 'high',
-    tag: 'Desenvolvimento',
-    date: 'Amanhã'
-  },
-  {
-    id: 5,
-    projectId: 'nexus-focus',
-    title: 'Revisar copy da landing page',
-    group: 'tomorrow',
-    status: 'todo',
-    priority: 'medium',
-    tag: 'Marketing',
-    date: 'Amanhã'
-  },
-  {
-    id: 6,
-    projectId: 'nexus-focus',
-    title: 'Otimizar performance e bundle da API',
-    group: 'week',
-    status: 'doing',
-    priority: 'high',
-    tag: 'Backend',
-    date: '25/09'
-  },
-  {
-    id: 7,
-    projectId: 'nexus-focus',
-    title: 'Criar novos tutoriais interativos',
-    group: 'week',
-    status: 'todo',
-    priority: 'low',
-    tag: 'Conteúdo',
-    date: '26/09'
-  },
-  {
-    id: 8,
-    projectId: 'nexus-focus',
-    title: 'Reunião de alinhamento com mentor',
-    group: 'week',
-    status: 'todo',
-    priority: 'medium',
-    tag: 'Reunião',
-    date: '27/09'
-  }
-];
+const EMPTY_PROJECT: ProjectItem = { id: "", name: "Nenhum projeto", description: "", category: "Geral", deadline: "", tags: [] };
 
 export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
+  const accountStorage = useAccountStorage();
   // Estado de Projetos
   const [projects, setProjects] = useState<ProjectItem[]>(() => {
     try {
-      const saved = localStorage.getItem('nexus_focus_projects_list');
-      return saved ? JSON.parse(saved) : INITIAL_PROJECTS;
+      const saved = accountStorage.getItem('nexus_focus_projects_list');
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return INITIAL_PROJECTS;
+      return [];
     }
   });
 
   // Estado de Tarefas
   const [tasks, setTasks] = useState<ProjectTask[]>(() => {
     try {
-      const saved = localStorage.getItem('nexus_focus_project_tasks');
-      return saved ? JSON.parse(saved) : INITIAL_TASKS;
+      const saved = accountStorage.getItem('nexus_focus_project_tasks');
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return INITIAL_TASKS;
+      return [];
     }
   });
 
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('nexus-focus');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [isProjectDetailsVisible, setIsProjectDetailsVisible] = useState<boolean>(true);
   const [projectCategoryFilter, setProjectCategoryFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'recent' | 'progress' | 'progress-asc' | 'deadline'>('recent');
@@ -230,7 +108,7 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
   // Sincronizar com localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('nexus_focus_projects_list', JSON.stringify(projects));
+      accountStorage.setItem('nexus_focus_projects_list', JSON.stringify(projects));
     } catch (e) {
       console.error('Erro ao salvar projetos no localStorage', e);
     }
@@ -238,7 +116,7 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
 
   useEffect(() => {
     try {
-      localStorage.setItem('nexus_focus_project_tasks', JSON.stringify(tasks));
+      accountStorage.setItem('nexus_focus_project_tasks', JSON.stringify(tasks));
     } catch (e) {
       console.error('Erro ao salvar tarefas no localStorage', e);
     }
@@ -251,7 +129,7 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
 
   // Projeto selecionado
   const selectedProject = useMemo(() => {
-    return projects.find(p => p.id === selectedProjectId) || projects[0] || INITIAL_PROJECTS[0];
+    return projects.find(p => p.id === selectedProjectId) || projects[0] || EMPTY_PROJECT;
   }, [projects, selectedProjectId]);
 
   // Tarefas do projeto selecionado
@@ -339,6 +217,7 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
 
   // Quick Add submit
   const handleQuickAddSubmit = (e: React.FormEvent) => {
+    if (!selectedProject.id) { e.preventDefault(); return; }
     e.preventDefault();
     if (!quickTitle.trim()) return;
 
@@ -350,7 +229,7 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
       status: 'todo',
       priority: quickPriority,
       tag: 'Geral',
-      date: quickDate ? formatDisplayDate(quickDate) : 'Hoje'
+      date: quickDate ? format(new Date(quickDate + "T12:00:00"), "dd/MM") : 'Hoje'
     };
 
     setTasks(prev => [newTask, ...prev]);
@@ -402,6 +281,7 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
 
   // Duplicar projeto
   const handleDuplicateProject = () => {
+    if (!selectedProject.id) return;
     const duplicatedProj: ProjectItem = {
       ...selectedProject,
       id: `proj-${Date.now()}`,
@@ -1252,7 +1132,7 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
       {/* ======================================================= */}
       {/* Desktop view now uses the function */}
       <AnimatePresence>
-        {isProjectDetailsVisible && (
+        {selectedProject.id && isProjectDetailsVisible && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}

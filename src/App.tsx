@@ -1,3 +1,4 @@
+import { useAccountStorage } from './hooks/useAccountStorage';
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TabType, User, AppNotification, Transaction, ChatMessage, Task, Appointment, Rotina } from './types';
@@ -38,6 +39,7 @@ import { AdminProtectedRoute } from './components/AdminProtectedRoute';
 import { RootRoute } from './components/RootRoute';
 
 function Dashboard() {
+  const accountStorage = useAccountStorage();
   const { currentUser, logout } = useAuth();
 
   const [userProfile, setUserProfile] = useState<{
@@ -50,7 +52,7 @@ function Dashboard() {
 
   // 1. Perfil do Usuário com validação direta de auth.currentUser.uid
   useEffect(() => {
-    const activeUid = auth.currentUser?.uid;
+    const activeUid = currentUser?.uid;
     if (!activeUid) {
       setUserProfile({});
       return;
@@ -79,7 +81,7 @@ function Dashboard() {
     };
   }, [currentUser?.uid]);
 
-  const activeAuthUid = auth.currentUser?.uid || '';
+  const activeAuthUid = currentUser?.uid || '';
 
   const user: User = {
     id: activeAuthUid,
@@ -114,7 +116,7 @@ function Dashboard() {
   const [initialChatPrompt, setInitialChatPrompt] = useState<{ text: string, imageBase64?: string, mimeType?: string } | null>(null);
   const [latestMentorFeedback, setLatestMentorFeedback] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('nexus_latest_mentor_feedback');
+      return accountStorage.getItem('nexus_latest_mentor_feedback');
     }
     return null;
   });
@@ -122,7 +124,7 @@ function Dashboard() {
   const handleSaveMentorFeedback = (feedback: string) => {
     setLatestMentorFeedback(feedback);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('nexus_latest_mentor_feedback', feedback);
+      accountStorage.setItem('nexus_latest_mentor_feedback', feedback);
     }
   };
 
@@ -139,7 +141,7 @@ function Dashboard() {
   // Todas as consultas dependem estritamente de auth.currentUser.uid no momento da chamada.
   // Se auth.currentUser for nulo, a requisição é sumariamente abortada e todo o estado purgado.
   useEffect(() => {
-    const activeUid = auth.currentUser?.uid;
+    const activeUid = currentUser?.uid;
 
     // Purga imediata de qualquer resíduo em memória da sessão anterior
     setTransactions([]);
@@ -289,7 +291,7 @@ function Dashboard() {
       .filter(t => t.type === 'expense' && t.date.startsWith(currentMonth))
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const savedBudget = localStorage.getItem('nexus_monthly_budget');
+    const savedBudget = accountStorage.getItem('nexus_monthly_budget');
     const budgetLimit = savedBudget ? parseFloat(savedBudget) : 3500;
 
     if (monthlyExpenses > budgetLimit) {

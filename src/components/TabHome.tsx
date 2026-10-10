@@ -1,3 +1,4 @@
+import { useAccountStorage } from '../hooks/useAccountStorage';
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { format } from 'date-fns';
@@ -48,6 +49,7 @@ interface TabHomeProps {
 }
 
 export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, onOpenProfile, latestMentorFeedback }: TabHomeProps) {
+  const accountStorage = useAccountStorage();
   const [greeting, setGreeting] = useState('');
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -55,7 +57,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
   // Integração com fluxo de Notas / Avisos do Dia
   const [dailyNotes, setDailyNotes] = useState<DailyNote[]>(() => {
     try {
-      const saved = localStorage.getItem('nexus_calendar_daily_notes');
+      const saved = accountStorage.getItem('nexus_calendar_daily_notes');
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -69,7 +71,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
   useEffect(() => {
     const handleStorageChange = () => {
       try {
-        const saved = localStorage.getItem('nexus_calendar_daily_notes');
+        const saved = accountStorage.getItem('nexus_calendar_daily_notes');
         if (saved) setDailyNotes(JSON.parse(saved));
       } catch (e) {
         console.error(e);
@@ -100,7 +102,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
     const updated = [newNote, ...dailyNotes];
     setDailyNotes(updated);
     try {
-      localStorage.setItem('nexus_calendar_daily_notes', JSON.stringify(updated));
+      accountStorage.setItem('nexus_calendar_daily_notes', JSON.stringify(updated));
     } catch (err) {
       console.error(err);
     }
@@ -112,7 +114,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
     const updated = dailyNotes.filter(n => n.id !== id);
     setDailyNotes(updated);
     try {
-      localStorage.setItem('nexus_calendar_daily_notes', JSON.stringify(updated));
+      accountStorage.setItem('nexus_calendar_daily_notes', JSON.stringify(updated));
     } catch (err) {
       console.error(err);
     }
