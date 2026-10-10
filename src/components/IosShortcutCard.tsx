@@ -248,7 +248,7 @@ export function IosShortcutCard({ user, onTokenGenerated, className = '' }: IosS
       {/* 2. BOTÃO DE DOWNLOAD DO ATALHO */}
       <div className="relative z-10 pt-0.5">
         <a
-          href="https://www.icloud.com/shortcuts/7b3bafcfefac49279dde3a75c3bdd641"
+          href="https://www.icloud.com/shortcuts/91f81a9457404976a10d4f7a1174ab99"
           target="_blank"
           rel="noopener noreferrer"
           className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-purple-500/20 active:scale-[0.99] transition-all cursor-pointer group"
