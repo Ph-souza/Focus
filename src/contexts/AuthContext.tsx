@@ -34,10 +34,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let unsubscribeFirestore: (() => void) | null = null;
     let generation = 0;
+    let accessRequest = 0;
     let disposed = false;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       const session = ++generation;
+      ++accessRequest;
       const isCurrentSession = () => !disposed && session === generation && auth.currentUser?.uid === user?.uid;
       setCurrentUser(user);
       setIsPremium(false);
@@ -54,6 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const userDocRef = doc(db, 'users', user.uid);
         const validate = async () => {
+          const request = ++accessRequest;
+          const accessIsCurrent = () => isCurrentSession() && request === accessRequest;
           try {
             const token = await user.getIdToken();
             const response = await fetch(getApiUrl('/api/auth/access'), {
@@ -62,18 +66,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
             if (!response.ok) throw new Error('Access validation unavailable');
             const data = await response.json();
-            if (!isCurrentSession()) return;
+            if (!accessIsCurrent()) return;
             setIsPremium(data.isPremium === true);
             setAdminAccess(data.isAdmin === true);
             setUserDocExists(data.userDocExists === true);
           } catch (err) {
-            if (!isCurrentSession()) return;
+            if (!accessIsCurrent()) return;
             console.warn('[Auth] Server access check failed:', err);
             setIsPremium(false);
             setAdminAccess(false);
             setUserDocExists(false);
           } finally {
-            if (isCurrentSession()) setIsLoading(false);
+            if (accessIsCurrent()) setIsLoading(false);
           }
         };
         // Atualiza o acesso quando o documento é alterado ou excluído.
@@ -103,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       disposed = true;
       generation++;
+      ++accessRequest;
       if (unsubscribeFirestore) unsubscribeFirestore();
       unsubscribeAuth();
     };
