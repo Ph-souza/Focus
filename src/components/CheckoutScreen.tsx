@@ -3,10 +3,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
 import QRCode from 'qrcode';
-import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { getApiUrl } from '../lib/api';
-import { db } from '../lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
 import './CheckoutScreen.css';
 
 // Chaves públicas do Mercado Pago (Teste e Produção)
@@ -82,8 +80,7 @@ export function CheckoutScreen() {
   });
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
-  const isWhitelisted = isWhitelistedPro(userEmail);
-  const hasAccess = isWhitelisted || isPremium;
+  const hasAccess = isPremium;
 
   // Inicialização no componente
   useEffect(() => {
@@ -229,21 +226,7 @@ export function CheckoutScreen() {
         throw new Error(data.error || 'Erro ao processar a assinatura.');
       }
 
-      // Atualização de segurança no Firestore para o usuário autenticado
-      if (currentUser?.uid) {
-        try {
-          await setDoc(doc(db, 'users', currentUser.uid), {
-            isPremium: true,
-            plan: billingCycle,
-            couponApplied: appliedCoupon || null,
-            currentPrice: currentAmount,
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
-        } catch (fsErr) {
-          console.warn('[Firestore] Aviso ao atualizar usuário:', fsErr);
-        }
-      }
-
+      // O pagamento é conciliado e o acesso é concedido somente pelo backend.
       // Sucesso: redireciona para o dashboard
       window.location.href = '/dashboard';
     } catch (err: any) {
