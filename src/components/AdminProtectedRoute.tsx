@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth, isAdmin } from '../contexts/AuthContext';
-import { db } from '../lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AdminProtectedRouteProps {
   children: React.ReactNode;
@@ -22,70 +20,8 @@ interface AdminProtectedRouteProps {
  */
 export function AdminProtectedRoute({ children }: AdminProtectedRouteProps) {
   const { currentUser, isLoading: authLoading, isAdmin: authIsAdmin } = useAuth();
-  const [isVerifyingFirestore, setIsVerifyingFirestore] = useState<boolean>(true);
-  const [hasAdminPermission, setHasAdminPermission] = useState<boolean>(false);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function checkAdminStatus() {
-      // 1. Não autenticado no Firebase Auth
-      if (!currentUser) {
-        if (isMounted) {
-          setHasAdminPermission(false);
-          setIsVerifyingFirestore(false);
-        }
-        return;
-      }
-
-      const email = (currentUser.email || currentUser.providerData?.[0]?.email || '').trim().toLowerCase();
-
-      // 2. Se já for identificado como admin na lista de credenciados
-      if (authIsAdmin || isAdmin(email)) {
-        if (isMounted) {
-          setHasAdminPermission(true);
-          setIsVerifyingFirestore(false);
-        }
-        return;
-      }
-
-      // 3. Verificação estrita no Firestore (perfil do usuário com flag isAdmin: true ou role: 'admin')
-      try {
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          const data = userDocSnap.data();
-          const firestoreAdmin = Boolean(
-            data?.isAdmin === true || 
-            data?.role === 'admin_pro' || 
-            data?.role === 'admin'
-          );
-
-          if (isMounted) {
-            setHasAdminPermission(firestoreAdmin);
-            setIsVerifyingFirestore(false);
-          }
-          return;
-        }
-      } catch (err) {
-        console.warn('[Admin Route Guard] Falha ao consultar permissões no Firestore:', err);
-      }
-
-      if (isMounted) {
-        setHasAdminPermission(false);
-        setIsVerifyingFirestore(false);
-      }
-    }
-
-    if (!authLoading) {
-      checkAdminStatus();
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [currentUser, authLoading, authIsAdmin]);
+  const isVerifyingFirestore = authLoading;
+  const hasAdminPermission = Boolean(currentUser && authIsAdmin);
 
   // Enquanto valida credenciais
   if (authLoading || isVerifyingFirestore) {
