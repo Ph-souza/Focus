@@ -1,35 +1,19 @@
 rules_version = '2';
-
 service cloud.firestore {
-  match /databases/{database}/documents {
-
-    // =========================================================================
-    // REGRA DE OURO DO ISOLAMENTO ESTRITO DE DADOS (P0 SECURITY SHIELD)
-    // =========================================================================
-    // Um usuário autenticado SÓ PODE ler e escrever no documento e subcoleções
-    // que correspondem EXATAMENTE ao seu próprio UID oficial do Firebase Auth.
-    // Qualquer tentativa de State Bleed ou acesso cruzado entre usuários é
-    // bloqueada sumariamente pelo motor do Firestore no nível do banco.
-    // =========================================================================
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-
-      match /{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-    }
-
-    // =========================================================================
-    // COLEÇÃO DE CUPONS (Sistema de Descontos e Homologação)
-    // =========================================================================
-    match /coupons/{couponCode} {
-      allow read: if request.auth != null;
-      allow write: if false; // Escrita permitida exclusivamente via Firebase Admin SDK
-    }
-
-    // Bloqueio categórico por padrão para todas as outras coleções não mapeadas
-    match /{document=**} {
-      allow read, write: if false;
-    }
+ match /databases/{database}/documents {
+  function owner(id) { return request.auth != null && request.auth.uid == id; }
+  function protectedFields() { return ["isPremium","isAdmin","role","subscriptionId","subscriptionStatus","subscribedAt","approvedAt","expiresAt","accessRevoked","blocked","paymentStatus","paymentMethod","lastPaymentId","plan","couponApplied","currentPrice","subscriptionExpiresAt","renewalDate","paidUntil","subscriptionEndDate","isLifetime"]; }
+  match /users/{userId} {
+   allow read: if owner(userId);
+   allow create: if owner(userId) && !request.resource.data.keys().hasAny(protectedFields());
+   allow update: if owner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedFields());
+   allow delete: if false;
+   match /{document=**} { allow read, write: if owner(userId); }
   }
+  match /coupons/{couponCode} {
+   allow read: if request.auth != null;
+   allow write: if false;
+  }
+  match /{document=**} { allow read, write: if false; }
+ }
 }
