@@ -927,6 +927,33 @@ async function startServer() {
     }
   });
 
+  app.get("/api/auth/access", requireAuth, async (req: AuthenticatedRequest, res) => {
+    res.setHeader("Cache-Control", "no-store, private");
+    try {
+      const uid = req.user.uid;
+      const snapshot = await adminDb.collection("users").doc(uid).get();
+      if (!snapshot.exists) return res.json({ userDocExists: false, isPremium: false, isAdmin: false });
+      const data = snapshot.data() || {};
+      const revoked = data.accessRevoked === true || data.blocked === true;
+      const admins = (process.env.NEXUS_ADMIN_EMAILS || "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+      const isAdmin = !revoked && req.user.email_verified === true && admins.includes(String(req.user.email || "").toLowerCase());
+      const subscriptionActive = data.isPremium === true && data.subscriptionStatus === "authorized" &&
+        typeof data.subscriptionId === "string" && data.subscriptionId.length > 0;
+      let paid = false;
+      if (!revoked && data.isPremium === true && data.lastPaymentId) {
+        const receipt = await adminDb.collection("confirmed_payments").doc(String(data.lastPaymentId)).get();
+        paid = receipt.exists && receipt.data()?.userId === uid && receipt.data()?.status === "approved";
+      }
+      const expirationValue = data.paidUntil || data.subscriptionExpiresAt || data.expiresAt;
+      const expiration = expirationValue?.toDate?.() || (typeof expirationValue === "string" ? new Date(expirationValue) : null);
+      const expired = expiration instanceof Date && (!Number.isFinite(expiration.getTime()) || expiration.getTime() <= Date.now());
+      return res.json({ userDocExists: true, isPremium: !revoked && !expired && (isAdmin || paid || subscriptionActive), isAdmin });
+    } catch (error: any) {
+      console.error("[Auth] Access validation failed:", error?.message);
+      return res.status(503).json({ error: "Falha ao validar assinatura" });
+    }
+  });
+
   app.get("/api/payments/:id/status", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       if (!/^\\d+$/.test(req.params.id)) return res.status(400).json({ error: "Pagamento inválido." });
@@ -1086,60 +1113,19 @@ async function startServer() {
         });
       }
 
-      // Se a assinatura foi autorizada ou está pendente de confirmação bancária
       if (status === "authorized" || status === "pending") {
-        const firestoreSubscriptionData = {
+        // Nunca autorizar Premium para pagamento pendente ou por correspondência de e-mail.
+        // Apenas o UID autenticado é dono desta assinatura.
+        await adminDb.collection("users").doc(userId).set({
           email: payerEmail,
-          isPremium: true,
-          role: "premium_user",
+          ...(status === "authorized" ? { isPremium: true } : {}),
           plan: normalizedPlan,
-          couponApplied: couponApplied,
+          couponApplied,
           currentPrice: finalAmount,
-          subscriptionId: subscriptionId,
+          subscriptionId,
           subscriptionStatus: status,
-          subscribedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp()
-        };
-
-        // 1. Atualizar documento users/{payerEmail}
-        const emailRef = adminDb.collection("users").doc(payerEmail);
-        await emailRef.set(firestoreSubscriptionData, { merge: true });
-
-        // 2. Se o userId (UID do Firebase Auth) foi enviado, atualizar users/{userId}
-        if (userId && typeof userId === "string") {
-          const userRef = adminDb.collection("users").doc(userId);
-          await userRef.set({
-            isPremium: true,
-            plan: normalizedPlan,
-            couponApplied: couponApplied,
-            currentPrice: finalAmount,
-            subscriptionId: subscriptionId,
-            subscriptionStatus: status,
-            updatedAt: FieldValue.serverTimestamp()
-          }, { merge: true });
-        }
-
-        // 3. Sincronizar qualquer outra conta matching pelo e-mail
-        try {
-          const querySnap = await adminDb.collection("users").where("email", "==", payerEmail).get();
-          const batch = adminDb.batch();
-          querySnap.forEach((docSnap) => {
-            if (docSnap.id !== payerEmail && docSnap.id !== userId) {
-              batch.set(docSnap.ref, {
-                isPremium: true,
-                plan: normalizedPlan,
-                couponApplied: couponApplied,
-                currentPrice: finalAmount,
-                subscriptionId: subscriptionId,
-                subscriptionStatus: status,
-                updatedAt: FieldValue.serverTimestamp()
-              }, { merge: true });
-            }
-          });
-          await batch.commit();
-        } catch (e: any) {
-          console.warn("[Assinaturas MP] Aviso na sincronização secundária:", e?.message);
-        }
+        }, { merge: true });
 
         // Envio do e-mail de onboarding transacional caso o cartão tenha sido autorizado imediatamente
         if (status === "authorized") {
