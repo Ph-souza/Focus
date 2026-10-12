@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ProtectedRouteProps {
   children?: React.ReactNode;
@@ -10,12 +10,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { currentUser, isPremium, userDocExists, isLoading } = useAuth();
   const location = useLocation();
 
-  const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
-  const isWhitelisted = isWhitelistedPro(userEmail);
+
   
   // BLOQUEIO ESTRITO DE INADIMPLENTES (P0 SECURITY GUARD):
   // Ninguém entra no painel /dashboard sem pagamento confirmado (isPremium === true) ou Admin/Whitelisted.
-  const hasConfirmedPayment = isWhitelisted || isPremium;
+  const hasConfirmedPayment = isPremium;
 
   if (isLoading || (currentUser && userDocExists === null)) {
     return (
