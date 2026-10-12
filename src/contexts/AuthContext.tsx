@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { getApiUrl } from '../lib/api';
 import { auth, db, signInWithGoogle, signOutUser } from '../lib/firebase';
 
 export interface AuthContextType {
@@ -16,36 +17,17 @@ export interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // 2. Regra de Auto-Admin baseada no Email:
-export const adminEmails = [
-  'phillipe.souza27@gmail.com',
-  'eumktdigital23@gmail.com'
-];
-
-// Contas de Administrador com acesso ao Painel Administrativo (/painel) e Acesso Pro Irrestrito
-export const ADMIN_ACCOUNTS = [
-  ...adminEmails,
-  'lvfernandes11@gmail.com'
-];
-
-export function isAdmin(email?: string | null): boolean {
-  if (!email || typeof email !== 'string') return false;
-  const normalized = email.trim().toLowerCase();
-  return adminEmails.includes(normalized) || ADMIN_ACCOUNTS.includes(normalized);
-}
-
-// Contas com acesso Pro / Vitalício garantido
-export const PRO_ACCOUNTS = [
-  ...ADMIN_ACCOUNTS
-];
-
-export function isWhitelistedPro(email?: string | null): boolean {
-  if (!email || typeof email !== 'string') return false;
-  return PRO_ACCOUNTS.includes(email.trim().toLowerCase()) || isAdmin(email);
-}
+export const adminEmails: string[] = [];
+export const ADMIN_ACCOUNTS: string[] = [];
+export const PRO_ACCOUNTS: string[] = [];
+// O navegador não é autoridade para conceder privilégios.
+export function isAdmin(_email?: string | null): boolean { return false; }
+export function isWhitelistedPro(_email?: string | null): boolean { return false; }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [adminAccess, setAdminAccess] = useState(false);
   const [userDocExists, setUserDocExists] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -59,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const isCurrentSession = () => !disposed && session === generation && auth.currentUser?.uid === user?.uid;
       setCurrentUser(user);
       setIsPremium(false);
+      setAdminAccess(false);
       setUserDocExists(user ? null : false);
       setIsLoading(Boolean(user));
       if (unsubscribeFirestore) {
@@ -69,91 +52,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user) {
         setCurrentUser(user);
 
-        const email = (user.email || user.providerData?.[0]?.email || '').trim().toLowerCase();
-        const emailIsAdmin = adminEmails.includes(email);
-        const isPro = isWhitelistedPro(email) || emailIsAdmin;
-
-        // Se for conta Pro whitelisted ou Admin, ativa imediatamente sem esperar rede
-        if (isPro) {
-          setIsPremium(true);
-          setUserDocExists(true);
-          setIsLoading(false);
-        }
-
-        // 1. O ID do documento na coleção users tem OBRIGATORIAMENTE de ser o uid oficial do Firebase Auth
         const userDocRef = doc(db, 'users', user.uid);
-
-        // Garante integridade do documento do usuário no Firestore apenas se já cadastrado ou for admin
-        try {
-          const snap = await getDoc(userDocRef);
-          if (!isCurrentSession()) return;
-
-          const name = user.displayName || user.providerData?.[0]?.displayName || user.email?.split('@')[0] || 'Usuário';
-          const email = user.email || '';
-          const photoURL = user.photoURL || user.providerData?.[0]?.photoURL || '';
-
-          if (snap.exists()) {
-            setUserDocExists(true);
-            // Usuário já cadastrado no banco: sincroniza dados básicos
-            await setDoc(userDocRef, {
-              name,
-              photoURL
-            }, { merge: true });
-          } else if (isPro) {
-            setUserDocExists(true);
-            // Contas Pro whitelisted / Administradores são criadas com acesso irrestrito
-            await setDoc(userDocRef, {
-              name,
-              email,
-              photoURL,
-              isPremium: true,
-              createdAt: serverTimestamp()
-            }, { merge: true });
-          } else {
-            setUserDocExists(false);
-          }
-          // Se !snap.exists() e não for Pro, NÃO criamos o documento aqui.
-          // O documento só será criado após a conclusão do checkout/onboarding.
-        } catch (err) {
-          if (!isCurrentSession()) return;
-          console.warn('Notice ensuring user doc exists:', err);
-          if (isPro) {
-            setIsPremium(true);
-            setUserDocExists(true);
-          }
-        }
-
-        if (!isCurrentSession()) return;
-        // Realtime listener for isPremium status changes
-        unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
-          if (!isCurrentSession()) return;
-          const exists = docSnap.exists();
-          setUserDocExists(isPro ? true : exists);
-
-          if (isPro) {
-            setIsPremium(true);
-          } else if (exists) {
-            const data = docSnap.data();
-            setIsPremium(Boolean(data?.isPremium));
-          } else {
+        const validate = async () => {
+          try {
+            const token = await user.getIdToken();
+            const response = await fetch(getApiUrl('/api/auth/access'), {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: 'no-store'
+            });
+            if (!response.ok) throw new Error('Access validation unavailable');
+            const data = await response.json();
+            if (!isCurrentSession()) return;
+            setIsPremium(data.isPremium === true);
+            setAdminAccess(data.isAdmin === true);
+            setUserDocExists(data.userDocExists === true);
+          } catch (err) {
+            if (!isCurrentSession()) return;
+            console.warn('[Auth] Server access check failed:', err);
             setIsPremium(false);
-          }
-          setIsLoading(false);
-        }, (err) => {
-          if (!isCurrentSession()) return;
-          console.error('Firestore user snapshot error:', err);
-          if (isPro) {
-            setIsPremium(true);
-            setUserDocExists(true);
-          } else {
-            setIsPremium(false);
+            setAdminAccess(false);
             setUserDocExists(false);
+          } finally {
+            if (isCurrentSession()) setIsLoading(false);
           }
+        };
+        // Atualiza o acesso quando o documento é alterado ou excluído.
+        unsubscribeFirestore = onSnapshot(userDocRef, () => {
+          if (!isCurrentSession()) return;
+          setIsLoading(true);
+          setIsPremium(false);
+          setAdminAccess(false);
+          void validate();
+        }, () => {
+          if (!isCurrentSession()) return;
+          setIsPremium(false);
+          setAdminAccess(false);
+          setUserDocExists(false);
           setIsLoading(false);
         });
+        void validate();
       } else {
         setCurrentUser(null);
         setIsPremium(false);
+        setAdminAccess(false);
         setUserDocExists(false);
         setIsLoading(false);
       }
@@ -187,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setCurrentUser(null);
     setIsPremium(false);
+    setAdminAccess(false);
     setUserDocExists(false);
     try {
       sessionStorage.removeItem('nexus-pending-payment');
@@ -195,8 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.location.href = '/login';
   };
 
-  const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
-  const userIsAdmin = isAdmin(userEmail);
+  const userIsAdmin = adminAccess;
 
   return (
     <AuthContext.Provider
