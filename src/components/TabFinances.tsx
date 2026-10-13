@@ -4,6 +4,8 @@ import { Transaction, TransactionType, User, Goal } from '../types';
 import { db, auth } from '../lib/firebase';
 import { collection, doc, writeBatch, increment, serverTimestamp, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
+import { LedgerToggle } from './LedgerToggle';
+import { useLedger } from '../contexts/LedgerContext';
 import { 
   ArrowUp, 
   ArrowDown, 
@@ -65,6 +67,7 @@ export function TabFinances({
   user, 
   onTabChange 
 }: TabFinancesProps) {
+  const { activeLedger } = useLedger();
   // 1. Sincronização com Data Real do Sistema (new Date())
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState<boolean>(false);
@@ -142,8 +145,13 @@ export function TabFinances({
     const startOfMonthStr = format(startOfMonth(selectedDate), 'yyyy-MM-dd');
     const endOfMonthStr = format(endOfMonth(selectedDate), 'yyyy-MM-dd');
 
+    const isShared = activeLedger.type === 'shared';
+    const targetCollection = isShared
+      ? collection(db, 'ledgers', activeLedger.id, 'transactions')
+      : collection(db, 'users', activeUid, 'transactions');
+
     const q = query(
-      collection(db, 'users', activeUid, 'transactions'),
+      targetCollection,
       where('date', '>=', startOfMonthStr),
       where('date', '<=', endOfMonthStr),
       orderBy('date', 'desc')
@@ -161,7 +169,7 @@ export function TabFinances({
       unsubscribe();
       setContextualTransactions([]);
     };
-  }, [user?.id, format(selectedDate, 'yyyy-MM')]);
+  }, [user?.id, format(selectedDate, 'yyyy-MM'), activeLedger.id, activeLedger.type]);
 
   // 1. Fonte Única da Verdade: Transações filtradas pelo mês selecionado via query contextual do Firestore
   const monthTransactions = useMemo(() => {
@@ -455,9 +463,13 @@ export function TabFinances({
     if (activeUid) {
       try {
         const batch = writeBatch(db);
+        const isShared = activeLedger.type === 'shared';
 
-        // 1. Grava a transação no Firestore (o onSnapshot de App.tsx atualizará a interface)
-        const txDocRef = doc(collection(db, 'users', activeUid, 'transactions'));
+        // 1. Grava a transação no cofre ativo
+        const targetColl = isShared
+          ? collection(db, 'ledgers', activeLedger.id, 'transactions')
+          : collection(db, 'users', activeUid, 'transactions');
+        const txDocRef = doc(targetColl);
         batch.set(txDocRef, {
           title: txTitle,
           amount: num,
@@ -465,12 +477,17 @@ export function TabFinances({
           category: txCategory,
           date: chosenDate,
           metaId: txMetaId,
+          ledgerId: activeLedger.id,
+          isFamily: isShared,
+          addedBy: activeUid,
           createdAt: serverTimestamp()
         });
 
         // 2. Se for aporte em meta, atualiza a Meta na mesma operação atômica
         if (txType === 'investimento_meta' && selectedMetaId) {
-          const goalRef = doc(db, 'users', activeUid, 'goals', selectedMetaId);
+          const goalRef = isShared
+            ? doc(db, 'ledgers', activeLedger.id, 'goals', selectedMetaId)
+            : doc(db, 'users', activeUid, 'goals', selectedMetaId);
           batch.update(goalRef, {
             currentAmount: increment(num),
             valorAcumulado: increment(num),
@@ -710,6 +727,7 @@ export function TabFinances({
           </div>
 
           <div className="flex items-center gap-2">
+            <LedgerToggle />
             {/* Functional Month Dropdown */}
             <div className="relative">
               <button
@@ -1130,6 +1148,7 @@ export function TabFinances({
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <LedgerToggle />
             {/* Desktop Month Dropdown */}
             <div className="relative">
               <button

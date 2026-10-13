@@ -25,6 +25,8 @@ import { collection, onSnapshot, query, orderBy, doc, where, limit } from 'fireb
 import { subscribeToPushNotifications } from './lib/pushNotifications';
 import { getApiUrl } from './lib/api';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LedgerProvider, useLedger } from './contexts/LedgerContext';
+import { FamilyVaultModal } from './components/FamilyVaultModal';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginScreen } from './components/LoginScreen';
 import { CheckoutScreen } from './components/CheckoutScreen';
@@ -41,6 +43,7 @@ import { RootRoute } from './components/RootRoute';
 function Dashboard() {
   const accountStorage = useAccountStorage();
   const { currentUser, logout } = useAuth();
+  const { activeLedger } = useLedger();
 
   const [userProfile, setUserProfile] = useState<{
     name?: string;
@@ -158,9 +161,17 @@ function Dashboard() {
       return;
     }
 
+    const isShared = activeLedger.type === 'shared';
+    const transCollection = isShared
+      ? collection(db, 'ledgers', activeLedger.id, 'transactions')
+      : collection(db, 'users', activeUid, 'transactions');
+    const goalsCollection = isShared
+      ? collection(db, 'ledgers', activeLedger.id, 'goals')
+      : collection(db, 'users', activeUid, 'goals');
+
     // Full history for the Home balance; recent lists still receive only five entries.
     const transQuery = query(
-      collection(db, 'users', activeUid, 'transactions'),
+      transCollection,
       orderBy('date', 'desc')
     );
     const unsubTrans = onSnapshot(transQuery, (snapshot) => {
@@ -169,17 +180,17 @@ function Dashboard() {
       setAllTransactions(docs);
       setTransactions(docs.slice(0, 5));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/transactions`);
+      handleFirestoreError(error, OperationType.LIST, isShared ? `ledgers/${activeLedger.id}/transactions` : `users/${activeUid}/transactions`);
     });
 
     // 2. Goals Listener
-    const goalsQuery = query(collection(db, 'users', activeUid, 'goals'));
+    const goalsQuery = query(goalsCollection);
     const unsubGoals = onSnapshot(goalsQuery, (snapshot) => {
       if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setGoals(docs);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/goals`);
+      handleFirestoreError(error, OperationType.LIST, isShared ? `ledgers/${activeLedger.id}/goals` : `users/${activeUid}/goals`);
     });
 
     // 3. Tasks Listener (Limit 20)
@@ -238,7 +249,7 @@ function Dashboard() {
       setAppointments([]);
       setRotinas([]);
     };
-  }, [currentUser?.uid]);
+  }, [currentUser?.uid, activeLedger.id, activeLedger.type]);
 
   // Notifications & Push Trigger
   useEffect(() => {
@@ -387,6 +398,7 @@ function Dashboard() {
       <WelcomeOverlay onStartTour={() => window.dispatchEvent(new CustomEvent('start-tour'))} />
       <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} user={user} onLogout={handleLogout} />
       <WhatsAppModal isOpen={isWhatsAppModalOpen} onClose={() => setIsWhatsAppModalOpen(false)} user={user} />
+      <FamilyVaultModal />
       <FocusModeModal 
         isOpen={isFocusModeOpen} 
         onClose={() => setIsFocusModeOpen(false)} 
@@ -434,34 +446,36 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/" element={<RootRoute />} />
-          <Route path="/homepage" element={<LandingPage />} />
-          <Route path="/page" element={<Navigate to="/homepage" replace />} />
-          <Route path="/login" element={<LoginScreen />} />
-          <Route path="/checkout" element={<CheckoutScreen />} />
-          <Route path="/import" element={<ImportModule />} />
-          <Route path="/privacidade" element={<PrivacyPolicy />} />
-          <Route path="/termos" element={<TermsOfUse />} />
-          <Route
-            path="/painel"
-            element={
-              <AdminProtectedRoute>
-                <PainelPage />
-              </AdminProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard/*"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          {/* Fallback inteligente: redireciona para a raiz onde o RootRoute avalia o destino */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <LedgerProvider>
+          <Routes>
+            <Route path="/" element={<RootRoute />} />
+            <Route path="/homepage" element={<LandingPage />} />
+            <Route path="/page" element={<Navigate to="/homepage" replace />} />
+            <Route path="/login" element={<LoginScreen />} />
+            <Route path="/checkout" element={<CheckoutScreen />} />
+            <Route path="/import" element={<ImportModule />} />
+            <Route path="/privacidade" element={<PrivacyPolicy />} />
+            <Route path="/termos" element={<TermsOfUse />} />
+            <Route
+              path="/painel"
+              element={
+                <AdminProtectedRoute>
+                  <PainelPage />
+                </AdminProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/*"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            {/* Fallback inteligente: redireciona para a raiz onde o RootRoute avalia o destino */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </LedgerProvider>
       </AuthProvider>
     </BrowserRouter>
   );

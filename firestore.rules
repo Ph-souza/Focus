@@ -27,6 +27,32 @@ service cloud.firestore {
       allow write: if false; // Escrita permitida exclusivamente via Firebase Admin SDK
     }
 
+    // =========================================================================
+    // COLEÇÃO DE COFRES COMPARTILHADOS (Controle Familiar)
+    // =========================================================================
+    match /ledgers/{ledgerId} {
+      allow read, write: if request.auth != null && (
+        resource == null ||
+        request.auth.uid in resource.data.members ||
+        resource.data.ownerUid == request.auth.uid
+      );
+
+      match /{document=**} {
+        allow read, write: if request.auth != null && (
+          get(/databases/$(database)/documents/ledgers/$(ledgerId)).data.ownerUid == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/ledgers/$(ledgerId)).data.members
+        );
+      }
+    }
+
+    // =========================================================================
+    // CONVITES DO COFRE FAMILIAR
+    // =========================================================================
+    match /family_invites/{inviteCode} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
     // Bloqueio categórico por padrão para todas as outras coleções não mapeadas
     match /{document=**} {
       allow read, write: if false;

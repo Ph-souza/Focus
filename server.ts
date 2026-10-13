@@ -583,8 +583,9 @@ const addTransactionTool: FunctionDeclaration = {
       title: { type: Type.STRING, description: "O nome / local da transação." },
       amount: { type: Type.NUMBER, description: "O valor da transação em Reais (Ex: 15.50)." },
       type: { type: Type.STRING, description: "Tipo da transação: 'income' (receita) ou 'expense' (despesa)." },
-      category: { type: Type.STRING, description: "Categoria (ex: 'Alimentação', 'Transporte', 'Assinatura', 'Salário')." },
-      date: { type: Type.STRING, description: "A data da transação no formato YYYY-MM-DD" }
+      category: { type: Type.STRING, description: "Categoria (ex: 'Alimentação', 'Mercado', 'Transporte', 'Moradia', 'Lazer', 'Saúde', 'Assinatura', 'Salário', 'Outros')." },
+      date: { type: Type.STRING, description: "A data da transação no formato YYYY-MM-DD" },
+      isFamily: { type: Type.BOOLEAN, description: "Defina como true se a transação for relacionada a despesas da casa, compras de mercado, contas residenciais ou gastos da família (ex: palavras como 'casa', 'mercado', 'nosso', 'luz', 'água', 'feira', 'família', 'aluguel', 'compras do mês'). Caso contrário, false." }
     },
     required: ["title", "amount", "type", "category"]
   }
@@ -604,7 +605,7 @@ const criarCompromissoRotinaTool: FunctionDeclaration = {
   }
 };
 
-const GLOBAL_SYSTEM_PROMPT = `Você é o Mentor Focus, a inteligência artificial de alta performance do aplicativo Nexus. Seu papel é atuar como um mentor implacável, porém encorajador, focado em produtividade e disciplina. Suas regras: 1. Tom de voz direto, assertivo e maduro. 2. Use frases curtas e de impacto. 3. Evite excesso de emojis. 4. Ao falar de metas ou finanças, exija constância e chame o usuário para a responsabilidade. 5. Nunca se apresente como um modelo de linguagem, você é o Mentor Focus.`;
+const GLOBAL_SYSTEM_PROMPT = `Você é o Mentor Focus, a inteligência artificial de alta performance do aplicativo Nexus Focus. Seu papel é atuar como um mentor implacável, porém encorajador, focado em produtividade e disciplina financeira. Suas regras: 1. Tom de voz direto, assertivo e maduro. 2. Use frases curtas e de impacto. 3. Evite excesso de emojis. 4. Ao falar de metas ou finanças, exija constância e chame o usuário para a responsabilidade. 5. Controle Familiar e Cofre Compartilhado: Se o usuário mencionar termos associados a gastos da casa, contas domésticas ou compras conjuntas (como 'casa', 'mercado', 'nosso', 'nossa', 'luz', 'água', 'feira', 'família', 'aluguel', 'compras do mês', 'condomínio'), classifique a transação com isFamily: true. Caso seja um gasto estritamente pessoal, use isFamily: false. 6. Nunca se apresente como um modelo de linguagem, você é o Mentor Focus.`;
 
 const GEMINI_MAIN_MODEL = "gemini-3.6-flash";
 const CANDIDATE_MODELS = [GEMINI_MAIN_MODEL];
@@ -2428,6 +2429,22 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
   }
 
   /**
+   * Helper que verifica se o título/categoria ou texto remete a despesas familiares/domésticas
+   */
+  function isFamilyContext(text?: string): boolean {
+    if (!text || typeof text !== "string") return false;
+    const lower = text.toLowerCase();
+    const keywords = [
+      "casa", "mercado", "nosso", "nossa", "luz", "água", "agua", "energia", "feira",
+      "aluguel", "família", "familia", "compras do mês", "compras do mes", "condomínio", "condominio",
+      "botijão", "supermercado", "açougue", "acougue", "hortifruti", "padaria da casa"
+    ];
+    if (keywords.some(k => lower.includes(k))) return true;
+    // Valida 'gás' ou 'gas' como palavra isolada para não confundir com gasolina
+    return /\b(gás|gas)\b/i.test(lower);
+  }
+
+  /**
    * Helpers para gravação direta no Firestore dos lançamentos extraídos pela IA
    */
   async function saveTransactionToFirestore(userId: string, tx: {
@@ -2436,6 +2453,7 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
     type?: string;
     category?: string;
     date?: string;
+    isFamily?: boolean;
   }) {
     const newTxId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
     let parsedAmount = 0;
@@ -2446,22 +2464,63 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
       parsedAmount = parseFloat(cleaned) || 0;
     }
 
+    const title = tx.title || "Lançamento";
+    const isFamilyDetected = Boolean(
+      tx.isFamily === true ||
+      isFamilyContext(tx.title) ||
+      isFamilyContext(tx.category)
+    );
+
+    // 1. Verifica se o usuário possui um cofre familiar/compartilhado ativo
+    let sharedLedgerId: string | null = null;
+    try {
+      const userSnap = await adminDb.collection("users").doc(userId).get();
+      if (userSnap.exists) {
+        const uData = userSnap.data();
+        const ledgers: any[] = uData?.ledgers || [];
+        const shared = ledgers.find((l: any) => l.type === "shared");
+        if (shared?.id) {
+          sharedLedgerId = shared.id;
+        }
+      }
+    } catch (err: any) {
+      console.warn("[saveTransactionToFirestore] Aviso ao buscar ledgers do usuário:", err?.message);
+    }
+
+    const isSavedToFamily = Boolean(isFamilyDetected && sharedLedgerId);
+    const targetLedgerId = isSavedToFamily ? sharedLedgerId! : userId;
+
     const transactionData = {
       id: newTxId,
-      title: tx.title || "Lançamento WhatsApp",
+      title,
       amount: parsedAmount,
       type: tx.type === "income" ? "income" : "expense",
-      category: tx.category || "Outros",
+      category: tx.category || (isSavedToFamily ? "Casa & Família" : "Outros"),
       date: tx.date || new Date().toISOString().split("T")[0],
+      ledgerId: targetLedgerId,
+      isFamily: isSavedToFamily,
+      addedBy: userId,
       createdAt: FieldValue.serverTimestamp()
     };
 
-    await withTimeout(
-      adminDb.collection("users").doc(userId).collection("transactions").doc(newTxId).set(transactionData),
-      10000,
-      `Salvar transação ${newTxId}`
-    );
-    console.log(`💰 [WhatsApp AI] Transação de R$ ${transactionData.amount} (${transactionData.title}) salva para o usuário ${userId}.`);
+    if (isSavedToFamily) {
+      // Salva no cofre compartilhado da família
+      await withTimeout(
+        adminDb.collection("ledgers").doc(sharedLedgerId!).collection("transactions").doc(newTxId).set(transactionData),
+        10000,
+        `Salvar transação familiar ${newTxId}`
+      );
+      console.log(`👨‍👩‍👧 [Family Ledger AI] Transação de R$ ${transactionData.amount} (${transactionData.title}) salva no cofre familiar ${sharedLedgerId} para o usuário ${userId}.`);
+    } else {
+      // Salva no cofre pessoal do usuário
+      await withTimeout(
+        adminDb.collection("users").doc(userId).collection("transactions").doc(newTxId).set(transactionData),
+        10000,
+        `Salvar transação ${newTxId}`
+      );
+      console.log(`💰 [WhatsApp/Siri AI] Transação pessoal de R$ ${transactionData.amount} (${transactionData.title}) salva para o usuário ${userId}.`);
+    }
+
     return transactionData;
   }
 
@@ -3722,7 +3781,7 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
       const baseInstruction = `${GLOBAL_SYSTEM_PROMPT}
 
 Sua missão na integração Siri & Atalhos do iOS é entender comandos de voz ou texto rápidos do usuário do iPhone.
-- Ao identificar gastos, despesas ou receitas: extraia amount, title, category ('Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Moradia', 'Lazer', 'Serviços', 'Outros'), type ('expense' ou 'income') e data no formato YYYY-MM-DD. Use OBRIGATORIAMENTE add_transaction.
+- Ao identificar gastos, despesas ou receitas: extraia amount, title, category ('Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Moradia', 'Lazer', 'Serviços', 'Outros'), type ('expense' ou 'income'), data no formato YYYY-MM-DD e isFamily (defina como true se envolver gastos domésticos, mercado, contas ou compras da família/casa, como 'casa', 'mercado', 'nosso', 'luz', 'água', 'feira', 'família', 'aluguel'). Use OBRIGATORIAMENTE add_transaction.
 - Ao identificar tarefas ou afazeres: use add_task.
 - Se o usuário especificar horário exato ou reunião/compromisso (ex: às 14h): use criarCompromissoRotina.
 - Ao solicitar conclusão de tarefa: use complete_task.
@@ -3833,51 +3892,10 @@ Data e hora atual: ${new Date().toISOString()}`;
               ...currentClaims,
               admin: true,
               isAdmin: true,
-              role: "admin_pro",
-              isPremium: true
+              role: "admin"
             });
           }
-
-          // 4. Concede privilégios no Firestore EXCLUSIVAMENTE para o documento cujo ID é o UID verificado do Auth
-          const verifiedUserRef = adminDb.collection("users").doc(authUser.uid);
-          await verifiedUserRef.set({
-            email: adminEmail,
-            isPremium: true,
-            role: "admin_pro",
-            plan: "pro_unlimited",
-            emailVerified: true,
-            verified: true,
-            updatedAt: FieldValue.serverTimestamp()
-          }, { merge: true });
-
-          // 5. Validação de integridade: pesquisa se existem outros documentos com o mesmo e-mail
-          // Se houver algum documento com esse e-mail cujo ID NÃO SEJA o UID verificado, NÃO concede privilégios!
-          const matchingUsersSnap = await adminDb.collection("users").where("email", "==", adminEmail).get();
-          const batch = adminDb.batch();
-
-          matchingUsersSnap.forEach((docSnap) => {
-            if (docSnap.id === authUser.uid) {
-              batch.set(docSnap.ref, {
-                isPremium: true,
-                role: "admin_pro",
-                plan: "pro_unlimited",
-                emailVerified: true,
-                updatedAt: FieldValue.serverTimestamp()
-              }, { merge: true });
-            } else {
-              console.warn(`🚨 [Auto-Seed Admin SEGURANÇA] Documento não verificado detectado com e-mail administrativo (ID: ${docSnap.id} !== UID: ${authUser.uid}). Removendo privilégios indevidos.`);
-              batch.set(docSnap.ref, {
-                role: "user",
-                isPremium: false,
-                plan: "gratuito",
-                securityAlert: "unverified_admin_email_mismatch",
-                updatedAt: FieldValue.serverTimestamp()
-              }, { merge: true });
-            }
-          });
-
-          await batch.commit();
-          console.log(`[Auto-Seed Admin] Administrador ${adminEmail} (UID: ${authUser.uid}) verificado e sincronizado com sucesso.`);
+          console.log(`[Auto-Seed Admin] Administrador ${adminEmail} (UID: ${authUser.uid}) verificado.`);
         }
       }
     } catch (seedErr: any) {
@@ -3911,6 +3929,224 @@ Data e hora atual: ${new Date().toISOString()}`;
     } catch (error: any) {
       console.error("[WhatsApp] Erro ao gerar token:", error);
       return res.status(500).json({ success: false, error: "Erro interno ao gerar token" });
+    }
+  });
+
+  // =========================================================================
+  // CONTROLE FAMILIAR - ROTAS DE COFRE COMPARTILHADO E CONVITES
+  // =========================================================================
+
+  /**
+   * 1. POST /api/family/vault
+   * Cria ou obtém o cofre compartilhado do usuário e gera um código/link de convite único.
+   */
+  app.post('/api/family/vault', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.user?.uid;
+      const userEmail = (req.user?.email || '').trim().toLowerCase();
+      const userName = req.user?.name || req.user?.displayName || userEmail.split('@')[0] || 'Usuário';
+
+      if (!userId) {
+        return res.status(401).json({ success: false, error: "Usuário não autenticado" });
+      }
+
+      // Consulta o perfil do usuário para verificar se já possui um cofre familiar
+      const userDocRef = adminDb.collection("users").doc(userId);
+      const userSnap = await userDocRef.get();
+      let ledgers: any[] = [];
+      if (userSnap.exists) {
+        ledgers = userSnap.data()?.ledgers || [];
+      }
+
+      let sharedLedger = ledgers.find((l: any) => l.type === "shared");
+      let sharedLedgerId = sharedLedger?.id;
+
+      // Se ainda não existir um cofre compartilhado, cria um novo
+      if (!sharedLedgerId) {
+        sharedLedgerId = `fam_${userId.slice(0, 8)}_${crypto.randomBytes(3).toString('hex')}`;
+        const newLedgerData = {
+          id: sharedLedgerId,
+          name: req.body?.name || "Cofre Familiar",
+          type: "shared",
+          ownerUid: userId,
+          ownerEmail: userEmail,
+          ownerName: userName,
+          members: [userId],
+          createdAt: FieldValue.serverTimestamp()
+        };
+
+        await adminDb.collection("ledgers").doc(sharedLedgerId).set(newLedgerData, { merge: true });
+
+        // Garante que o usuário tenha o cofre pessoal e adiciona o cofre compartilhado
+        const hasPersonal = ledgers.some((l: any) => l.type === "personal");
+        const updatedLedgers = hasPersonal ? [...ledgers] : [{ id: userId, type: "personal", role: "owner", name: "Pessoal" }, ...ledgers];
+        updatedLedgers.push({
+          id: sharedLedgerId,
+          type: "shared",
+          role: "owner",
+          name: "Família"
+        });
+
+        await userDocRef.set({ ledgers: updatedLedgers }, { merge: true });
+        ledgers = updatedLedgers;
+      }
+
+      // Gera código de convite amigável de 6 caracteres (Ex: FAM-9X2K)
+      const inviteCode = `FAM-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+      const inviteData = {
+        code: inviteCode,
+        ledgerId: sharedLedgerId,
+        ownerUid: userId,
+        ownerName: userName,
+        ownerEmail: userEmail,
+        status: "pending",
+        createdAt: FieldValue.serverTimestamp(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 dias
+      };
+
+      await adminDb.collection("family_invites").doc(inviteCode).set(inviteData);
+
+      const clientOrigin = req.headers.origin || "https://nexusfocus.web.app";
+      const inviteUrl = `${clientOrigin}/?family_invite=${inviteCode}`;
+
+      return res.json({
+        success: true,
+        ledgerId: sharedLedgerId,
+        inviteCode,
+        inviteUrl,
+        ownerName: userName
+      });
+    } catch (err: any) {
+      console.error("[Family Vault] Erro ao criar ou obter cofre familiar:", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erro interno ao processar cofre familiar" });
+    }
+  });
+
+  /**
+   * 2. POST /api/family/invite/accept
+   * Valida e aceita um código de convite, adicionando o cofre compartilhado ao perfil do convidado.
+   */
+  app.post('/api/family/invite/accept', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const inviteeUid = req.user?.uid;
+      const inviteeEmail = (req.user?.email || '').trim().toLowerCase();
+      const inviteeName = req.user?.name || req.user?.displayName || inviteeEmail.split('@')[0] || 'Usuário';
+
+      if (!inviteeUid) {
+        return res.status(401).json({ success: false, error: "Usuário não autenticado" });
+      }
+
+      const { inviteCode } = req.body || {};
+      const normalizedCode = (inviteCode || '').trim().toUpperCase();
+
+      if (!normalizedCode) {
+        return res.status(400).json({ success: false, error: "Código de convite não informado." });
+      }
+
+      const inviteDocRef = adminDb.collection("family_invites").doc(normalizedCode);
+      const inviteSnap = await inviteDocRef.get();
+
+      if (!inviteSnap.exists) {
+        return res.status(404).json({ success: false, error: "Convite não encontrado ou código inválido." });
+      }
+
+      const inviteData = inviteSnap.data();
+      if (inviteData?.status !== "pending") {
+        return res.status(400).json({ success: false, error: "Este convite já foi utilizado ou está expirado." });
+      }
+
+      if (inviteData?.ownerUid === inviteeUid) {
+        return res.status(400).json({ success: false, error: "Você já é o proprietário deste cofre familiar." });
+      }
+
+      const ledgerId = inviteData.ledgerId;
+      const ledgerRef = adminDb.collection("ledgers").doc(ledgerId);
+
+      // Adiciona o novo membro ao documento do cofre compartilhado
+      await ledgerRef.set({
+        members: FieldValue.arrayUnion(inviteeUid)
+      }, { merge: true });
+
+      // Atualiza o documento do convidado com o cofre compartilhado
+      const inviteeUserRef = adminDb.collection("users").doc(inviteeUid);
+      const inviteeSnap = await inviteeUserRef.get();
+      let inviteeLedgers: any[] = [];
+      if (inviteeSnap.exists) {
+        inviteeLedgers = inviteeSnap.data()?.ledgers || [];
+      }
+
+      const hasPersonal = inviteeLedgers.some((l: any) => l.type === "personal");
+      const updatedLedgers = hasPersonal ? [...inviteeLedgers] : [{ id: inviteeUid, type: "personal", role: "owner", name: "Pessoal" }, ...inviteeLedgers];
+
+      // Remove eventual entrada anterior do mesmo ledger se existir e adiciona com role guest
+      const filteredLedgers = updatedLedgers.filter((l: any) => l.id !== ledgerId);
+      filteredLedgers.push({
+        id: ledgerId,
+        type: "shared",
+        role: "guest",
+        name: "Família",
+        ownerEmail: inviteData.ownerEmail,
+        ownerName: inviteData.ownerName
+      });
+
+      await inviteeUserRef.set({
+        ledgers: filteredLedgers,
+        activeLedgerId: ledgerId
+      }, { merge: true });
+
+      // Atualiza o status do convite
+      await inviteDocRef.set({
+        status: "accepted",
+        acceptedByUid: inviteeUid,
+        acceptedByEmail: inviteeEmail,
+        acceptedByName: inviteeName,
+        acceptedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      console.log(`👨‍👩‍👧 [Family Invite] Convite ${normalizedCode} aceito por ${inviteeEmail} (UID: ${inviteeUid}) para o cofre ${ledgerId}.`);
+
+      return res.json({
+        success: true,
+        ledgerId,
+        ownerName: inviteData.ownerName,
+        ownerEmail: inviteData.ownerEmail
+      });
+    } catch (err: any) {
+      console.error("[Family Invite] Erro ao aceitar convite:", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erro ao aceitar convite familiar" });
+    }
+  });
+
+  /**
+   * 3. GET /api/family/invite/:code
+   * Retorna os dados públicos de um convite para exibição prévia antes da aceitação.
+   */
+  app.get('/api/family/invite/:code', async (req, res) => {
+    try {
+      const code = (req.params.code || '').trim().toUpperCase();
+      if (!code) {
+        return res.status(400).json({ valid: false, error: "Código ausente" });
+      }
+
+      const inviteSnap = await adminDb.collection("family_invites").doc(code).get();
+      if (!inviteSnap.exists) {
+        return res.status(404).json({ valid: false, error: "Convite não encontrado" });
+      }
+
+      const data = inviteSnap.data();
+      if (data?.status !== "pending") {
+        return res.status(400).json({ valid: false, error: "Convite já utilizado ou expirado" });
+      }
+
+      return res.json({
+        valid: true,
+        code: data.code,
+        ledgerId: data.ledgerId,
+        ownerName: data.ownerName,
+        ownerEmail: data.ownerEmail
+      });
+    } catch (err: any) {
+      return res.status(500).json({ valid: false, error: err?.message });
     }
   });
 
