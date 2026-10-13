@@ -23,8 +23,7 @@ export const adminEmails = [
 
 // Contas de Administrador com acesso ao Painel Administrativo (/painel) e Acesso Pro Irrestrito
 export const ADMIN_ACCOUNTS = [
-  ...adminEmails,
-  'lvfernandes11@gmail.com'
+  ...adminEmails
 ];
 
 export function isAdmin(email?: string | null): boolean {
