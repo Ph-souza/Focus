@@ -1,5 +1,33 @@
 export type TransactionType = 'income' | 'expense' | 'investimento_meta' | 'receita' | 'despesa';
 
+export type LedgerType = 'personal' | 'shared';
+export type LedgerRole = 'owner' | 'guest';
+
+export interface Ledger {
+  id: string;
+  type: LedgerType;
+  role: LedgerRole;
+  name?: string;
+  sharedWith?: string;
+  ownerEmail?: string;
+  ownerName?: string;
+  ownerUid?: string;
+  members?: string[];
+  createdAt?: string;
+}
+
+export interface FamilyInvite {
+  id?: string;
+  code: string;
+  ledgerId: string;
+  ownerUid: string;
+  ownerName: string;
+  ownerEmail: string;
+  status: 'pending' | 'accepted' | 'expired';
+  createdAt?: any;
+  expiresAt?: any;
+}
+
 export interface Transaction {
   id: string;
   title: string;
@@ -9,6 +37,9 @@ export interface Transaction {
   category?: string;
   metaId?: string; // Vincula a transação a uma meta específica
   description?: string;
+  ledgerId?: string; // Vincula a transação a um cofre/ledger específico (Pessoal ou Familiar)
+  isFamily?: boolean; // Flag contextual de gasto familiar/doméstico detectado pela IA
+  addedBy?: string; // UID de quem adicionou a transação
 }
 
 export type Transacao = Transaction;
@@ -20,6 +51,7 @@ export interface Goal {
   targetAmount: number;
   icon?: string;
   valorAcumulado?: number; // Compatibilidade com atualização de meta
+  ledgerId?: string; // Vincula a meta a um cofre específico
 }
 
 export interface Task {
@@ -80,6 +112,8 @@ export interface User {
   isDemo?: boolean;
   iosShortcutToken?: string;
   whatsappNumber?: string;
+  ledgers?: Ledger[];
+  activeLedgerId?: string;
 }
 
 export interface Notification {

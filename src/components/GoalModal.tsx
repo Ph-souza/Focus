@@ -5,6 +5,8 @@ import { db } from '../lib/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { User } from '../types';
 
+import { useLedger } from '../contexts/LedgerContext';
+
 interface GoalModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -12,6 +14,7 @@ interface GoalModalProps {
 }
 
 export function GoalModal({ isOpen, onClose, user }: GoalModalProps) {
+  const { activeLedger } = useLedger();
   const [title, setTitle] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
   
@@ -28,12 +31,17 @@ export function GoalModal({ isOpen, onClose, user }: GoalModalProps) {
     
     try {
       const newId = crypto.randomUUID();
-      await setDoc(doc(db, `users/${user.id}/goals`, newId), {
+      const isShared = activeLedger.type === 'shared';
+      const targetPath = isShared ? `ledgers/${activeLedger.id}/goals` : `users/${user.id}/goals`;
+      await setDoc(doc(db, targetPath, newId), {
         title: title.trim(),
         targetAmount: val,
         currentAmount: 0,
         deadline: '',
         type: 'financial',
+        ledgerId: activeLedger.id,
+        isFamily: isShared,
+        createdBy: user.id,
         createdAt: serverTimestamp(),
         userId: user.id
       });

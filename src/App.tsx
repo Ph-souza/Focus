@@ -25,6 +25,7 @@ import { collection, onSnapshot, query, orderBy, doc, where, limit } from 'fireb
 import { subscribeToPushNotifications } from './lib/pushNotifications';
 import { getApiUrl } from './lib/api';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LedgerProvider } from './contexts/LedgerContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginScreen } from './components/LoginScreen';
 import { CheckoutScreen } from './components/CheckoutScreen';
@@ -433,6 +434,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <LedgerProvider>
         <Routes>
           <Route path="/" element={<RootRoute />} />
           <Route path="/homepage" element={<LandingPage />} />
@@ -455,6 +457,7 @@ export default function App() {
           {/* Fallback inteligente: redireciona para a raiz onde o RootRoute avalia o destino */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </LedgerProvider>
       </AuthProvider>
     </BrowserRouter>
   );

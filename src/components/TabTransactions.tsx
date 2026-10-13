@@ -7,6 +7,8 @@ import { doc, setDoc, deleteDoc, serverTimestamp, collection, query, orderBy, li
 import { getApiUrl } from '../lib/api';
 
 import { MonthlyBudgetWidget } from './MonthlyBudgetWidget';
+import { useLedger } from '../contexts/LedgerContext';
+import { LedgerToggle } from './LedgerToggle';
 
 interface TabTransactionsProps {
   transactions: Transaction[];
@@ -15,6 +17,7 @@ interface TabTransactionsProps {
 }
 
 export function TabTransactions({ transactions, setTransactions, user }: TabTransactionsProps) {
+  const { activeLedger } = useLedger();
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newAmount, setNewAmount] = useState('');
@@ -44,8 +47,12 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
     const fetchInitial = async () => {
       setIsLoadingInitial(true);
       try {
+        const isShared = activeLedger.type === 'shared';
+        const targetColl = isShared
+          ? collection(db, 'ledgers', activeLedger.id, 'transactions')
+          : collection(db, 'users', currentUid, 'transactions');
         const firstQuery = query(
-          collection(db, 'users', currentUid, 'transactions'),
+          targetColl,
           orderBy('date', 'desc'),
           limit(20)
         );
@@ -76,7 +83,7 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
       isMounted = false;
       setPaginatedTransactions([]);
     };
-  }, [user?.id]);
+  }, [user?.id, activeLedger.id, activeLedger.type]);
 
   // 2. Paginação baseada em cursor: busca próxima página de 20 itens com startAfter(lastVisible)
   const loadMore = async () => {
@@ -84,8 +91,12 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
     if (!lastVisible || isLoadingMore || !hasMore || !currentUid) return;
     setIsLoadingMore(true);
     try {
+      const isShared = activeLedger.type === 'shared';
+      const targetColl = isShared
+        ? collection(db, 'ledgers', activeLedger.id, 'transactions')
+        : collection(db, 'users', currentUid, 'transactions');
       const nextQuery = query(
-        collection(db, 'users', currentUid, 'transactions'),
+        targetColl,
         orderBy('date', 'desc'),
         startAfter(lastVisible),
         limit(20)
@@ -164,8 +175,10 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
     for (let i = 0; i < _installments; i++) {
       const txDate = new Date();
       txDate.setMonth(txDate.getMonth() + i);
-      
       const txId = `${baseTxId}_${i}`;
+      
+      const isShared = activeLedger.type === 'shared';
+      const targetPath = isShared ? `ledgers/${activeLedger.id}/transactions` : `users/${user.id}/transactions`;
       const newTx = {
         title: _installments > 1 ? `${newTitle} (${i + 1}/${_installments})` : newTitle,
         amount: Math.round((amountNum / _installments) * 100) / 100, // Handle float division
@@ -173,14 +186,17 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
         category: newCategory,
         date: txDate.toISOString().split('T')[0],
         userId: user.id,
+        ledgerId: activeLedger.id,
+        isFamily: isShared,
+        addedBy: auth.currentUser?.uid || user.id,
         createdAt: serverTimestamp()
       };
       
       try {
-        await setDoc(doc(db, `users/${user.id}/transactions`, txId), newTx);
+        await setDoc(doc(db, targetPath, txId), newTx);
         setPaginatedTransactions(prev => [{ id: txId, ...newTx } as Transaction, ...prev]);
       } catch(err) {
-        handleFirestoreError(err, OperationType.CREATE, `users/${user.id}/transactions/${txId}`);
+        handleFirestoreError(err, OperationType.CREATE, `${targetPath}/${txId}`);
       }
     }
   };
@@ -200,11 +216,13 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const isShared = activeLedger.type === 'shared';
+    const targetPath = isShared ? `ledgers/${activeLedger.id}/transactions` : `users/${user.id}/transactions`;
     try {
-      await deleteDoc(doc(db, `users/${user.id}/transactions`, id));
+      await deleteDoc(doc(db, targetPath, id));
       setPaginatedTransactions(prev => prev.filter(tx => tx.id !== id));
     } catch(err) {
-      handleFirestoreError(err, OperationType.DELETE, `users/${user.id}/transactions/${id}`);
+      handleFirestoreError(err, OperationType.DELETE, `${targetPath}/${id}`);
     }
   };
 
@@ -214,17 +232,20 @@ export function TabTransactions({ transactions, setTransactions, user }: TabTran
       animate={{ opacity: 1, y: 0 }}
       className="max-w-7xl mx-auto flex flex-col gap-6"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Transações e Fluxo Financeiro</h2>
           <p className="text-slate-500 dark:text-zinc-400 text-sm mt-0.5">Gestão em tempo real de receitas, despesas e orçamento inteligente.</p>
         </div>
-        <button 
-          onClick={() => setIsAdding(!isAdding)}
-          className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-semibold transition-all shadow-sm hover:shadow-emerald-500/20 flex items-center gap-2 cursor-pointer active:scale-95"
-        >
-          <Plus size={16} /> <span className="hidden sm:inline">Nova Transação</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <LedgerToggle />
+          <button 
+            onClick={() => setIsAdding(!isAdding)}
+            className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-semibold transition-all shadow-sm hover:shadow-emerald-500/20 flex items-center gap-2 cursor-pointer active:scale-95"
+          >
+            <Plus size={16} /> <span className="hidden sm:inline">Nova Transação</span>
+          </button>
+        </div>
       </div>
 
       {isAdding && (

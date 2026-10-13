@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Target, TrendingUp, Plus } from 'lucide-react';
 import { Goal, User } from '../types';
 import { GoalModal } from './GoalModal';
+import { LedgerToggle } from './LedgerToggle';
 
 interface TabGoalsProps {
   goals: Goal[];
@@ -24,18 +25,21 @@ export function TabGoals({ goals, user }: TabGoalsProps) {
     >
       <GoalModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} user={user} />
       
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Caixinhas</h2>
           <p className="text-slate-600 dark:text-slate-400 mt-1">Gerencie e conquiste as suas metas financeiras.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="px-4 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm flex items-center gap-2 relative overflow-hidden group"
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-          <Plus size={16} /> <span className="hidden sm:inline relative z-10">Nova Meta</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <LedgerToggle />
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="px-4 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm flex items-center gap-2 relative overflow-hidden group cursor-pointer active:scale-95"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <Plus size={16} /> <span className="hidden sm:inline relative z-10">Nova Meta</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

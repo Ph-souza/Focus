@@ -2,6 +2,19 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Nexus Focus",
+        "supportEmail": "phillipe.souza27@gmail.com",
+        "authorizedRedirectUris": [
+          "https://planner-com-ia-assistant.firebaseapp.com/__/auth/handler",
+          "https://nexusfocus.web.app/__/auth/handler",
+          "http://localhost"
+        ]
+      }
+    }
+  },
   "hosting": {
     "site": "nexusfocus",
     "public": "dist",
