@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
 import QRCode from 'qrcode';
-import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { getApiUrl } from '../lib/api';
 import { db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
@@ -82,8 +82,7 @@ export function CheckoutScreen() {
   });
 
   const userEmail = (currentUser?.email || currentUser?.providerData?.[0]?.email || '').trim().toLowerCase();
-  const isWhitelisted = isWhitelistedPro(userEmail);
-  const hasAccess = isWhitelisted || isPremium;
+  const hasAccess = Boolean(isPremium);
 
   // Inicialização no componente
   useEffect(() => {

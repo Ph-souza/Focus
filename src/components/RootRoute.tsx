@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
-import { db } from '../lib/firebase';
+import { useAuth } from '../contexts/AuthContext';
 
 export function RootRoute() {
   const { currentUser, isPremium, isLoading, userDocExists } = useAuth();
@@ -23,10 +21,9 @@ export function RootRoute() {
   }
 
   // 3. Se o usuário ESTIVER autenticado no Firebase Auth:
-  // Se o pagamento estiver confirmado (isPremium ou Whitelisted): Redirecione para /dashboard.
+  // Se o pagamento estiver confirmado no Firestore (isPremium === true): Redirecione para /dashboard.
   // Se NÃO tiver pagamento confirmado: Redirecione imediatamente para /checkout.
-  const userEmail = (currentUser.email || '').trim().toLowerCase();
-  const hasPaidAccess = isWhitelistedPro(userEmail) || isPremium;
+  const hasPaidAccess = Boolean(isPremium);
 
   if (hasPaidAccess) {
     return <Navigate to="/dashboard" replace />;

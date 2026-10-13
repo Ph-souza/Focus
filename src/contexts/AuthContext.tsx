@@ -33,14 +33,11 @@ export function isAdmin(email?: string | null): boolean {
   return adminEmails.includes(normalized) || ADMIN_ACCOUNTS.includes(normalized);
 }
 
-// Contas com acesso Pro / Vitalício garantido
-export const PRO_ACCOUNTS = [
-  ...ADMIN_ACCOUNTS
-];
+// Contas com acesso Pro / Vitalício garantido (deprecado: acesso ao dashboard valida estritamente Firestore isPremium)
+export const PRO_ACCOUNTS: string[] = [];
 
-export function isWhitelistedPro(email?: string | null): boolean {
-  if (!email || typeof email !== 'string') return false;
-  return PRO_ACCOUNTS.includes(email.trim().toLowerCase()) || isAdmin(email);
+export function isWhitelistedPro(_email?: string | null): boolean {
+  return false;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -69,58 +66,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user) {
         setCurrentUser(user);
 
-        const email = (user.email || user.providerData?.[0]?.email || '').trim().toLowerCase();
-        const emailIsAdmin = adminEmails.includes(email);
-        const isPro = isWhitelistedPro(email) || emailIsAdmin;
-
-        // Se for conta Pro whitelisted ou Admin, ativa imediatamente sem esperar rede
-        if (isPro) {
-          setIsPremium(true);
-          setUserDocExists(true);
-          setIsLoading(false);
-        }
-
         // 1. O ID do documento na coleção users tem OBRIGATORIAMENTE de ser o uid oficial do Firebase Auth
         const userDocRef = doc(db, 'users', user.uid);
 
-        // Garante integridade do documento do usuário no Firestore apenas se já cadastrado ou for admin
+        // Garante integridade do documento do usuário no Firestore apenas se já cadastrado
         try {
           const snap = await getDoc(userDocRef);
           if (!isCurrentSession()) return;
 
           const name = user.displayName || user.providerData?.[0]?.displayName || user.email?.split('@')[0] || 'Usuário';
-          const email = user.email || '';
           const photoURL = user.photoURL || user.providerData?.[0]?.photoURL || '';
 
           if (snap.exists()) {
             setUserDocExists(true);
-            // Usuário já cadastrado no banco: sincroniza dados básicos
+            // Usuário já cadastrado no banco: sincroniza dados básicos se necessário sem alterar permissões
             await setDoc(userDocRef, {
               name,
               photoURL
             }, { merge: true });
-          } else if (isPro) {
-            setUserDocExists(true);
-            // Contas Pro whitelisted / Administradores são criadas com acesso irrestrito
-            await setDoc(userDocRef, {
-              name,
-              email,
-              photoURL,
-              isPremium: true,
-              createdAt: serverTimestamp()
-            }, { merge: true });
           } else {
             setUserDocExists(false);
           }
-          // Se !snap.exists() e não for Pro, NÃO criamos o documento aqui.
-          // O documento só será criado após a conclusão do checkout/onboarding.
+          // Se !snap.exists(), NÃO criamos documento com isPremium: true aqui.
+          // O acesso ao app exige pagamento confirmado no Firestore.
         } catch (err) {
           if (!isCurrentSession()) return;
           console.warn('Notice ensuring user doc exists:', err);
-          if (isPro) {
-            setIsPremium(true);
-            setUserDocExists(true);
-          }
         }
 
         if (!isCurrentSession()) return;
@@ -128,13 +99,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
           if (!isCurrentSession()) return;
           const exists = docSnap.exists();
-          setUserDocExists(isPro ? true : exists);
+          setUserDocExists(exists);
 
-          if (isPro) {
-            setIsPremium(true);
-          } else if (exists) {
+          if (exists) {
             const data = docSnap.data();
-            setIsPremium(Boolean(data?.isPremium));
+            // Valida estritamente a tag de pagamento confirmada no Firestore
+            setIsPremium(Boolean(
+              data?.isPremium === true ||
+              data?.status === 'active' ||
+              data?.role === 'admin_pro'
+            ));
           } else {
             setIsPremium(false);
           }
@@ -142,13 +116,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }, (err) => {
           if (!isCurrentSession()) return;
           console.error('Firestore user snapshot error:', err);
-          if (isPro) {
-            setIsPremium(true);
-            setUserDocExists(true);
-          } else {
-            setIsPremium(false);
-            setUserDocExists(false);
-          }
+          setIsPremium(false);
+          setUserDocExists(false);
           setIsLoading(false);
         });
       } else {

@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Shield, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
-import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { db, mapAuthError } from '../lib/firebase';
 import { NexusFocusLogo } from './AuraLogo';
 
@@ -30,9 +30,13 @@ export function LoginScreen() {
 
           if (!isMounted) return;
 
-          // Acesso ao /dashboard apenas com pagamento confirmado (isPremium) ou conta whitelisted
-          const userEmail = (currentUser.email || '').trim().toLowerCase();
-          const hasPaidAccess = isWhitelistedPro(userEmail) || Boolean(userDocSnap.data()?.isPremium);
+          // Acesso ao /dashboard apenas com pagamento confirmado no Firestore (isPremium === true)
+          const data = userDocSnap.data();
+          const hasPaidAccess = userDocSnap.exists() && Boolean(
+            data?.isPremium === true ||
+            data?.status === 'active' ||
+            data?.role === 'admin_pro'
+          );
 
           if (hasPaidAccess) {
             navigate('/dashboard', { replace: true });
@@ -71,11 +75,15 @@ export function LoginScreen() {
 
       if (user) {
         // Assim que o login via Google for concluído com sucesso:
-        // Verifique a existência do documento users/{uid} e status de pagamento
+        // Verifique a existência do documento users/{uid} e status de pagamento no Firestore
         const userDocRef = doc(db, 'users', user.uid);
         const userDocSnap = await getDoc(userDocRef);
-        const userEmail = (user.email || '').trim().toLowerCase();
-        const hasPaidAccess = isWhitelistedPro(userEmail) || Boolean(userDocSnap.data()?.isPremium);
+        const data = userDocSnap.data();
+        const hasPaidAccess = userDocSnap.exists() && Boolean(
+          data?.isPremium === true ||
+          data?.status === 'active' ||
+          data?.role === 'admin_pro'
+        );
 
         // Se pagamento confirmado -> /dashboard. Se não confirmado / novo -> /checkout
         if (hasPaidAccess) {
