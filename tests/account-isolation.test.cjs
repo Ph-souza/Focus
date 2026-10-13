@@ -53,44 +53,52 @@ test('logged out sessions cannot read or write personal cache', () => {
   assert.equal(guest.getItem('notes'), null);
   assert.equal(f.values.size, 0);
 });
-test('a stale auth load cannot install another account listener or restore its premium state', async () => {
+test('a stale auth response cannot restore another account premium state or listener', async () => {
   const states = []; let stateIndex = 0, effect, authCallback;
   const auth = { currentUser: null };
-  const pending = new Map(), listeners = [];
+  const access = new Map(), listeners = [];
   const React = {
     createContext: () => ({Provider: 'provider'}), createElement: () => null, Fragment: 'fragment',
     useState: initial => { const i=stateIndex++; states[i]=initial; return [initial, value=>states[i]=value]; },
     useEffect: fn => { effect=fn; }, useContext: () => null
   };
   const firebase = { doc: (_db,...parts)=>parts.join('/'),
-    getDoc: ref => new Promise(resolve=>pending.set(ref,resolve)),
-    setDoc: async()=>{}, serverTimestamp: ()=>0,
     onSnapshot: (ref,next,error)=>{const l={ref,next,error,unsubscribed:false};listeners.push(l);return ()=>l.unsubscribed=true;}
   };
   const mod={exports:{}};
   vm.runInNewContext(compile('src/contexts/AuthContext.tsx'), {
     exports:mod.exports,module:mod,
     require: name => name==='react'?React:name==='firebase/auth'?{onAuthStateChanged:(_auth,cb)=>{authCallback=cb;return ()=>{};}}:
-      name==='firebase/firestore'?firebase:{auth,db:{},signInWithGoogle:async()=>null,signOutUser:async()=>{}},
-    console, sessionStorage:{removeItem:()=>{}},window:{location:{}}
+      name==='firebase/firestore'?firebase:name.endsWith('/lib/api')?{getApiUrl:path=>path}:{auth,db:{},signInWithGoogle:async()=>null,signOutUser:async()=>{}},
+    console, sessionStorage:{removeItem:()=>{}},window:{location:{}},
+    fetch: (_url, init) => new Promise(resolve => access.set(init.headers.Authorization.slice(7), resolve))
   });
   mod.exports.AuthProvider({children:null}); effect();
-  auth.currentUser={uid:'A',email:'a@example.com'};
+  const user = uid => ({uid, email:uid.toLowerCase()+'@example.com', getIdToken:async()=>uid});
+  const response = premium => ({ok:true, json:async()=>({userDocExists:true,isPremium:premium,isAdmin:false})});
+  auth.currentUser=user('A');
   const first=authCallback(auth.currentUser);
-  auth.currentUser={uid:'B',email:'b@example.com'};
+  auth.currentUser=user('B');
   const second=authCallback(auth.currentUser);
-  assert.equal(states[1],false); assert.equal(states[2],null);
-  pending.get('users/B')({exists:()=>true});
-  await second;
-  pending.get('users/A')({exists:()=>true});
-  await first;
-  assert.equal(listeners.length,1); assert.equal(listeners[0].ref,'users/B');
-  listeners[0].next({exists:()=>true,data:()=>({isPremium:true})});
+  await Promise.all([first,second]);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(states[1],false); assert.equal(states[3],null);
+  const listenerB=listeners.find(listener=>listener.ref==='users/B');
+  assert.ok(listenerB); assert.equal(listeners.filter(listener=>!listener.unsubscribed).length,1);
+  access.get('B')(response(true));
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(states[1],true);
-  auth.currentUser={uid:'C',email:'c@example.com'};
+  access.get('A')(response(false));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(states[1],true);
+  auth.currentUser=user('C');
   const third=authCallback(auth.currentUser);
-  listeners[0].next({exists:()=>true,data:()=>({isPremium:true})});
+  await third;
+  await new Promise(resolve=>setImmediate(resolve));
+  listenerB.next({exists:()=>true,data:()=>({isPremium:true})});
   assert.equal(states[1],false);
-  pending.get('users/C')({exists:()=>false}); await third;
-  assert.equal(listeners[0].unsubscribed,true);
+  access.get('C')(response(false));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(listenerB.unsubscribed,true);
+  assert.equal(states[1],false);
 });

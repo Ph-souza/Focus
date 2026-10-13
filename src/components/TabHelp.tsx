@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Joyride, Step, CallBackProps, STATUS } from 'react-joyride';
+import { Joyride, type Step, type EventData, STATUS } from 'react-joyride';
 import { 
   LayoutDashboard, 
   Target, 
@@ -126,7 +126,7 @@ const TutorialCard: React.FC<TutorialCardProps> = ({ title, description, icon, o
 export function TabHelp() {
   const [activeTour, setActiveTour] = useState<string | null>(null);
 
-  const handleJoyrideCallback = (data: CallBackProps) => {
+  const handleJoyrideCallback = (data: EventData) => {
     const { status } = data;
     // Reseta o estado quando finalizado ou pulado
     if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status as any)) {
@@ -195,8 +195,7 @@ export function TabHelp() {
         steps={activeTour ? TOUR_STEPS[activeTour] : []}
         run={!!activeTour}
         continuous={true}
-        showSkipButton={true}
-        callback={handleJoyrideCallback}
+        onEvent={handleJoyrideCallback}
         locale={{
           back: 'Anterior',
           close: 'Fechar',
@@ -204,14 +203,13 @@ export function TabHelp() {
           next: 'Próximo',
           skip: 'Pular',
         }}
-        styles={{
-          options: {
-            primaryColor: '#2563eb', // Azul vibrante
-            textColor: '#1e293b',
-            backgroundColor: '#ffffff',
-            arrowColor: '#ffffff',
-            zIndex: 10000,
-          }
+        options={{
+          buttons: ['back', 'close', 'primary', 'skip'],
+          primaryColor: '#2563eb',
+          textColor: '#1e293b',
+          backgroundColor: '#ffffff',
+          arrowColor: '#ffffff',
+          zIndex: 10000,
         }}
       />
     </div>

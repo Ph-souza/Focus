@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Shield, AlertCircle, Loader2, Sparkles } from 'lucide-react';
-import { doc, getDoc } from 'firebase/firestore';
-import { useAuth, isWhitelistedPro } from '../contexts/AuthContext';
-import { db, mapAuthError } from '../lib/firebase';
+import { useAuth } from '../contexts/AuthContext';
+import { mapAuthError } from '../lib/firebase';
+import { getApiUrl } from '../lib/api';
 import { NexusFocusLogo } from './AuraLogo';
 
 export function LoginScreen() {
-  const { currentUser, isLoading, loginWithGoogle, logout } = useAuth();
+  const { currentUser, isPremium, isLoading, loginWithGoogle, logout } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isCheckoutIntent = searchParams.get('intent') === 'checkout';
@@ -25,14 +25,10 @@ export function LoginScreen() {
       if (!isLoading && currentUser) {
         setIsVerifyingUserDoc(true);
         try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          const userDocSnap = await getDoc(userDocRef);
-
           if (!isMounted) return;
 
-          // Acesso ao /dashboard apenas com pagamento confirmado (isPremium) ou conta whitelisted
-          const userEmail = (currentUser.email || '').trim().toLowerCase();
-          const hasPaidAccess = isWhitelistedPro(userEmail) || Boolean(userDocSnap.data()?.isPremium);
+          // O acesso é decidido pelo backend após validação de assinatura e identidade.
+          const hasPaidAccess = isPremium;
 
           if (hasPaidAccess) {
             navigate('/dashboard', { replace: true });
@@ -56,7 +52,7 @@ export function LoginScreen() {
     return () => {
       isMounted = false;
     };
-  }, [isLoading, currentUser, navigate]);
+  }, [isLoading, currentUser, isPremium, navigate]);
 
   // Regra 2: Lógica do Pós-Login com Google Auth
   const handleGoogleClick = async () => {
@@ -70,12 +66,12 @@ export function LoginScreen() {
       const user = await loginWithGoogle();
 
       if (user) {
-        // Assim que o login via Google for concluído com sucesso:
-        // Verifique a existência do documento users/{uid} e status de pagamento
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        const userEmail = (user.email || '').trim().toLowerCase();
-        const hasPaidAccess = isWhitelistedPro(userEmail) || Boolean(userDocSnap.data()?.isPremium);
+        // Consulta a decisão do backend; Firestore no cliente não concede acesso Premium.
+        const token = await user.getIdToken();
+        const accessResponse = await fetch(getApiUrl('/api/auth/access'), { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+        if (!accessResponse.ok) throw new Error('Não foi possível validar a assinatura. Tente novamente.');
+        const access = await accessResponse.json();
+        const hasPaidAccess = access.isPremium === true;
 
         // Se pagamento confirmado -> /dashboard. Se não confirmado / novo -> /checkout
         if (hasPaidAccess) {

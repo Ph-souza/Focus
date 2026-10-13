@@ -1,8 +1,5 @@
-import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../lib/firebase';
 
 export function RootRoute() {
   const { currentUser, isPremium, isLoading, userDocExists } = useAuth();

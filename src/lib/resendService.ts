@@ -60,7 +60,7 @@ export async function sendOnboardingEmail(payload: OnboardingEmailPayload): Prom
   const normalizedCoupon = (payload.coupon || '').trim().toUpperCase();
 
   // Seleção automática do template
-  let selectedTemplate = RESEND_TEMPLATES.STANDARD;
+  let selectedTemplate: (typeof RESEND_TEMPLATES)[keyof typeof RESEND_TEMPLATES] = RESEND_TEMPLATES.STANDARD;
   if (normalizedCoupon === 'NEXUSELITE') {
     selectedTemplate = RESEND_TEMPLATES.ELITE;
   } else if (normalizedCoupon === 'FOCUS50') {

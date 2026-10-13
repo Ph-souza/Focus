@@ -1,5 +1,5 @@
 import { useAccountStorage } from './hooks/useAccountStorage';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TabType, User, AppNotification, Transaction, ChatMessage, Task, Appointment, Rotina } from './types';
 import { Navigation } from './components/Navigation';
@@ -31,10 +31,9 @@ import { CheckoutScreen } from './components/CheckoutScreen';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfUse } from './components/TermsOfUse';
 import { LandingPage } from './components/LandingPage';
-import { ImportModule } from './components/ImportModule';
+const ImportModule = lazy(() => import('./components/ImportModule').then(module => ({ default: module.ImportModule })));
+const AdminConsole = lazy(() => import('./components/AdminConsole').then(module => ({ default: module.AdminConsole })));
 import { WelcomeOverlay } from './components/WelcomeOverlay';
-import { AdminPanel } from './components/AdminPanel';
-import PainelPage from './app/painel/page';
 import { AdminProtectedRoute } from './components/AdminProtectedRoute';
 import { RootRoute } from './components/RootRoute';
 
@@ -440,17 +439,11 @@ export default function App() {
           <Route path="/page" element={<Navigate to="/homepage" replace />} />
           <Route path="/login" element={<LoginScreen />} />
           <Route path="/checkout" element={<CheckoutScreen />} />
-          <Route path="/import" element={<ImportModule />} />
+          <Route path="/import" element={<Suspense fallback={<div className="min-h-screen grid place-items-center">Carregando…</div>}><ImportModule /></Suspense>} />
           <Route path="/privacidade" element={<PrivacyPolicy />} />
           <Route path="/termos" element={<TermsOfUse />} />
-          <Route
-            path="/painel"
-            element={
-              <AdminProtectedRoute>
-                <PainelPage />
-              </AdminProtectedRoute>
-            }
-          />
+          <Route path="/admin" element={<AdminProtectedRoute><Suspense fallback={<div className="min-h-screen grid place-items-center">Carregando painel…</div>}><AdminConsole /></Suspense></AdminProtectedRoute>} />
+          <Route path="/painel" element={<Navigate to="/admin" replace />} />
           <Route
             path="/dashboard/*"
             element={

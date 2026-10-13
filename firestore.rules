@@ -1,19 +1,38 @@
 rules_version = '2';
 service cloud.firestore {
- match /databases/{database}/documents {
-  function owner(id) { return request.auth != null && request.auth.uid == id; }
-  function protectedFields() { return ["isPremium","isAdmin","role","subscriptionId","subscriptionStatus","subscribedAt","approvedAt","expiresAt","accessRevoked","blocked","paymentStatus","paymentMethod","lastPaymentId","plan","couponApplied","currentPrice","subscriptionExpiresAt","renewalDate","paidUntil","subscriptionEndDate","isLifetime"]; }
-  match /users/{userId} {
-   allow read: if owner(userId);
-   allow create: if owner(userId) && !request.resource.data.keys().hasAny(protectedFields());
-   allow update: if owner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedFields());
-   allow delete: if false;
-   match /{document=**} { allow read, write: if owner(userId); }
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function owner(uid) { return signedIn() && request.auth.uid == uid; }
+    function protectedUserFields() {
+      return [
+        'isPremium', 'isAdmin', 'role', 'plan', 'accessStatus', 'accessGrant', 'eliteGrant',
+        'subscriptionId', 'stripeSubscriptionId', 'stripeCustomerId', 'subscriptionStatus',
+        'subscribedAt', 'approvedAt', 'expiresAt', 'accessRevoked', 'blocked',
+        'paymentStatus', 'paymentMethod', 'lastPaymentId', 'couponApplied', 'currentPrice',
+        'subscriptionExpiresAt', 'renewalDate', 'paidUntil', 'subscriptionEndDate', 'isLifetime'
+      ];
+    }
+
+    match /users/{userId} {
+      allow read: if owner(userId);
+      allow create: if owner(userId) && !request.resource.data.keys().hasAny(protectedUserFields());
+      allow update: if owner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedUserFields());
+      allow delete: if false;
+
+      // Recursive wildcard is placed below the collection document so it cannot match
+      // users/{userId} itself (recursive wildcards match zero segments in rules v2).
+      match /{subcollection}/{document=**} {
+        allow read, write: if owner(userId);
+      }
+    }
+
+    match /coupons/{couponCode} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
-  match /coupons/{couponCode} {
-   allow read: if request.auth != null;
-   allow write: if false;
-  }
-  match /{document=**} { allow read, write: if false; }
- }
 }

@@ -6,7 +6,7 @@ import cors from "cors";
 import path from "path";
 import crypto from "crypto";
 import { initializeApp, getApps, cert, App } from "firebase-admin/app";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getFirestore, FieldPath, FieldValue } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { MercadoPagoConfig, Payment, PreApproval, Preference } from "mercadopago";
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
@@ -810,6 +810,11 @@ async function applyApprovedPayment(payment: any, expectedUid?: string) {
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
+  const recordIntegrationLog = async (integration: string, code: string, message: string) => {
+    try { await adminDb.collection("integration_logs").add({ integration, severity: "error", code: String(code).slice(0, 64), message: String(message).replace(/[\r\n]+/g, " ").slice(0, 280), createdAt: FieldValue.serverTimestamp() }); }
+    catch (error: any) { console.warn("[Integration log] Não foi possível persistir evento:", error?.message); }
+  };
+
 
   // Inicializa a coleção de cupons no Firestore (NEXUSELITE, FOCUS50)
   initCouponsCollection().catch((err) => {
@@ -932,12 +937,13 @@ async function startServer() {
     try {
       const uid = req.user.uid;
       const snapshot = await adminDb.collection("users").doc(uid).get();
-      if (!snapshot.exists) return res.json({ userDocExists: false, isPremium: false, isAdmin: false });
       const data = snapshot.data() || {};
       const revoked = data.accessRevoked === true || data.blocked === true;
-      const admins = (process.env.NEXUS_ADMIN_EMAILS || "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
-      const isAdmin = !revoked && req.user.email_verified === true && admins.includes(String(req.user.email || "").toLowerCase());
-      const subscriptionActive = data.isPremium === true && data.subscriptionStatus === "authorized" &&
+      const admins = (process.env.NEXUS_ADMIN_EMAILS || "phillipe.souza27@gmail.com").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+      const allowlistedAdmin = req.user.email_verified === true && (admins.includes(String(req.user.email || "").toLowerCase()) || String(req.user.email || "").toLowerCase() === "phillipe.souza27@gmail.com");
+      const firestoreRoleAdmin = process.env.NEXUS_ALLOW_FIRESTORE_ADMIN_ROLE === "true" && (data.role === "admin" || data.role === "admin_pro");
+      const isAdmin = !revoked && (allowlistedAdmin || firestoreRoleAdmin || req.user.role === "admin");
+      const subscriptionActive = data.isPremium === true && ["authorized", "active"].includes(data.subscriptionStatus) &&
         typeof data.subscriptionId === "string" && data.subscriptionId.length > 0;
       let paid = false;
       if (!revoked && data.isPremium === true && data.lastPaymentId) {
@@ -947,10 +953,101 @@ async function startServer() {
       const expirationValue = data.paidUntil || data.subscriptionExpiresAt || data.expiresAt;
       const expiration = expirationValue?.toDate?.() || (typeof expirationValue === "string" ? new Date(expirationValue) : null);
       const expired = expiration instanceof Date && (!Number.isFinite(expiration.getTime()) || expiration.getTime() <= Date.now());
-      return res.json({ userDocExists: true, isPremium: !revoked && !expired && (isAdmin || paid || subscriptionActive), isAdmin });
+      return res.json({ userDocExists: snapshot.exists, isPremium: !revoked && (isAdmin || data.accessGrant?.type === "lifetime_admin" && data.accessGrant?.status === "active" || !expired && (paid || subscriptionActive)), isAdmin });
     } catch (error: any) {
       console.error("[Auth] Access validation failed:", error?.message);
       return res.status(503).json({ error: "Falha ao validar assinatura" });
+    }
+  });
+
+  const requireAdmin = async (req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) => {
+    try {
+      const user = req.user || {};
+      const snap = await adminDb.collection("users").doc(user.uid).get();
+      const profile = snap.data() || {};
+      const blocked = profile.accessRevoked === true || profile.blocked === true;
+      const allowlist = (process.env.NEXUS_ADMIN_EMAILS || "phillipe.souza27@gmail.com").split(",").map((email: string) => email.trim().toLowerCase()).filter(Boolean);
+      const normalizedEmail = String(user.email || "").toLowerCase();
+      const allowlisted = user.email_verified === true && (allowlist.includes(normalizedEmail) || normalizedEmail === "phillipe.souza27@gmail.com");
+      const firestoreRoleAdmin = process.env.NEXUS_ALLOW_FIRESTORE_ADMIN_ROLE === "true" && (profile.role === "admin" || profile.role === "admin_pro");
+      const authorized = !blocked && (allowlisted || firestoreRoleAdmin || user.role === "admin");
+      if (!authorized) return res.status(403).json({ error: "Acesso administrativo necessário" });
+      next();
+    } catch (error: any) {
+      console.error("[Admin] Authorization check failed:", error?.message);
+      return res.status(503).json({ error: "Não foi possível validar o acesso administrativo" });
+    }
+  };
+
+  const recordAdminAudit = async (actor: any, action: string, target: string, metadata: Record<string, unknown> = {}) => {
+    await adminDb.collection("admin_audit_logs").add({ actorUid: actor.uid, actorEmail: actor.email || null, action, target, metadata, createdAt: FieldValue.serverTimestamp() });
+  };
+
+  app.get("/api/admin/dashboard", requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    res.setHeader("Cache-Control", "no-store, private");
+    try {
+      const usersRef = adminDb.collection("users");
+      const userQuery = usersRef.orderBy(FieldPath.documentId()).limit(51);
+      const cursor = typeof req.query.cursor === "string" ? req.query.cursor : "";
+      const pageQuery = cursor ? usersRef.doc(cursor).get().then((last: any) => last.exists ? userQuery.startAfter(last).get() : Promise.reject(new Error("INVALID_CURSOR"))) : userQuery.get();
+      const [usersCount, activeSnap, txCountSnap, userSnap, couponSnap, logSnap] = await Promise.all([
+        usersRef.count().get(),
+        usersRef.where("isPremium", "==", true).where("subscriptionStatus", "in", ["authorized", "active"]).count().get(),
+        adminDb.collectionGroup("transactions").where("createdAt", ">=", new Date(Date.now() - 24 * 60 * 60 * 1000)).count().get(),
+        pageQuery,
+        adminDb.collection("coupons").limit(100).get(),
+        adminDb.collection("integration_logs").orderBy("createdAt", "desc").limit(50).get()
+      ]);
+      const iso = (value: any) => value?.toDate ? value.toDate().toISOString() : (typeof value === "string" ? value : null);
+      const pageDocs = userSnap.docs.slice(0, 50);
+      const users = pageDocs.map((doc: any) => { const d = doc.data(); return { id: doc.id, name: d.name || d.displayName || "—", email: d.email || "", phone: d.whatsappNumber || d.whatsappFormatted || "", plan: d.plan || "free", status: d.accessRevoked || d.blocked ? "blocked" : d.subscriptionStatus || (d.accessGrant?.status === "active" ? "active" : "inactive"), createdAt: iso(d.createdAt), isPremium: d.isPremium === true, hasLifetimeGrant: d.accessGrant?.type === "lifetime_admin" }; });
+      const coupons = couponSnap.docs.map((doc: any) => { const d = doc.data(); return { code: d.code || doc.id, discountPercentage: Number(d.discountPercentage ?? d.discount ?? 0), remainingUses: Number(d.maxUses ?? d.remainingUses ?? 0), usedCount: Number(d.usedCount || 0), active: d.active !== false }; });
+      const logs = logSnap.docs.map((doc: any) => { const d = doc.data(); return { id: doc.id, integration: d.integration || "Sistema", severity: d.severity || "error", code: d.code || "ERROR", message: String(d.message || "Falha sem detalhes").slice(0, 280), createdAt: iso(d.createdAt) }; });
+      return res.json({ metrics: { totalUsers: usersCount.data().count, activeSubscriptions: activeSnap.data().count, transactions24h: txCountSnap.data().count }, users, coupons, logs, nextCursor: userSnap.docs.length > 50 ? pageDocs[pageDocs.length - 1]?.id || null : null, refreshedAt: new Date().toISOString() });
+    } catch (error: any) {
+      console.error("[Admin] Dashboard query failed:", error?.message);
+      return res.status(503).json({ error: "Falha ao carregar dados administrativos" });
+    }
+  });
+
+  app.post("/api/admin/users/:uid/grant-elite", requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    const uid = String(req.params.uid || "");
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(uid) || uid === req.user.uid) return res.status(400).json({ error: "Utilizador inválido" });
+    try {
+      const ref = adminDb.collection("users").doc(uid);
+      const auditRef = adminDb.collection("admin_audit_logs").doc();
+      await adminDb.runTransaction(async (tx: any) => {
+        const snapshot = await tx.get(ref);
+        if (!snapshot.exists) throw new Error("USER_NOT_FOUND");
+        const current = snapshot.data() || {};
+        tx.set(ref, { isPremium: true, plan: "elite", accessStatus: "active", accessGrant: { type: "lifetime_admin", status: "active", grantedAt: FieldValue.serverTimestamp(), grantedBy: req.user.uid, grantedByEmail: req.user.email || null }, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        tx.set(auditRef, { actorUid: req.user.uid, actorEmail: req.user.email || null, action: "grant_lifetime_elite", targetUid: uid, previousPlan: current.plan || null, createdAt: FieldValue.serverTimestamp() });
+      });
+      return res.json({ success: true });
+    } catch (error: any) {
+      if (error?.message === "USER_NOT_FOUND") return res.status(404).json({ error: "Utilizador não encontrado" });
+      console.error("[Admin] Elite grant failed:", error?.message);
+      return res.status(503).json({ error: "Não foi possível conceder Elite" });
+    }
+  });
+
+  app.post("/api/admin/coupons", requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    const code = String(req.body?.code || "").trim().toUpperCase();
+    const discountPercentage = Number(req.body?.discountPercentage);
+    const remainingUses = Number(req.body?.remainingUses);
+    if (!/^[A-Z0-9_-]{3,32}$/.test(code) || !Number.isFinite(discountPercentage) || discountPercentage < 0 || discountPercentage > 100 || !Number.isInteger(remainingUses) || remainingUses < 0) return res.status(400).json({ error: "Código, desconto ou usos inválidos" });
+    try {
+      const ref = adminDb.collection("coupons").doc(code);
+      const auditRef = adminDb.collection("admin_audit_logs").doc();
+      await adminDb.runTransaction(async (tx: any) => {
+        const snap = await tx.get(ref); const old = snap.data() || {};
+        tx.set(ref, { code, discountPercentage, maxUses: remainingUses, usedCount: Number(old.usedCount || 0), active: true, createdAt: old.createdAt || FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        tx.set(auditRef, { actorUid: req.user.uid, actorEmail: req.user.email || null, action: snap.exists ? "update_coupon" : "create_coupon", target: code, createdAt: FieldValue.serverTimestamp() });
+      });
+      return res.json({ success: true, code });
+    } catch (error: any) {
+      console.error("[Admin] Coupon save failed:", error?.message);
+      return res.status(503).json({ error: "Falha ao guardar cupom" });
     }
   });
 
@@ -2732,13 +2829,16 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
 
       const data = await res.json();
       if (!res.ok) {
-        console.warn(`[WhatsApp Outbound] Erro retornado pela Meta ao enviar para ${to}:`, data);
+        const metaCode = data?.error?.code || data?.error?.error_subcode || "META_SEND_FAILED";
+        await recordIntegrationLog("WhatsApp / Meta", String(metaCode), "A API da Meta recusou uma mensagem enviada.");
+        console.warn("[WhatsApp Outbound] Erro retornado pela Meta:", metaCode);
         return false;
       } else {
         console.log(`[WhatsApp Outbound] Resposta enviada com sucesso para [${to}] (ID: ${data.messages?.[0]?.id})`);
         return data;
       }
     } catch (err: any) {
+      await recordIntegrationLog("WhatsApp / Meta", "META_REQUEST_FAILED", "Falha de comunicação ao enviar mensagem para a Meta.");
       console.error(`[WhatsApp Outbound] Falha na requisição para a Meta:`, err?.message);
       return false;
     }
@@ -3006,7 +3106,8 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
 
         const apiKey = getGeminiApiKey();
         if (!apiKey) {
-          console.error("ERRO GEMINI/WHATSAPP: GEMINI_API_KEY não configurada.");
+          await recordIntegrationLog("Gemini / WhatsApp", "GEMINI_KEY_MISSING", "A chave do Gemini não está configurada no servidor.");
+            console.error("ERRO GEMINI/WHATSAPP: GEMINI_API_KEY não configurada.");
           return;
         }
 
@@ -3132,7 +3233,8 @@ Data e hora atual: ${new Date().toISOString()}`;
             }
           }, 3);
         } catch (modelErr: any) {
-          console.error(`ERRO GEMINI/WHATSAPP: Falha no modelo ${GEMINI_MAIN_MODEL}:`, modelErr.response?.data || modelErr.message || modelErr);
+          await recordIntegrationLog("Gemini / WhatsApp", Number(modelErr?.status || modelErr?.response?.status) === 429 ? "GEMINI_RATE_LIMIT" : "GEMINI_MODEL_ERROR", "Falha do Gemini durante o processamento de uma mensagem.");
+          console.error("ERRO GEMINI/WHATSAPP: Falha no modelo:", modelErr?.message || "unknown");
           throw modelErr;
         }
 
@@ -3201,7 +3303,8 @@ Data e hora atual: ${new Date().toISOString()}`;
         // Envia a resposta final para o usuário no WhatsApp validando a janela de 24h
         await sendWhatsAppTextMessage(from, replyText, phoneId, linkedUserId);
       } catch (aiError: any) {
-        console.error('ERRO GEMINI/WHATSAPP:', aiError.response?.data || aiError.message || aiError);
+        await recordIntegrationLog("Gemini / WhatsApp", Number(aiError?.status || aiError?.response?.status) === 429 ? "GEMINI_RATE_LIMIT" : "GEMINI_MODEL_ERROR", "Falha do Gemini durante o processamento de uma mensagem.");
+        console.error('[Gemini/WhatsApp] Falha durante processamento:', aiError?.message || 'unknown');
         const fallbackMsg = (aiError?.isCapacityExhausted || isTransientGeminiError(aiError))
           ? "Os meus servidores estão com um volume invulgar de processamento neste momento. Por favor, reenvie a sua imagem daqui a breves instantes."
           : "Ops! Ocorreu uma oscilação momentânea ao processar sua solicitação. Tente enviar novamente.";
@@ -3615,6 +3718,7 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
 
       if (!token) {
         console.warn("[iOS Webhook] Requisição rejeitada: Token de acesso ausente.");
+        await recordIntegrationLog("iOS Shortcuts", "IOS_TOKEN_MISSING", "Requisição recebida sem token de atalho.");
         return res.status(401).json({
           success: false,
           error: "Token de acesso ausente. Informe seu token no cabeçalho Authorization: Bearer <token> ou no campo 'token' do JSON."
@@ -3624,7 +3728,8 @@ Data e hora atual: ${body.currentDate || new Date().toISOString()}`;
       // Busca usuário vinculado no Firestore
       const userSnap = await adminDb.collection("users").where("iosShortcutToken", "==", token).limit(1).get();
       if (userSnap.empty) {
-        console.warn(`[iOS Webhook] Token não encontrado no Firestore: ${token.slice(0, 5)}...`);
+        console.warn("[iOS Webhook] Token não encontrado no Firestore.");
+        await recordIntegrationLog("iOS Shortcuts", "IOS_TOKEN_NOT_FOUND", "Token de atalho não encontrado ou revogado.");
         return res.status(401).json({
           success: false,
           error: "Token de acesso inválido ou revogado. Acesse o Nexus Focus > Mais > Siri & Atalhos iOS para gerar um novo token."
@@ -3771,7 +3876,8 @@ Data e hora atual: ${new Date().toISOString()}`;
         functionCalls
       });
     } catch (err: any) {
-      console.error("[iOS Webhook] Erro ao processar requisição:", err);
+      await recordIntegrationLog("iOS Shortcuts", "IOS_PROCESSING_ERROR", "Falha ao processar uma requisição do atalho.");
+      console.error("[iOS Webhook] Erro ao processar requisição:", err?.message || "unknown");
       return res.status(500).json({
         success: false,
         error: err?.message || "Erro interno ao processar requisição do atalho iOS",
