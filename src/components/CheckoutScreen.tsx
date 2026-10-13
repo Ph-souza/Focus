@@ -211,6 +211,7 @@ export function CheckoutScreen() {
           email: currentUser?.email || userEmail || formData?.payer?.email,
           userId: currentUser?.uid,
           plan: billingCycle,
+          paymentMethod: 'card',
           paymentMethodId: formData.payment_method_id || formData.paymentMethodId,
           issuerId: formData.issuer_id || formData.issuerId,
           installments: formData.installments || 1,

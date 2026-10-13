@@ -9,6 +9,7 @@ import { initializeApp, getApps, cert, App } from "firebase-admin/app";
 import { getFirestore, FieldPath, FieldValue } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { MercadoPagoConfig, Payment, PreApproval, Preference } from "mercadopago";
+import { buildPreapprovalPayload, mercadoPagoErrorDetails } from "./src/lib/mercadoPagoSubscriptions.js";
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
@@ -1069,7 +1070,7 @@ async function startServer() {
   // =========================================================================
   app.post("/api/subscriptions", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
-      const { token, plan, coupon, couponCode, planId, paymentMethod } = req.body || {};
+      const { token, plan, coupon, couponCode, paymentMethod } = req.body || {};
       const email = req.user?.email;
       const userId = req.user?.uid;
       const hostedCheckout = paymentMethod === "pix";
@@ -1096,8 +1097,6 @@ async function startServer() {
       // Lógica de preços e periodicidade baseada na escolha e no cupom validado no Firestore
       let finalAmount = normalizedPlan === "anual" ? 238.80 : 19.90;
       let frequency = normalizedPlan === "anual" ? 12 : 1;
-      let frequencyType = "months";
-      let reason = normalizedPlan === "anual" ? "Nexus Focus Pro - Assinatura Anual" : "Nexus Focus Pro - Assinatura Mensal";
       let couponApplied: string | null = null;
 
       if (rawCoupon) {
@@ -1110,12 +1109,6 @@ async function startServer() {
         }
         couponApplied = couponRes.code || null;
         finalAmount = couponRes.finalAmount || finalAmount;
-        reason = `Nexus Focus Pro - Assinatura ${normalizedPlan === "anual" ? "Anual" : "Mensal"} (Cupom ${couponApplied} ${couponRes.discountPercentage}% OFF)`;
-
-        // Decrementa maxUses no Firestore após validação bem-sucedida
-        if (couponApplied) {
-          await decrementCouponUsage(couponApplied);
-        }
       }
 
       // Regra técnica P0 Mercado Pago: Valor mínimo aceito é R$ 1,00 para garantir autorização
@@ -1130,37 +1123,25 @@ async function startServer() {
         });
       }
 
-      const selectedPlanId = planId || process.env.MERCADOPAGO_PLAN_ID;
+      const selectedPlanId = process.env.MERCADOPAGO_PLAN_ID?.trim();
       const appUrl = process.env.APP_URL || "https://nexusfocus.web.app";
 
       // Montar corpo da requisição de PreApproval com metadados para auditoria e webhook
       const orderId = crypto.randomUUID();
       await adminDb.collection("payment_orders").doc(orderId).set({ userId, amount: finalAmount, plan: normalizedPlan, coupon: couponApplied, createdAt: FieldValue.serverTimestamp() });
-      const preapprovalPayload: any = {
-        payer_email: payerEmail,
-        ...(hostedCheckout ? {} : { card_token_id: token }),
-        back_url: `${appUrl}/dashboard`,
-        status: hostedCheckout ? "pending" : "authorized",
-        external_reference: JSON.stringify({
-          orderId,
-          plan: normalizedPlan,
-          coupon: couponApplied,
-          userId: userId || null,
-          price: finalAmount
-        })
-      };
-
-      if (!hostedCheckout && selectedPlanId && !couponApplied && normalizedPlan === "mensal") {
-        preapprovalPayload.preapproval_plan_id = selectedPlanId;
-      } else {
-        preapprovalPayload.reason = reason;
-        preapprovalPayload.auto_recurring = {
-          frequency,
-          frequency_type: frequencyType,
-          transaction_amount: finalAmount,
-          currency_id: "BRL"
-        };
-      }
+      const preapprovalPayload = buildPreapprovalPayload({
+        payerEmail,
+        cardToken: token,
+        hostedCheckout,
+        backUrl: `${appUrl}/dashboard`,
+        orderId,
+        plan: normalizedPlan,
+        coupon: couponApplied,
+        userId,
+        finalAmount,
+        frequency,
+        selectedPlanId
+      });
 
       let subscriptionResult: any = null;
 
@@ -1179,7 +1160,10 @@ async function startServer() {
         subscriptionResult = await response.json();
 
         if (!response.ok) {
-          throw new Error(subscriptionResult?.message || subscriptionResult?.cause?.[0]?.description || "Falha na criação da assinatura no Mercado Pago");
+          const gatewayError: any = new Error(subscriptionResult?.message || subscriptionResult?.cause?.[0]?.description || "Falha na criação da assinatura no Mercado Pago");
+          gatewayError.status = response.status;
+          gatewayError.response = { status: response.status, data: subscriptionResult, headers: { "x-request-id": response.headers.get("x-request-id") } };
+          throw gatewayError;
         }
       }
 
@@ -1187,6 +1171,10 @@ async function startServer() {
 
       const subscriptionId = subscriptionResult?.id;
       const status = subscriptionResult?.status; // 'authorized', 'pending', etc.
+
+      if (subscriptionId && (status === "authorized" || status === "pending") && couponApplied) {
+        await decrementCouponUsage(couponApplied);
+      }
 
       // O checkout hospedado ainda não é um pagamento confirmado.
       // Não conceder Pro nem escrever isPremium nesta etapa.
@@ -1257,7 +1245,11 @@ async function startServer() {
         });
       }
     } catch (err: any) {
-      console.error("[Assinaturas MP] Erro ao processar assinatura:", err);
+      console.error("[Assinaturas MP] Erro ao processar assinatura:", JSON.stringify({
+        plan: req.body?.plan,
+        coupon: req.body?.couponCode || req.body?.coupon || null,
+        gateway: mercadoPagoErrorDetails(err)
+      }));
       return res.status(500).json({
         success: false,
         error: err?.message || "Erro interno ao processar assinatura."
