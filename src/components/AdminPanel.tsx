@@ -91,17 +91,7 @@ export function AdminPanel() {
           nextBilling: '10/10/2026',
           status: 'active'
         },
-        {
-          id: 'usr-002',
-          name: 'Lucas Fernandes',
-          email: 'lvfernandes11@gmail.com',
-          role: 'Administrador / Pro',
-          isPremium: true,
-          plan: 'Plano Mensal (R$ 19,90)',
-          createdAt: '12/01/2026',
-          nextBilling: '12/10/2026',
-          status: 'active'
-        },
+
         {
           id: 'usr-003',
           name: 'Mariana Duarte',
