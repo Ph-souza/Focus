@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Joyride, Step, STATUS } from 'react-joyride';
+import { Joyride, type Step, type EventData, STATUS } from 'react-joyride';
 import { 
   LayoutDashboard, 
   Target, 
@@ -126,7 +126,7 @@ const TutorialCard: React.FC<TutorialCardProps> = ({ title, description, icon, o
 export function TabHelp() {
   const [activeTour, setActiveTour] = useState<string | null>(null);
 
-  const handleJoyrideCallback = (data: any) => {
+  const handleJoyrideCallback = (data: EventData) => {
     const { status } = data;
     // Reseta o estado quando finalizado ou pulado
     if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status as any)) {
@@ -203,16 +203,13 @@ export function TabHelp() {
           next: 'Próximo',
           skip: 'Pular',
         }}
-        styles={{
-          tooltip: {
-            backgroundColor: '#ffffff',
-            borderRadius: '16px',
-            color: '#1e293b',
-          },
-          buttonPrimary: {
-            backgroundColor: '#2563eb',
-            borderRadius: '8px',
-          }
+        options={{
+          buttons: ['back', 'close', 'primary', 'skip'],
+          primaryColor: '#2563eb',
+          textColor: '#1e293b',
+          backgroundColor: '#ffffff',
+          arrowColor: '#ffffff',
+          zIndex: 10000,
         }}
       />
     </div>

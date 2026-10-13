@@ -1,4 +1,3 @@
-import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -21,9 +20,9 @@ export function RootRoute() {
   }
 
   // 3. Se o usuário ESTIVER autenticado no Firebase Auth:
-  // Se o pagamento estiver confirmado no Firestore (isPremium === true): Redirecione para /dashboard.
+  // Se o pagamento estiver confirmado (isPremium ou Whitelisted): Redirecione para /dashboard.
   // Se NÃO tiver pagamento confirmado: Redirecione imediatamente para /checkout.
-  const hasPaidAccess = Boolean(isPremium);
+  const hasPaidAccess = isPremium;
 
   if (hasPaidAccess) {
     return <Navigate to="/dashboard" replace />;

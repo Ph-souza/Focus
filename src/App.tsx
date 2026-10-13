@@ -1,5 +1,5 @@
 import { useAccountStorage } from './hooks/useAccountStorage';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TabType, User, AppNotification, Transaction, ChatMessage, Task, Appointment, Rotina } from './types';
 import { Navigation } from './components/Navigation';
@@ -25,25 +25,22 @@ import { collection, onSnapshot, query, orderBy, doc, where, limit } from 'fireb
 import { subscribeToPushNotifications } from './lib/pushNotifications';
 import { getApiUrl } from './lib/api';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { LedgerProvider, useLedger } from './contexts/LedgerContext';
-import { FamilyVaultModal } from './components/FamilyVaultModal';
+import { LedgerProvider } from './contexts/LedgerContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginScreen } from './components/LoginScreen';
 import { CheckoutScreen } from './components/CheckoutScreen';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfUse } from './components/TermsOfUse';
 import { LandingPage } from './components/LandingPage';
-import { ImportModule } from './components/ImportModule';
+const ImportModule = lazy(() => import('./components/ImportModule').then(module => ({ default: module.ImportModule })));
+const AdminConsole = lazy(() => import('./components/AdminConsole').then(module => ({ default: module.AdminConsole })));
 import { WelcomeOverlay } from './components/WelcomeOverlay';
-import { AdminPanel } from './components/AdminPanel';
-import PainelPage from './app/painel/page';
 import { AdminProtectedRoute } from './components/AdminProtectedRoute';
 import { RootRoute } from './components/RootRoute';
 
 function Dashboard() {
   const accountStorage = useAccountStorage();
   const { currentUser, logout } = useAuth();
-  const { activeLedger } = useLedger();
 
   const [userProfile, setUserProfile] = useState<{
     name?: string;
@@ -161,17 +158,9 @@ function Dashboard() {
       return;
     }
 
-    const isShared = activeLedger.type === 'shared';
-    const transCollection = isShared
-      ? collection(db, 'ledgers', activeLedger.id, 'transactions')
-      : collection(db, 'users', activeUid, 'transactions');
-    const goalsCollection = isShared
-      ? collection(db, 'ledgers', activeLedger.id, 'goals')
-      : collection(db, 'users', activeUid, 'goals');
-
     // Full history for the Home balance; recent lists still receive only five entries.
     const transQuery = query(
-      transCollection,
+      collection(db, 'users', activeUid, 'transactions'),
       orderBy('date', 'desc')
     );
     const unsubTrans = onSnapshot(transQuery, (snapshot) => {
@@ -180,17 +169,17 @@ function Dashboard() {
       setAllTransactions(docs);
       setTransactions(docs.slice(0, 5));
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, isShared ? `ledgers/${activeLedger.id}/transactions` : `users/${activeUid}/transactions`);
+      handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/transactions`);
     });
 
     // 2. Goals Listener
-    const goalsQuery = query(goalsCollection);
+    const goalsQuery = query(collection(db, 'users', activeUid, 'goals'));
     const unsubGoals = onSnapshot(goalsQuery, (snapshot) => {
       if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setGoals(docs);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, isShared ? `ledgers/${activeLedger.id}/goals` : `users/${activeUid}/goals`);
+      handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/goals`);
     });
 
     // 3. Tasks Listener (Limit 20)
@@ -249,7 +238,7 @@ function Dashboard() {
       setAppointments([]);
       setRotinas([]);
     };
-  }, [currentUser?.uid, activeLedger.id, activeLedger.type]);
+  }, [currentUser?.uid]);
 
   // Notifications & Push Trigger
   useEffect(() => {
@@ -398,7 +387,6 @@ function Dashboard() {
       <WelcomeOverlay onStartTour={() => window.dispatchEvent(new CustomEvent('start-tour'))} />
       <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} user={user} onLogout={handleLogout} />
       <WhatsAppModal isOpen={isWhatsAppModalOpen} onClose={() => setIsWhatsAppModalOpen(false)} user={user} />
-      <FamilyVaultModal />
       <FocusModeModal 
         isOpen={isFocusModeOpen} 
         onClose={() => setIsFocusModeOpen(false)} 
@@ -447,34 +435,28 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <LedgerProvider>
-          <Routes>
-            <Route path="/" element={<RootRoute />} />
-            <Route path="/homepage" element={<LandingPage />} />
-            <Route path="/page" element={<Navigate to="/homepage" replace />} />
-            <Route path="/login" element={<LoginScreen />} />
-            <Route path="/checkout" element={<CheckoutScreen />} />
-            <Route path="/import" element={<ImportModule />} />
-            <Route path="/privacidade" element={<PrivacyPolicy />} />
-            <Route path="/termos" element={<TermsOfUse />} />
-            <Route
-              path="/painel"
-              element={
-                <AdminProtectedRoute>
-                  <PainelPage />
-                </AdminProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/*"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            {/* Fallback inteligente: redireciona para a raiz onde o RootRoute avalia o destino */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+        <Routes>
+          <Route path="/" element={<RootRoute />} />
+          <Route path="/homepage" element={<LandingPage />} />
+          <Route path="/page" element={<Navigate to="/homepage" replace />} />
+          <Route path="/login" element={<LoginScreen />} />
+          <Route path="/checkout" element={<CheckoutScreen />} />
+          <Route path="/import" element={<Suspense fallback={<div className="min-h-screen grid place-items-center">Carregando…</div>}><ImportModule /></Suspense>} />
+          <Route path="/privacidade" element={<PrivacyPolicy />} />
+          <Route path="/termos" element={<TermsOfUse />} />
+          <Route path="/admin" element={<AdminProtectedRoute><Suspense fallback={<div className="min-h-screen grid place-items-center">Carregando painel…</div>}><AdminConsole /></Suspense></AdminProtectedRoute>} />
+          <Route path="/painel" element={<Navigate to="/admin" replace />} />
+          <Route
+            path="/dashboard/*"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          {/* Fallback inteligente: redireciona para a raiz onde o RootRoute avalia o destino */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
         </LedgerProvider>
       </AuthProvider>
     </BrowserRouter>

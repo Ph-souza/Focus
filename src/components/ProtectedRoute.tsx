@@ -10,9 +10,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { currentUser, isPremium, userDocExists, isLoading } = useAuth();
   const location = useLocation();
 
+
+  
   // BLOQUEIO ESTRITO DE INADIMPLENTES (P0 SECURITY GUARD):
-  // Ninguém entra no painel /dashboard sem confirmação da tag de pagamento no Firestore (isPremium === true).
-  const hasConfirmedPayment = Boolean(isPremium);
+  // Ninguém entra no painel /dashboard sem pagamento confirmado (isPremium === true) ou Admin/Whitelisted.
+  const hasConfirmedPayment = isPremium;
 
   if (isLoading || (currentUser && userDocExists === null)) {
     return (
