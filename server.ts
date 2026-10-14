@@ -1042,82 +1042,51 @@ async function startServer() {
         return { ok: response.ok, status: response.status, data };
       };
 
-      // 1. Obter ou vincular o preapproval_plan_id adequado no Mercado Pago para o valor exato
-      // Importante: No Mercado Pago, assinaturas diretas com cartão (status: 'authorized' e card_token_id)
-      // EXIGEM um preapproval_plan_id associado.
-      let targetPlanId = selectedPlanId || null;
+      // =========================================================================
+      // Ramificação de Fluxo: Com Cupom (Valor Descontado) vs Normal (Preço Cheio)
+      // =========================================================================
+      const hasDiscountedCoupon = Boolean(couponApplied || finalAmount < 19.90);
 
-      // Planos pré-existentes homologados na conta:
-      // R$ 1,00 (NEXUSELITE): '210cddc5f36a4bccb486b1d2331e91d5'
-      // R$ 19,90 (Mensal normal): '6da912a0268f4cf092b92262ae8daa5f'
-      if (Math.abs(finalAmount - 1.00) < 0.05) {
-        targetPlanId = "210cddc5f36a4bccb486b1d2331e91d5";
-      } else if (Math.abs(finalAmount - 19.90) < 0.05 && normalizedPlan === "mensal") {
-        targetPlanId = "6da912a0268f4cf092b92262ae8daa5f";
-      }
-
-      // Se é outro valor personalizado (ex: outro cupom de desconto), busca ou cria plano dinâmico
-      if (!targetPlanId) {
-        try {
-          const searchRes = await fetch("https://api.mercadopago.com/preapproval_plan/search?status=active", {
-            headers: { Authorization: `Bearer ${mpAccessToken}` }
-          });
-          if (searchRes.ok) {
-            const searchData = await searchRes.json().catch(() => ({}));
-            const matching = searchData?.results?.find((p: any) =>
-              Math.abs(Number(p.auto_recurring?.transaction_amount) - finalAmount) < 0.01 &&
-              p.auto_recurring?.frequency === frequency
-            );
-            if (matching?.id) {
-              targetPlanId = matching.id;
-              console.log(`[Assinaturas MP] Plano compatível de R$ ${finalAmount} encontrado no MP: ${targetPlanId}`);
-            }
-          }
-          if (!targetPlanId) {
-            const createPlanRes = await fetch("https://api.mercadopago.com/preapproval_plan", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${mpAccessToken}`
-              },
-              body: JSON.stringify({
-                reason: reason,
-                auto_recurring: {
-                  frequency,
-                  frequency_type: frequencyType,
-                  transaction_amount: finalAmount,
-                  currency_id: "BRL"
-                },
-                back_url: `${appUrl}/dashboard`
-              })
-            });
-            const createdData = await createPlanRes.json().catch(() => ({}));
-            if (createPlanRes.ok && createdData?.id) {
-              targetPlanId = createdData.id;
-              console.log(`[Assinaturas MP] Plano dinâmico de R$ ${finalAmount} criado no MP: ${targetPlanId}`);
-            }
-          }
-        } catch (pErr: any) {
-          console.warn("[Assinaturas MP] Aviso ao localizar plano dinâmico:", pErr?.message);
-        }
-      }
-
-      if (targetPlanId) {
-        preapprovalPayload.preapproval_plan_id = targetPlanId;
-      } else {
-        preapprovalPayload.reason = reason;
+      if (hasDiscountedCoupon) {
+        // 2. Fluxo com Cupão (Valor Descontado):
+        // NÃO envia o campo preapproval_plan_id no JSON do payload.
+        // Cria uma assinatura personalizada enviando as regras diretamente no objeto auto_recurring.
+        delete preapprovalPayload.preapproval_plan_id;
+        preapprovalPayload.reason = "Nexus Focus - Plano Elite (Com Cupão)";
         preapprovalPayload.auto_recurring = {
-          frequency,
-          frequency_type: frequencyType,
+          frequency: 1,
+          frequency_type: "months",
           transaction_amount: finalAmount,
           currency_id: "BRL"
         };
+      } else {
+        // 1. Fluxo Normal (Sem Cupão - Preço Cheio):
+        // Se o valor for o preço cheio, o payload envia o preapproval_plan_id
+        const normalPlanId = selectedPlanId || (normalizedPlan === "anual" ? process.env.MERCADOPAGO_ANUAL_PLAN_ID : "6da912a0268f4cf092b92262ae8daa5f");
+        if (normalPlanId) {
+          preapprovalPayload.preapproval_plan_id = normalPlanId;
+          delete preapprovalPayload.auto_recurring;
+          delete preapprovalPayload.reason;
+        } else {
+          preapprovalPayload.reason = normalizedPlan === "anual" ? "Nexus Focus Pro - Anual" : "Nexus Focus Pro - Mensal";
+          preapprovalPayload.auto_recurring = {
+            frequency: normalizedPlan === "anual" ? 12 : 1,
+            frequency_type: "months",
+            transaction_amount: finalAmount,
+            currency_id: "BRL"
+          };
+          delete preapprovalPayload.preapproval_plan_id;
+        }
       }
 
-      console.log(`[Assinaturas MP] Submetendo requisição para Mercado Pago (plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}, targetPlanId=${targetPlanId}):`, {
+      console.log(`[Assinaturas MP] Submetendo requisição para Mercado Pago (fluxo=${hasDiscountedCoupon ? "com_cupom_auto_recurring" : "sem_cupom_plan_id"}, plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}):`, {
         payer_email: preapprovalPayload.payer_email,
         has_card_token: Boolean(preapprovalPayload.card_token_id),
-        preapproval_plan_id: preapprovalPayload.preapproval_plan_id || null,
+        has_preapproval_plan_id: Boolean(preapprovalPayload.preapproval_plan_id),
+        preapproval_plan_id: preapprovalPayload.preapproval_plan_id || undefined,
+        reason: preapprovalPayload.reason,
+        auto_recurring: preapprovalPayload.auto_recurring,
+        back_url: preapprovalPayload.back_url,
         status: preapprovalPayload.status
       });
 
@@ -1132,31 +1101,11 @@ async function startServer() {
         mpAttempt.data?.message?.toLowerCase().includes("not found")
       )) {
         const altToken = mpAccessToken === PROD_MP_ACCESS_TOKEN ? TEST_MP_ACCESS_TOKEN : PROD_MP_ACCESS_TOKEN;
-        console.warn(`[Assinaturas MP] Primeira tentativa retornou erro (${mpAttempt.status} - ${mpAttempt.data?.message}). Retentando com token alternativo do Mercado Pago...`);
+        console.warn(`[Assinaturas MP] Tentativa retornou erro (${mpAttempt.status} - ${mpAttempt.data?.message}). Retentando com token alternativo do Mercado Pago...`);
         const retryAttempt = await submitPreApprovalRequest(preapprovalPayload, altToken);
         if (retryAttempt.ok) {
           console.log(`[Assinaturas MP] Sucesso na retentativa com token alternativo ID: ${retryAttempt.data?.id}`);
           mpAttempt = retryAttempt;
-        }
-      }
-
-      // Contingência adicional: se falhou com plano, tenta auto_recurring direto
-      if (!mpAttempt.ok && preapprovalPayload.preapproval_plan_id) {
-        console.warn(`[Assinaturas MP] Plano ${preapprovalPayload.preapproval_plan_id} não aceito. Tentando auto_recurring direto...`);
-        const fallbackPayload = {
-          ...preapprovalPayload,
-          reason,
-          auto_recurring: {
-            frequency,
-            frequency_type: frequencyType,
-            transaction_amount: finalAmount,
-            currency_id: "BRL"
-          }
-        };
-        delete (fallbackPayload as any).preapproval_plan_id;
-        const fallbackAttempt = await submitPreApprovalRequest(fallbackPayload, mpAccessToken);
-        if (fallbackAttempt.ok) {
-          mpAttempt = fallbackAttempt;
         }
       }
 
