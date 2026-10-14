@@ -222,10 +222,14 @@ export function CheckoutScreen() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Erro ao processar a assinatura.');
+        let msg = data.error || 'Erro ao processar a assinatura.';
+        if (typeof msg === 'string' && msg.toLowerCase().includes('resource not found')) {
+          msg = 'O plano ou recurso de assinatura não foi localizado no Mercado Pago. Por favor, tente novamente ou escolha outra forma de pagamento.';
+        }
+        throw new Error(msg);
       }
 
       // Atualização de segurança no Firestore para o usuário autenticado

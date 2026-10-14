@@ -1026,7 +1026,26 @@ async function startServer() {
         })
       };
 
-      if (!hostedCheckout && selectedPlanId && !couponApplied && normalizedPlan === "mensal") {
+      // Helper para chamada direta e controlada à API de Preapproval do Mercado Pago
+      const submitPreApprovalRequest = async (payload: any) => {
+        const response = await fetch("https://api.mercadopago.com/preapproval", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${mpAccessToken}`
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+        return { ok: response.ok, status: response.status, data };
+      };
+
+      // Se há cupom aplicado (ex: NEXUSELITE R$ 1,00) ou sem plano pré-fixado,
+      // NUNCA atrelamos ao preapproval_plan_id padrão rígido (que cobraria o valor cheio ou rejeitaria o valor sobrescrito).
+      // Criamos a subscrição 'on the fly' com auto_recurring ajustado ao valor com desconto.
+      const canUsePreconfiguredPlan = Boolean(!hostedCheckout && selectedPlanId && !couponApplied && normalizedPlan === "mensal");
+
+      if (canUsePreconfiguredPlan) {
         preapprovalPayload.preapproval_plan_id = selectedPlanId;
       } else {
         preapprovalPayload.reason = reason;
@@ -1038,26 +1057,97 @@ async function startServer() {
         };
       }
 
-      let subscriptionResult: any = null;
+      console.log(`[Assinaturas MP] Submetendo requisição para Mercado Pago (plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}, usaPlanId=${Boolean(preapprovalPayload.preapproval_plan_id)}):`, {
+        payer_email: preapprovalPayload.payer_email,
+        has_card_token: Boolean(preapprovalPayload.card_token_id),
+        preapproval_plan_id: preapprovalPayload.preapproval_plan_id || null,
+        auto_recurring: preapprovalPayload.auto_recurring || null,
+        status: preapprovalPayload.status
+      });
 
-      if (mpPreApproval) {
-        subscriptionResult = await mpPreApproval.create({ body: preapprovalPayload });
-      } else {
-        const response = await fetch("https://api.mercadopago.com/preapproval", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mpAccessToken}`
-          },
-          body: JSON.stringify(preapprovalPayload)
-        });
+      let mpAttempt = await submitPreApprovalRequest(preapprovalPayload);
 
-        subscriptionResult = await response.json();
+      // Contingência 1: Se falhou com preapproval_plan_id (ex: 400 ou 404 'Resource not found' por plano inexistente/desativado)
+      if (!mpAttempt.ok && preapprovalPayload.preapproval_plan_id && (
+        mpAttempt.status === 404 ||
+        mpAttempt.status === 400 ||
+        mpAttempt.data?.message?.toLowerCase().includes("not found")
+      )) {
+        console.warn(`[Assinaturas MP] Plano pré-configurado '${selectedPlanId}' retornou erro ${mpAttempt.status} (${mpAttempt.data?.message}). Recorrendo à criação on-the-fly com auto_recurring...`);
+        delete preapprovalPayload.preapproval_plan_id;
+        preapprovalPayload.reason = reason;
+        preapprovalPayload.auto_recurring = {
+          frequency,
+          frequency_type: frequencyType,
+          transaction_amount: finalAmount,
+          currency_id: "BRL"
+        };
+        mpAttempt = await submitPreApprovalRequest(preapprovalPayload);
+      }
 
-        if (!response.ok) {
-          throw new Error(subscriptionResult?.message || subscriptionResult?.cause?.[0]?.description || "Falha na criação da assinatura no Mercado Pago");
+      // Contingência 2: Se foi enviado com auto_recurring (ex: cupom/desconto), mas a credencial do MP exige um plano associado
+      // Ex: "This app can't create preapprovals without a plan" ou 401/400
+      if (!mpAttempt.ok && !preapprovalPayload.preapproval_plan_id && (
+        mpAttempt.data?.message?.toLowerCase().includes("without a plan") ||
+        mpAttempt.data?.message?.toLowerCase().includes("not found") ||
+        mpAttempt.status === 401
+      )) {
+        console.warn(`[Assinaturas MP] Criação on-the-fly com auto_recurring exigiu plano associado (${mpAttempt.data?.message || mpAttempt.status}). Criando preapproval_plan dinâmico com valor R$ ${finalAmount}...`);
+        try {
+          const planRes = await fetch("https://api.mercadopago.com/preapproval_plan", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${mpAccessToken}`
+            },
+            body: JSON.stringify({
+              reason: reason,
+              auto_recurring: {
+                frequency,
+                frequency_type: frequencyType,
+                transaction_amount: finalAmount,
+                currency_id: "BRL"
+              },
+              back_url: `${appUrl}/dashboard`
+            })
+          });
+          const dynamicPlanData = await planRes.json().catch(() => ({}));
+          if (planRes.ok && dynamicPlanData?.id) {
+            console.log(`[Assinaturas MP] Plano dinâmico criado com sucesso no MP: ID ${dynamicPlanData.id}. Criando assinatura atrelada ao plano...`);
+            const payloadWithDynamicPlan = {
+              preapproval_plan_id: dynamicPlanData.id,
+              payer_email: payerEmail,
+              ...(hostedCheckout ? {} : { card_token_id: token }),
+              back_url: `${appUrl}/dashboard`,
+              status: hostedCheckout ? "pending" : "authorized",
+              external_reference: preapprovalPayload.external_reference
+            };
+            mpAttempt = await submitPreApprovalRequest(payloadWithDynamicPlan);
+          } else {
+            console.error(`[Assinaturas MP] Erro ao criar preapproval_plan dinâmico no Mercado Pago:`, dynamicPlanData);
+          }
+        } catch (dynPlanErr: any) {
+          console.error(`[Assinaturas MP] Exceção ao gerar preapproval_plan dinâmico:`, dynPlanErr);
         }
       }
+
+      if (!mpAttempt.ok) {
+        console.error("❌ [Assinaturas MP] Resposta de erro da API do Mercado Pago:", {
+          status: mpAttempt.status,
+          message: mpAttempt.data?.message,
+          error: mpAttempt.data?.error,
+          cause: mpAttempt.data?.cause,
+          data: mpAttempt.data
+        });
+        const errMessage = mpAttempt.data?.message || mpAttempt.data?.cause?.[0]?.description || mpAttempt.data?.error || "Falha na criação da assinatura no Mercado Pago";
+        const customErr: any = new Error(errMessage);
+        customErr.status = mpAttempt.status;
+        customErr.data = mpAttempt.data;
+        customErr.causes = mpAttempt.data?.cause;
+        throw customErr;
+      }
+
+      const subscriptionResult = mpAttempt.data;
 
       console.log(`[Assinaturas MP] Resposta da criação no MP ID: ${subscriptionResult?.id}, Status: ${subscriptionResult?.status}`);
 
@@ -1174,10 +1264,31 @@ async function startServer() {
         });
       }
     } catch (err: any) {
-      console.error("[Assinaturas MP] Erro ao processar assinatura:", err);
-      return res.status(500).json({
+      console.error("❌ [Assinaturas MP] Erro capturado no bloco catch de /api/subscriptions:", {
+        message: err?.message,
+        name: err?.name,
+        status: err?.status || err?.statusCode || (err as any)?.response?.status,
+        responseData: err?.data || (err as any)?.response?.data || (err as any)?.api_response,
+        causes: err?.causes || (err as any)?.cause || (err as any)?.response?.data?.cause,
+        stack: err?.stack
+      });
+
+      let userFacingError = err?.message || "Erro interno ao processar assinatura.";
+      if (typeof userFacingError === "string" && userFacingError.toLowerCase().includes("resource not found")) {
+        userFacingError = "O plano ou recurso de assinatura não foi localizado no Mercado Pago. Por favor, tente novamente ou escolha outra forma de pagamento.";
+      } else if (typeof userFacingError === "string" && userFacingError.toLowerCase().includes("card token")) {
+        userFacingError = "Não foi possível validar os dados do cartão de crédito. Verifique o número, validade e código de segurança.";
+      }
+
+      const responseStatus = (err?.status && typeof err.status === "number" && err.status >= 400 && err.status < 600)
+        ? err.status
+        : 500;
+
+      return res.status(responseStatus).json({
         success: false,
-        error: err?.message || "Erro interno ao processar assinatura."
+        error: userFacingError,
+        rawMessage: err?.message || null,
+        details: err?.causes || (err as any)?.cause || err?.data || null
       });
     }
   });
