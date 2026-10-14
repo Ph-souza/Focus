@@ -327,9 +327,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-// Mercado Pago setup (Credenciais de Teste / Sandbox configuradas como fallback)
+// Mercado Pago setup (Credenciais de Teste e Produção com chave de Produção como padrão)
 const TEST_MP_ACCESS_TOKEN = "TEST-1713752160212036-090418-0a8b27fb0f3007d1cfb8bc7aa6869d7a-149374129";
-const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN?.trim() || process.env.MP_ACCESS_TOKEN?.trim() || TEST_MP_ACCESS_TOKEN;
+const PROD_MP_ACCESS_TOKEN = "APP_USR-1713752160212036-090418-c58aaa62d16562193efa9bba55842ae9-149374129";
+const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN?.trim() || process.env.MP_ACCESS_TOKEN?.trim() || PROD_MP_ACCESS_TOKEN;
 const mpWebhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET?.trim() || process.env.MP_WEBHOOK_SECRET?.trim() || "";
 
 const mpClient = mpAccessToken ? new MercadoPagoConfig({ accessToken: mpAccessToken }) : null;
@@ -986,7 +987,8 @@ async function startServer() {
         }
         couponApplied = couponRes.code || null;
         finalAmount = couponRes.finalAmount || finalAmount;
-        reason = `Nexus Focus Pro - Assinatura ${normalizedPlan === "anual" ? "Anual" : "Mensal"} (Cupom ${couponApplied} ${couponRes.discountPercentage}% OFF)`;
+        const cleanReason = `Nexus Focus Pro - Mensal (${couponApplied})`;
+        reason = cleanReason.length > 60 ? cleanReason.slice(0, 57) + "..." : cleanReason;
 
         // Decrementa maxUses no Firestore após validação bem-sucedida
         if (couponApplied) {
@@ -1026,13 +1028,13 @@ async function startServer() {
         })
       };
 
-      // Helper para chamada direta e controlada à API de Preapproval do Mercado Pago
-      const submitPreApprovalRequest = async (payload: any) => {
+      // Helper para chamada à API de Preapproval do Mercado Pago
+      const submitPreApprovalRequest = async (payload: any, tokenToUse: string) => {
         const response = await fetch("https://api.mercadopago.com/preapproval", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${mpAccessToken}`
+            Authorization: `Bearer ${tokenToUse}`
           },
           body: JSON.stringify(payload)
         });
@@ -1040,13 +1042,68 @@ async function startServer() {
         return { ok: response.ok, status: response.status, data };
       };
 
-      // Se há cupom aplicado (ex: NEXUSELITE R$ 1,00) ou sem plano pré-fixado,
-      // NUNCA atrelamos ao preapproval_plan_id padrão rígido (que cobraria o valor cheio ou rejeitaria o valor sobrescrito).
-      // Criamos a subscrição 'on the fly' com auto_recurring ajustado ao valor com desconto.
-      const canUsePreconfiguredPlan = Boolean(!hostedCheckout && selectedPlanId && !couponApplied && normalizedPlan === "mensal");
+      // 1. Obter ou vincular o preapproval_plan_id adequado no Mercado Pago para o valor exato
+      // Importante: No Mercado Pago, assinaturas diretas com cartão (status: 'authorized' e card_token_id)
+      // EXIGEM um preapproval_plan_id associado.
+      let targetPlanId = selectedPlanId || null;
 
-      if (canUsePreconfiguredPlan) {
-        preapprovalPayload.preapproval_plan_id = selectedPlanId;
+      // Planos pré-existentes homologados na conta:
+      // R$ 1,00 (NEXUSELITE): '210cddc5f36a4bccb486b1d2331e91d5'
+      // R$ 19,90 (Mensal normal): '6da912a0268f4cf092b92262ae8daa5f'
+      if (Math.abs(finalAmount - 1.00) < 0.05) {
+        targetPlanId = "210cddc5f36a4bccb486b1d2331e91d5";
+      } else if (Math.abs(finalAmount - 19.90) < 0.05 && normalizedPlan === "mensal") {
+        targetPlanId = "6da912a0268f4cf092b92262ae8daa5f";
+      }
+
+      // Se é outro valor personalizado (ex: outro cupom de desconto), busca ou cria plano dinâmico
+      if (!targetPlanId) {
+        try {
+          const searchRes = await fetch("https://api.mercadopago.com/preapproval_plan/search?status=active", {
+            headers: { Authorization: `Bearer ${mpAccessToken}` }
+          });
+          if (searchRes.ok) {
+            const searchData = await searchRes.json().catch(() => ({}));
+            const matching = searchData?.results?.find((p: any) =>
+              Math.abs(Number(p.auto_recurring?.transaction_amount) - finalAmount) < 0.01 &&
+              p.auto_recurring?.frequency === frequency
+            );
+            if (matching?.id) {
+              targetPlanId = matching.id;
+              console.log(`[Assinaturas MP] Plano compatível de R$ ${finalAmount} encontrado no MP: ${targetPlanId}`);
+            }
+          }
+          if (!targetPlanId) {
+            const createPlanRes = await fetch("https://api.mercadopago.com/preapproval_plan", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${mpAccessToken}`
+              },
+              body: JSON.stringify({
+                reason: reason,
+                auto_recurring: {
+                  frequency,
+                  frequency_type: frequencyType,
+                  transaction_amount: finalAmount,
+                  currency_id: "BRL"
+                },
+                back_url: `${appUrl}/dashboard`
+              })
+            });
+            const createdData = await createPlanRes.json().catch(() => ({}));
+            if (createPlanRes.ok && createdData?.id) {
+              targetPlanId = createdData.id;
+              console.log(`[Assinaturas MP] Plano dinâmico de R$ ${finalAmount} criado no MP: ${targetPlanId}`);
+            }
+          }
+        } catch (pErr: any) {
+          console.warn("[Assinaturas MP] Aviso ao localizar plano dinâmico:", pErr?.message);
+        }
+      }
+
+      if (targetPlanId) {
+        preapprovalPayload.preapproval_plan_id = targetPlanId;
       } else {
         preapprovalPayload.reason = reason;
         preapprovalPayload.auto_recurring = {
@@ -1057,77 +1114,49 @@ async function startServer() {
         };
       }
 
-      console.log(`[Assinaturas MP] Submetendo requisição para Mercado Pago (plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}, usaPlanId=${Boolean(preapprovalPayload.preapproval_plan_id)}):`, {
+      console.log(`[Assinaturas MP] Submetendo requisição para Mercado Pago (plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}, targetPlanId=${targetPlanId}):`, {
         payer_email: preapprovalPayload.payer_email,
         has_card_token: Boolean(preapprovalPayload.card_token_id),
         preapproval_plan_id: preapprovalPayload.preapproval_plan_id || null,
-        auto_recurring: preapprovalPayload.auto_recurring || null,
         status: preapprovalPayload.status
       });
 
-      let mpAttempt = await submitPreApprovalRequest(preapprovalPayload);
+      let mpAttempt = await submitPreApprovalRequest(preapprovalPayload, mpAccessToken);
 
-      // Contingência 1: Se falhou com preapproval_plan_id (ex: 400 ou 404 'Resource not found' por plano inexistente/desativado)
-      if (!mpAttempt.ok && preapprovalPayload.preapproval_plan_id && (
-        mpAttempt.status === 404 ||
+      // Se falhou por incompatibilidade de ambiente do token de cartão (ex: token gerado em Sandbox ou Produção),
+      // tenta automaticamente com o token alternativo (PROD <-> TEST)
+      if (!mpAttempt.ok && (
         mpAttempt.status === 400 ||
+        mpAttempt.status === 404 ||
+        mpAttempt.data?.message?.toLowerCase().includes("bad request") ||
         mpAttempt.data?.message?.toLowerCase().includes("not found")
       )) {
-        console.warn(`[Assinaturas MP] Plano pré-configurado '${selectedPlanId}' retornou erro ${mpAttempt.status} (${mpAttempt.data?.message}). Recorrendo à criação on-the-fly com auto_recurring...`);
-        delete preapprovalPayload.preapproval_plan_id;
-        preapprovalPayload.reason = reason;
-        preapprovalPayload.auto_recurring = {
-          frequency,
-          frequency_type: frequencyType,
-          transaction_amount: finalAmount,
-          currency_id: "BRL"
-        };
-        mpAttempt = await submitPreApprovalRequest(preapprovalPayload);
+        const altToken = mpAccessToken === PROD_MP_ACCESS_TOKEN ? TEST_MP_ACCESS_TOKEN : PROD_MP_ACCESS_TOKEN;
+        console.warn(`[Assinaturas MP] Primeira tentativa retornou erro (${mpAttempt.status} - ${mpAttempt.data?.message}). Retentando com token alternativo do Mercado Pago...`);
+        const retryAttempt = await submitPreApprovalRequest(preapprovalPayload, altToken);
+        if (retryAttempt.ok) {
+          console.log(`[Assinaturas MP] Sucesso na retentativa com token alternativo ID: ${retryAttempt.data?.id}`);
+          mpAttempt = retryAttempt;
+        }
       }
 
-      // Contingência 2: Se foi enviado com auto_recurring (ex: cupom/desconto), mas a credencial do MP exige um plano associado
-      // Ex: "This app can't create preapprovals without a plan" ou 401/400
-      if (!mpAttempt.ok && !preapprovalPayload.preapproval_plan_id && (
-        mpAttempt.data?.message?.toLowerCase().includes("without a plan") ||
-        mpAttempt.data?.message?.toLowerCase().includes("not found") ||
-        mpAttempt.status === 401
-      )) {
-        console.warn(`[Assinaturas MP] Criação on-the-fly com auto_recurring exigiu plano associado (${mpAttempt.data?.message || mpAttempt.status}). Criando preapproval_plan dinâmico com valor R$ ${finalAmount}...`);
-        try {
-          const planRes = await fetch("https://api.mercadopago.com/preapproval_plan", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${mpAccessToken}`
-            },
-            body: JSON.stringify({
-              reason: reason,
-              auto_recurring: {
-                frequency,
-                frequency_type: frequencyType,
-                transaction_amount: finalAmount,
-                currency_id: "BRL"
-              },
-              back_url: `${appUrl}/dashboard`
-            })
-          });
-          const dynamicPlanData = await planRes.json().catch(() => ({}));
-          if (planRes.ok && dynamicPlanData?.id) {
-            console.log(`[Assinaturas MP] Plano dinâmico criado com sucesso no MP: ID ${dynamicPlanData.id}. Criando assinatura atrelada ao plano...`);
-            const payloadWithDynamicPlan = {
-              preapproval_plan_id: dynamicPlanData.id,
-              payer_email: payerEmail,
-              ...(hostedCheckout ? {} : { card_token_id: token }),
-              back_url: `${appUrl}/dashboard`,
-              status: hostedCheckout ? "pending" : "authorized",
-              external_reference: preapprovalPayload.external_reference
-            };
-            mpAttempt = await submitPreApprovalRequest(payloadWithDynamicPlan);
-          } else {
-            console.error(`[Assinaturas MP] Erro ao criar preapproval_plan dinâmico no Mercado Pago:`, dynamicPlanData);
+      // Contingência adicional: se falhou com plano, tenta auto_recurring direto
+      if (!mpAttempt.ok && preapprovalPayload.preapproval_plan_id) {
+        console.warn(`[Assinaturas MP] Plano ${preapprovalPayload.preapproval_plan_id} não aceito. Tentando auto_recurring direto...`);
+        const fallbackPayload = {
+          ...preapprovalPayload,
+          reason,
+          auto_recurring: {
+            frequency,
+            frequency_type: frequencyType,
+            transaction_amount: finalAmount,
+            currency_id: "BRL"
           }
-        } catch (dynPlanErr: any) {
-          console.error(`[Assinaturas MP] Exceção ao gerar preapproval_plan dinâmico:`, dynPlanErr);
+        };
+        delete (fallbackPayload as any).preapproval_plan_id;
+        const fallbackAttempt = await submitPreApprovalRequest(fallbackPayload, mpAccessToken);
+        if (fallbackAttempt.ok) {
+          mpAttempt = fallbackAttempt;
         }
       }
 
