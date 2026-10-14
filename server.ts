@@ -974,7 +974,7 @@ async function startServer() {
       let finalAmount = normalizedPlan === "anual" ? 238.80 : 19.90;
       let frequency = normalizedPlan === "anual" ? 12 : 1;
       let frequencyType = "months";
-      let reason = normalizedPlan === "anual" ? "Nexus Focus Pro - Assinatura Anual" : "Nexus Focus Pro - Assinatura Mensal";
+      let reason = normalizedPlan === "anual" ? "Nexus Focus Pro - Anual" : "Nexus Focus Pro - Mensal";
       let couponApplied: string | null = null;
 
       if (rawCoupon) {
@@ -988,7 +988,7 @@ async function startServer() {
         couponApplied = couponRes.code || null;
         finalAmount = couponRes.finalAmount || finalAmount;
         const cleanReason = `Nexus Focus Pro - Mensal (${couponApplied})`;
-        reason = cleanReason.length > 60 ? cleanReason.slice(0, 57) + "..." : cleanReason;
+        reason = cleanReason.length > 50 ? cleanReason.slice(0, 47) + "..." : cleanReason;
 
         // Decrementa maxUses no Firestore após validação bem-sucedida
         if (couponApplied) {
@@ -1052,7 +1052,7 @@ async function startServer() {
         // NÃO envia o campo preapproval_plan_id no JSON do payload.
         // Cria uma assinatura personalizada enviando as regras diretamente no objeto auto_recurring.
         delete preapprovalPayload.preapproval_plan_id;
-        preapprovalPayload.reason = "Nexus Focus - Plano Elite (Com Cupão)";
+        preapprovalPayload.reason = "Nexus Focus - Plano Elite (Cupom)";
         preapprovalPayload.auto_recurring = {
           frequency: 1,
           frequency_type: "months",
@@ -1077,6 +1077,11 @@ async function startServer() {
           };
           delete preapprovalPayload.preapproval_plan_id;
         }
+      }
+
+      // Blindagem estrita: Mercado Pago rejeita reason > 60 caracteres com erro 400
+      if (preapprovalPayload.reason) {
+        preapprovalPayload.reason = String(preapprovalPayload.reason).trim().slice(0, 50);
       }
 
       console.log(`[Assinaturas MP] Submetendo requisição para Mercado Pago (fluxo=${hasDiscountedCoupon ? "com_cupom_auto_recurring" : "sem_cupom_plan_id"}, plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}):`, {
@@ -4390,7 +4395,11 @@ Data e hora atual: ${new Date().toISOString()}`;
   }
 
   // Health Check Route
-  app.get('/', (req, res) => res.status(200).json({ status: 'Nexus Focus API Online', version: '1.0' }));
+  app.get('/', (req, res) => res.status(200).json({
+    status: 'Nexus Focus API Online',
+    version: '1.2.0-reason-fixed',
+    deployedAt: '2026-10-13T21:57:00Z'
+  }));
 
   app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

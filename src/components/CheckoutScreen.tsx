@@ -236,6 +236,9 @@ export function CheckoutScreen() {
         if (typeof msg === 'string' && msg.toLowerCase().includes('resource not found')) {
           msg = 'O plano ou recurso de assinatura não foi localizado no Mercado Pago. Por favor, tente novamente ou escolha outra forma de pagamento.';
         }
+        if (typeof msg === 'string' && msg.toLowerCase().includes('reason has more than 60 characters')) {
+          msg = 'A descrição do plano excedeu o limite do Mercado Pago. Por favor, aguarde alguns instantes e tente novamente.';
+        }
         throw new Error(msg);
       }
 
