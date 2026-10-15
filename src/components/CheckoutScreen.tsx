@@ -22,15 +22,10 @@ const rawKey = (
   ''
 ).trim();
 
-const isLocalEnvironment = typeof window !== 'undefined' && (
-  window.location.hostname === 'localhost' ||
-  window.location.hostname === '127.0.0.1'
-);
-
-// Em produção (ex: nexusfocus.web.app), utiliza a chave pública de Produção (APP_USR-) para permitir pagamento com cartões reais
-export const MP_PUBLIC_KEY = (!isLocalEnvironment)
-  ? (rawKey.startsWith('APP_USR-') ? rawKey : PROD_MP_PUBLIC_KEY)
-  : (rawKey || TEST_MP_PUBLIC_KEY);
+// Garante que o frontend utilize a mesma credencial de Produção do backend (App ID: 1713752160212036)
+export const MP_PUBLIC_KEY = (rawKey && !rawKey.includes('your-public-key'))
+  ? rawKey
+  : PROD_MP_PUBLIC_KEY;
 
 // Inicializa o SDK do Mercado Pago
 if (typeof window !== 'undefined' && MP_PUBLIC_KEY) {

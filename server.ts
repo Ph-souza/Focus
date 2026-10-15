@@ -846,83 +846,166 @@ async function startServer() {
 
   // Endpoint principal do Webhook (POST)
   app.post("/api/webhooks/mercadopago", async (req, res) => {
-    // 1. Responder status 200 IMEDIATAMENTE para evitar timeout e retentativas do Mercado Pago
-    // Acknowledge only after durable processing so failures can be retried.
-
     try {
       const body = req.body || {};
       const query = req.query || {};
 
       // Mercado Pago envia o ID via body.data.id, query['data.id'] ou query.id
       const rawId = body.data?.id || query["data.id"] || query.id;
-      const topic = (body.type || body.action || query.topic || query.type || "").toString();
+      const eventType = (body.type || query.type || "").toString().toLowerCase().trim();
+      const topic = (query.topic || body.topic || body.action || "").toString().toLowerCase().trim();
 
       if (!rawId) {
         console.log("[Webhook MP] Notificação recebida sem ID de recurso.");
         return res.status(400).json({ error: "Missing resource ID" });
       }
 
-      // Filtra apenas eventos relacionados a pagamento
-      if (topic && !topic.includes("payment") && topic !== "payment.created" && topic !== "payment.updated") {
-        console.log(`[Webhook MP] Tópico ignorado (${topic}) para ID ${rawId}.`);
-        return res.status(200).json({ ignored: true });
+      const resourceId = String(rawId);
+      console.log(`[Webhook MP] Notificação recebida: ID=${resourceId}, type="${eventType}", topic="${topic}"`);
+
+      // 1. Caso: Fatura/Cobrança periódica de assinatura (subscription_authorized_payment)
+      // Evita falsos erros nos logs consultando payment.get em IDs de fatura
+      if (
+        eventType === "subscription_authorized_payment" ||
+        topic === "subscription_authorized_payment" ||
+        topic.includes("authorized_payment")
+      ) {
+        console.log(`[Webhook MP] Evento de fatura de assinatura recebido (subscription_authorized_payment) ID: ${resourceId}. Ignorado com status 200 (ativação já gerida via preapproval/payment).`);
+        return res.status(200).json({ received: true, ignored: true, reason: "subscription_authorized_payment_handled" });
       }
 
-      const paymentId = String(rawId);
-      console.log(`[Webhook MP] Recebida notificação para o pagamento ID: ${paymentId}`);
-
-      // 2. Validação da Origem da Requisição
-      // A) Validação criptográfica via HMAC (x-signature) se o segredo estiver configurado
+      // 2. Validação criptográfica HMAC (x-signature) se configurada
       const xSignature = req.headers["x-signature"] as string | undefined;
       const xRequestId = req.headers["x-request-id"] as string | undefined;
-
       if (mpWebhookSecret) {
-        const isSignatureValid = verifyMercadoPagoSignature(xSignature, xRequestId, paymentId, mpWebhookSecret);
+        const isSignatureValid = verifyMercadoPagoSignature(xSignature, xRequestId, resourceId, mpWebhookSecret);
         if (!isSignatureValid) {
-          console.warn(`[Webhook MP] Invalid signature for ${paymentId}`);
+          console.warn(`[Webhook MP] Assinatura inválida x-signature para recurso ${resourceId}`);
           return res.status(401).json({ error: "Invalid signature" });
         }
-        console.log(`[Webhook MP] Assinatura criptográfica x-signature validada para o pagamento ${paymentId}.`);
+        console.log(`[Webhook MP] Assinatura criptográfica x-signature validada para recurso ${resourceId}.`);
       }
 
-      // B) Consulta autoritativa direta à API do Mercado Pago
-      // Garante autenticidade total dos dados (status e payer.email) diretamente dos servidores do MP
-      let paymentData: any = null;
+      // 3. Caso: Assinatura Recorrente (subscription_preapproval ou topic === 'preapproval')
+      if (
+        eventType === "subscription_preapproval" ||
+        topic === "preapproval" ||
+        topic.includes("preapproval")
+      ) {
+        console.log(`[Webhook MP] Processando assinatura PreApproval ID: ${resourceId}`);
+        let preapprovalData: any = null;
 
-      if (mpPayment) {
-        try {
-          paymentData = await mpPayment.get({ id: paymentId });
-        } catch (apiErr: any) {
-          console.error(`[Webhook MP] Falha ao consultar pagamento no SDK MP: ${apiErr?.message}`);
-        }
-      } else if (mpAccessToken) {
-        try {
-          const apiRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-            headers: { Authorization: `Bearer ${mpAccessToken}` }
-          });
-          if (apiRes.ok) {
-            paymentData = await apiRes.json();
-          } else {
-            console.error(`[Webhook MP] API do MP retornou erro HTTP: ${apiRes.status}`);
+        if (mpPreApproval) {
+          try {
+            preapprovalData = await mpPreApproval.get({ id: resourceId });
+          } catch (apiErr: any) {
+            console.error(`[Webhook MP] Falha ao consultar preapproval no SDK MP: ${apiErr?.message}`);
           }
-        } catch (fetchErr: any) {
-          console.error(`[Webhook MP] Erro ao consultar API MP via fetch: ${fetchErr?.message}`);
         }
-      } else {
-        console.warn("[Webhook MP] MERCADOPAGO_ACCESS_TOKEN não configurado no .env! Utilizando payload bruto (modo preview).");
-        paymentData = body.data || body;
+        if (!preapprovalData && mpAccessToken) {
+          try {
+            const apiRes = await fetch(`https://api.mercadopago.com/preapproval/${resourceId}`, {
+              headers: { Authorization: `Bearer ${mpAccessToken}` }
+            });
+            if (apiRes.ok) {
+              preapprovalData = await apiRes.json();
+            } else {
+              console.error(`[Webhook MP] API PreApproval retornou HTTP ${apiRes.status}`);
+            }
+          } catch (fetchErr: any) {
+            console.error(`[Webhook MP] Erro ao consultar preapproval via fetch: ${fetchErr?.message}`);
+          }
+        }
+
+        if (!preapprovalData) {
+          console.error(`[Webhook MP] Incapaz de obter dados do preapproval ${resourceId}`);
+          return res.status(502).json({ error: "Gateway unavailable for preapproval" });
+        }
+
+        const subStatus = preapprovalData.status; // 'authorized', 'paused', 'cancelled', 'pending'
+        const payerEmail = (preapprovalData.payer_email || preapprovalData.payer?.email || "").trim().toLowerCase();
+        let ref: any = {};
+        try { ref = JSON.parse(preapprovalData.external_reference || "{}"); } catch {}
+        const userId = ref.userId || null;
+        const plan = ref.plan || "mensal";
+        const coupon = ref.coupon || null;
+        const price = ref.price || preapprovalData.auto_recurring?.transaction_amount || null;
+        const isPro = subStatus === "authorized";
+
+        console.log(`[Webhook MP] PreApproval ${resourceId} status: "${subStatus}", email: "${payerEmail}", userId: "${userId}", isPremium: ${isPro}`);
+
+        const updateData: any = {
+          subscriptionId: resourceId,
+          subscriptionStatus: subStatus,
+          isPremium: isPro,
+          plan,
+          updatedAt: FieldValue.serverTimestamp()
+        };
+        if (isPro) updateData.role = "premium_user";
+        if (coupon) updateData.couponApplied = coupon;
+        if (price) updateData.currentPrice = price;
+
+        if (payerEmail) {
+          await adminDb.collection("users").doc(payerEmail).set(updateData, { merge: true });
+        }
+        if (userId) {
+          await adminDb.collection("users").doc(userId).set(updateData, { merge: true });
+        }
+
+        return res.status(200).json({ received: true, resourceId, type: "subscription_preapproval", status: subStatus });
       }
 
-      if (!paymentData) {
-        console.error(`[Webhook MP] Unable to fetch ${paymentId}`);
-        return res.status(502).json({ error: "Gateway unavailable" });
+      // 4. Caso: Pagamento avulso / Pix / Cartão direto (type === 'payment' ou topic === 'payment' etc.)
+      if (
+        eventType === "payment" ||
+        topic === "payment" ||
+        topic === "payment.created" ||
+        topic === "payment.updated"
+      ) {
+        const paymentId = resourceId;
+        console.log(`[Webhook MP] Consultando pagamento ID: ${paymentId}`);
+
+        let paymentData: any = null;
+        if (mpPayment) {
+          try {
+            paymentData = await mpPayment.get({ id: paymentId });
+          } catch (apiErr: any) {
+            console.error(`[Webhook MP] Falha ao consultar pagamento no SDK MP: ${apiErr?.message}`);
+          }
+        }
+        if (!paymentData && mpAccessToken) {
+          try {
+            const apiRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+              headers: { Authorization: `Bearer ${mpAccessToken}` }
+            });
+            if (apiRes.ok) {
+              paymentData = await apiRes.json();
+            } else {
+              console.error(`[Webhook MP] API do MP retornou erro HTTP: ${apiRes.status}`);
+            }
+          } catch (fetchErr: any) {
+            console.error(`[Webhook MP] Erro ao consultar API MP via fetch: ${fetchErr?.message}`);
+          }
+        } else if (!paymentData && !mpAccessToken) {
+          console.warn("[Webhook MP] MERCADOPAGO_ACCESS_TOKEN não configurado no .env! Utilizando payload bruto (modo preview).");
+          paymentData = body.data || body;
+        }
+
+        if (!paymentData) {
+          console.error(`[Webhook MP] Unable to fetch ${paymentId}`);
+          return res.status(502).json({ error: "Gateway unavailable" });
+        }
+
+        const paymentStatus = paymentData.status;
+        console.log(`[Webhook MP] Pagamento ${paymentId} status: "${paymentStatus}"`);
+
+        await applyApprovedPayment(paymentData);
+        return res.status(200).json({ received: true, resourceId: paymentId, type: "payment", status: paymentStatus });
       }
 
-      const paymentStatus = paymentData.status;
-      console.log(`[Webhook MP] Pagamento ${paymentId} status: "${paymentStatus}"`);
-
-      await applyApprovedPayment(paymentData);
-      return res.status(200).json({ received: true });
+      // 5. Tópico não monitorado: responder 200 para evitar retentativas desnecessárias
+      console.log(`[Webhook MP] Tópico ignorado (${eventType || topic}) para ID ${resourceId}.`);
+      return res.status(200).json({ received: true, ignored: true, type: eventType, topic });
     } catch (error: any) {
       console.error("[Webhook MP] Processing failed:", error?.message);
       return res.status(500).json({ error: "Payment processing failed; retry notification." });
@@ -1097,8 +1180,14 @@ async function startServer() {
       let mpAttempt = await submitPreApprovalRequest(preapprovalPayload, mpAccessToken);
 
       // Se falhou por incompatibilidade de ambiente do token de cartão (ex: token gerado em Sandbox ou Produção),
-      // tenta automaticamente com o token alternativo (PROD <-> TEST)
-      if (!mpAttempt.ok && (
+      // e NÃO for rejeição explícita do próprio cartão (ex: CC_VAL_433), tenta com o token alternativo
+      const isCardValidationError =
+        mpAttempt.data?.message?.toLowerCase().includes("credit card") ||
+        (Array.isArray(mpAttempt.data?.cause) && mpAttempt.data.cause.some((c: any) =>
+          c?.code === "CC_VAL_433" || String(c?.description || "").toLowerCase().includes("credit card")
+        ));
+
+      if (!mpAttempt.ok && !isCardValidationError && (
         mpAttempt.status === 400 ||
         mpAttempt.status === 404 ||
         mpAttempt.data?.message?.toLowerCase().includes("bad request") ||
@@ -1114,13 +1203,14 @@ async function startServer() {
       }
 
       if (!mpAttempt.ok) {
-        console.error("❌ [Assinaturas MP] Resposta de erro da API do Mercado Pago:", {
+        console.error("❌ [Assinaturas MP] Resposta de erro da API do Mercado Pago (JSON completo):\n" + JSON.stringify({
           status: mpAttempt.status,
           message: mpAttempt.data?.message,
           error: mpAttempt.data?.error,
           cause: mpAttempt.data?.cause,
           data: mpAttempt.data
-        });
+        }, null, 2));
+
         const errMessage = mpAttempt.data?.message || mpAttempt.data?.cause?.[0]?.description || mpAttempt.data?.error || "Falha na criação da assinatura no Mercado Pago";
         const customErr: any = new Error(errMessage);
         customErr.status = mpAttempt.status;
@@ -1246,14 +1336,19 @@ async function startServer() {
         });
       }
     } catch (err: any) {
-      console.error("❌ [Assinaturas MP] Erro capturado no bloco catch de /api/subscriptions:", {
+      const errorJson = {
         message: err?.message,
         name: err?.name,
         status: err?.status || err?.statusCode || (err as any)?.response?.status,
         responseData: err?.data || (err as any)?.response?.data || (err as any)?.api_response,
         causes: err?.causes || (err as any)?.cause || (err as any)?.response?.data?.cause,
         stack: err?.stack
-      });
+      };
+      try {
+        console.error("❌ [Assinaturas MP] Erro capturado no bloco catch de /api/subscriptions (JSON completo):\n" + JSON.stringify(errorJson, null, 2));
+      } catch {
+        console.error("❌ [Assinaturas MP] Erro capturado no bloco catch de /api/subscriptions:", errorJson);
+      }
 
       let userFacingError = err?.message || "Erro interno ao processar assinatura.";
       if (typeof userFacingError === "string" && userFacingError.toLowerCase().includes("resource not found")) {
@@ -4396,8 +4491,8 @@ Data e hora atual: ${new Date().toISOString()}`;
   // Health Check Route
   app.get('/', (req, res) => res.status(200).json({
     status: 'Nexus Focus API Online',
-    version: '1.3.0-reason-fixed',
-    deployedAt: '2026-10-14T21:42:00Z'
+    version: '1.4.0-webhook-preapproval',
+    deployedAt: '2026-10-14T22:48:00Z'
   }));
 
   app.listen(Number(PORT), "0.0.0.0", () => {
