@@ -974,7 +974,7 @@ async function startServer() {
       let finalAmount = normalizedPlan === "anual" ? 238.80 : 19.90;
       let frequency = normalizedPlan === "anual" ? 12 : 1;
       let frequencyType = "months";
-      let reason = normalizedPlan === "anual" ? "Nexus Focus Pro - Anual" : "Nexus Focus Pro - Mensal";
+      let reason = "Nexus Focus - Assinatura";
       let couponApplied: string | null = null;
 
       if (rawCoupon) {
@@ -987,8 +987,7 @@ async function startServer() {
         }
         couponApplied = couponRes.code || null;
         finalAmount = couponRes.finalAmount || finalAmount;
-        const cleanReason = `Nexus Focus Pro - Mensal (${couponApplied})`;
-        reason = cleanReason.length > 50 ? cleanReason.slice(0, 47) + "..." : cleanReason;
+        reason = "Nexus Focus Elite";
 
         // Decrementa maxUses no Firestore após validação bem-sucedida
         if (couponApplied) {
@@ -1052,7 +1051,7 @@ async function startServer() {
         // NÃO envia o campo preapproval_plan_id no JSON do payload.
         // Cria uma assinatura personalizada enviando as regras diretamente no objeto auto_recurring.
         delete preapprovalPayload.preapproval_plan_id;
-        preapprovalPayload.reason = "Nexus Focus - Plano Elite (Cupom)";
+        preapprovalPayload.reason = "Nexus Focus Elite";
         preapprovalPayload.auto_recurring = {
           frequency: 1,
           frequency_type: "months",
@@ -1068,7 +1067,7 @@ async function startServer() {
           delete preapprovalPayload.auto_recurring;
           delete preapprovalPayload.reason;
         } else {
-          preapprovalPayload.reason = normalizedPlan === "anual" ? "Nexus Focus Pro - Anual" : "Nexus Focus Pro - Mensal";
+          preapprovalPayload.reason = "Nexus Focus - Assinatura";
           preapprovalPayload.auto_recurring = {
             frequency: normalizedPlan === "anual" ? 12 : 1,
             frequency_type: "months",
@@ -1079,9 +1078,9 @@ async function startServer() {
         }
       }
 
-      // Blindagem estrita: Mercado Pago rejeita reason > 60 caracteres com erro 400
+      // Blindagem estrita: Mercado Pago exige reason curto (< 30 caracteres)
       if (preapprovalPayload.reason) {
-        preapprovalPayload.reason = String(preapprovalPayload.reason).trim().slice(0, 50);
+        preapprovalPayload.reason = String(preapprovalPayload.reason).trim().slice(0, 30);
       }
 
       console.log(`[Assinaturas MP] Submetendo requisição para Mercado Pago (fluxo=${hasDiscountedCoupon ? "com_cupom_auto_recurring" : "sem_cupom_plan_id"}, plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}):`, {
@@ -4397,8 +4396,8 @@ Data e hora atual: ${new Date().toISOString()}`;
   // Health Check Route
   app.get('/', (req, res) => res.status(200).json({
     status: 'Nexus Focus API Online',
-    version: '1.2.0-reason-fixed',
-    deployedAt: '2026-10-13T21:57:00Z'
+    version: '1.3.0-reason-fixed',
+    deployedAt: '2026-10-14T21:42:00Z'
   }));
 
   app.listen(Number(PORT), "0.0.0.0", () => {
