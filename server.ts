@@ -8,7 +8,7 @@ import crypto from "crypto";
 import { initializeApp, getApps, cert, App } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-import { MercadoPagoConfig, Payment, PreApproval, Preference } from "mercadopago";
+import { Customer, CustomerCard, MercadoPagoConfig, Payment, PreApproval, Preference } from "mercadopago";
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
@@ -337,6 +337,82 @@ const mpClient = mpAccessToken ? new MercadoPagoConfig({ accessToken: mpAccessTo
 const mpPayment = mpClient ? new Payment(mpClient) : null;
 const mpPreApproval = mpClient ? new PreApproval(mpClient) : null;
 const mpPreference = mpClient ? new Preference(mpClient) : null;
+const mpCustomer = mpClient ? new Customer(mpClient) : null;
+const mpCustomerCard = mpClient ? new CustomerCard(mpClient) : null;
+
+/**
+ * Busca ou cria um Cliente (Customer) no Mercado Pago com base no e-mail
+ */
+async function getOrCreateMpCustomer(email: string, name?: string): Promise<string | null> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!mpAccessToken) return null;
+
+  try {
+    // 1. Buscar cliente existente por e-mail
+    const searchRes = await fetch(`https://api.mercadopago.com/v1/customers/search?email=${encodeURIComponent(cleanEmail)}`, {
+      headers: { Authorization: `Bearer ${mpAccessToken}` }
+    });
+    if (searchRes.ok) {
+      const searchData = await searchRes.json().catch(() => ({}));
+      if (searchData?.results && searchData.results.length > 0 && searchData.results[0]?.id) {
+        const existingId = String(searchData.results[0].id);
+        console.log(`[Customer MP] Cliente existente encontrado: ID ${existingId} para ${cleanEmail}`);
+        return existingId;
+      }
+    }
+
+    // 2. Criar novo cliente caso não exista
+    const createRes = await fetch("https://api.mercadopago.com/v1/customers", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${mpAccessToken}`
+      },
+      body: JSON.stringify({
+        email: cleanEmail,
+        ...(name ? { first_name: name.slice(0, 30) } : {})
+      })
+    });
+    const createData = await createRes.json().catch(() => ({}));
+    if (createRes.ok && createData?.id) {
+      console.log(`[Customer MP] Novo cliente criado no MP: ID ${createData.id} para ${cleanEmail}`);
+      return String(createData.id);
+    }
+    console.warn("[Customer MP] Aviso ao criar cliente no MP:", createData);
+    return null;
+  } catch (err: any) {
+    console.warn("[Customer MP] Exceção ao obter/criar cliente:", err?.message);
+    return null;
+  }
+}
+
+/**
+ * Salva o cartão de crédito associando o token ao Cliente no Mercado Pago
+ */
+async function saveCardToCustomer(customerId: string, cardToken: string): Promise<any | null> {
+  if (!mpAccessToken || !customerId || !cardToken) return null;
+
+  try {
+    const cardRes = await fetch(`https://api.mercadopago.com/v1/customers/${customerId}/cards`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${mpAccessToken}`
+      },
+      body: JSON.stringify({ token: cardToken })
+    });
+    const cardData = await cardRes.json().catch(() => ({}));
+    if (cardRes.ok && cardData?.id) {
+      console.log(`[CustomerCard MP] Cartão ID ${cardData.id} vinculado com sucesso ao cliente ${customerId}`);
+      return cardData;
+    }
+    console.warn(`[CustomerCard MP] Aviso ao vincular cartão ao cliente ${customerId}:`, cardData);
+    return null;
+  } catch (err: any) {
+    console.warn("[CustomerCard MP] Exceção ao salvar cartão no cliente:", err?.message);
+    return null;
+  }
+}
 
 /**
  * Valida a assinatura do Webhook do Mercado Pago (Header x-signature)
@@ -1029,7 +1105,18 @@ async function startServer() {
   // =========================================================================
   app.post("/api/subscriptions", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
-      const { token, plan, coupon, couponCode, planId, paymentMethod } = req.body || {};
+      const {
+        token,
+        plan,
+        coupon,
+        couponCode,
+        planId,
+        paymentMethod,
+        paymentMethodId,
+        issuerId,
+        installments,
+        identification
+      } = req.body || {};
       const email = req.user?.email;
       const userId = req.user?.uid;
       const hostedCheckout = paymentMethod === "pix";
@@ -1093,11 +1180,23 @@ async function startServer() {
       const selectedPlanId = planId || process.env.MERCADOPAGO_PLAN_ID;
       const appUrl = process.env.APP_URL || "https://nexusfocus.web.app";
 
+      // 1. Abordagem com Customer ID (Recomendado pelo Mercado Pago)
+      let customerId: string | null = null;
+      let savedCard: any = null;
+
+      if (token && !hostedCheckout) {
+        customerId = await getOrCreateMpCustomer(payerEmail, req.user?.displayName || req.user?.name);
+        if (customerId) {
+          savedCard = await saveCardToCustomer(customerId, token);
+        }
+      }
+
       // Montar corpo da requisição de PreApproval com metadados para auditoria e webhook
       const orderId = crypto.randomUUID();
       await adminDb.collection("payment_orders").doc(orderId).set({ userId, amount: finalAmount, plan: normalizedPlan, coupon: couponApplied, createdAt: FieldValue.serverTimestamp() });
       const preapprovalPayload: any = {
         payer_email: payerEmail,
+        ...(customerId ? { payer_id: customerId } : {}),
         ...(hostedCheckout ? {} : { card_token_id: token }),
         back_url: `${appUrl}/dashboard`,
         status: hostedCheckout ? "pending" : "authorized",
@@ -1202,20 +1301,152 @@ async function startServer() {
         }
       }
 
-      if (!mpAttempt.ok) {
-        console.error("❌ [Assinaturas MP] Resposta de erro da API do Mercado Pago (JSON completo):\n" + JSON.stringify({
+      // =========================================================================
+      // Fallback para Pagamento Único da 1ª Mensalidade + Cartão Salvo
+      // Se a API de PreApproval direta falhar (ex: CC_VAL_433 ou rejeição de token recorrente),
+      // processa a primeira cobrança como pagamento avulso (Payment API), que aceita o token
+      // sem o erro 433, concedendo acesso Pro e salvando o customer/card para renovações.
+      // =========================================================================
+      let isFallbackApproved = false;
+      let fallbackPaymentResult: any = null;
+
+      if (!mpAttempt.ok && token && !hostedCheckout) {
+        console.warn(`[Assinaturas MP] PreApproval rejeitado (${mpAttempt.status} - ${mpAttempt.data?.message || "CC_VAL_433"}). Acionando Fallback Híbrido: cobrança da 1ª mensalidade de R$ ${finalAmount} via Payment API...`);
+
+        try {
+          const paymentPayload: any = {
+            transaction_amount: finalAmount,
+            token: token,
+            description: reason,
+            installments: Number(installments) || 1,
+            payment_method_id: paymentMethodId || "credit_card",
+            payer: {
+              email: payerEmail,
+              ...(customerId ? { id: customerId } : {}),
+              ...(identification ? { identification } : {})
+            },
+            external_reference: JSON.stringify({
+              orderId,
+              plan: normalizedPlan,
+              coupon: couponApplied,
+              userId: userId || null,
+              price: finalAmount
+            })
+          };
+          if (issuerId) paymentPayload.issuer_id = issuerId;
+
+          const paymentResponse = await fetch("https://api.mercadopago.com/v1/payments", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${mpAccessToken}`
+            },
+            body: JSON.stringify(paymentPayload)
+          });
+          fallbackPaymentResult = await paymentResponse.json().catch(() => ({}));
+
+          console.log(`[Assinaturas MP - Fallback] Resposta da API de Pagamento: status=${fallbackPaymentResult?.status}, ID=${fallbackPaymentResult?.id}`);
+
+          if (paymentResponse.ok && (fallbackPaymentResult?.status === "approved" || fallbackPaymentResult?.status === "in_process")) {
+            isFallbackApproved = true;
+          } else {
+            console.error("❌ [Assinaturas MP - Fallback] Falha no pagamento avulso da 1ª mensalidade (JSON completo):\n" + JSON.stringify(fallbackPaymentResult, null, 2));
+          }
+        } catch (fbErr: any) {
+          console.error("❌ [Assinaturas MP - Fallback] Exceção no pagamento avulso:", fbErr?.message);
+        }
+      }
+
+      if (isFallbackApproved) {
+        const paymentId = fallbackPaymentResult?.id;
+        const subStatus = fallbackPaymentResult?.status; // 'approved'
+
+        const firestoreData: any = {
+          email: payerEmail,
+          isPremium: true,
+          role: "premium_user",
+          plan: normalizedPlan,
+          couponApplied,
+          currentPrice: finalAmount,
+          lastPaymentId: paymentId,
+          subscriptionId: String(paymentId),
+          subscriptionStatus: subStatus === "approved" ? "authorized" : "pending",
+          subscriptionType: "card_recurring_hybrid",
+          mpCustomerId: customerId || null,
+          mpCardId: savedCard?.id || null,
+          subscribedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        };
+
+        const emailRef = adminDb.collection("users").doc(payerEmail);
+        await emailRef.set(firestoreData, { merge: true });
+
+        if (userId && typeof userId === "string") {
+          const userRef = adminDb.collection("users").doc(userId);
+          await userRef.set(firestoreData, { merge: true });
+        }
+
+        // Sincronizar qualquer outra conta matching pelo e-mail
+        try {
+          const querySnap = await adminDb.collection("users").where("email", "==", payerEmail).get();
+          const batch = adminDb.batch();
+          querySnap.forEach((docSnap) => {
+            if (docSnap.id !== payerEmail && docSnap.id !== userId) {
+              batch.set(docSnap.ref, firestoreData, { merge: true });
+            }
+          });
+          await batch.commit();
+        } catch (e: any) {
+          console.warn("[Assinaturas MP] Aviso na sincronização secundária:", e?.message);
+        }
+
+        // Envio do e-mail de onboarding
+        try {
+          const recipientName = req.user?.displayName || req.user?.name || "Membro Focus";
+          await dispatchResendOnboardingEmail({
+            to: payerEmail,
+            name: recipientName,
+            plan: normalizedPlan,
+            coupon: couponApplied
+          });
+        } catch (e: any) {
+          console.warn("[Assinaturas MP] Erro ao enviar e-mail de onboarding:", e?.message);
+        }
+
+        return res.status(200).json({
+          success: true,
+          status: subStatus,
+          subscriptionId: paymentId,
+          paymentId: paymentId,
+          plan: normalizedPlan,
+          couponApplied,
+          currentPrice: finalAmount,
+          message: "Assinatura ativada com sucesso!"
+        });
+      }
+
+      if (!mpAttempt.ok && !isFallbackApproved) {
+        console.error("❌ [Assinaturas MP] PreApproval e Fallback falharam. Resposta do PreApproval (JSON completo):\n" + JSON.stringify({
           status: mpAttempt.status,
           message: mpAttempt.data?.message,
           error: mpAttempt.data?.error,
           cause: mpAttempt.data?.cause,
-          data: mpAttempt.data
+          data: mpAttempt.data,
+          fallback: fallbackPaymentResult
         }, null, 2));
 
-        const errMessage = mpAttempt.data?.message || mpAttempt.data?.cause?.[0]?.description || mpAttempt.data?.error || "Falha na criação da assinatura no Mercado Pago";
+        const errMessage =
+          fallbackPaymentResult?.message ||
+          fallbackPaymentResult?.cause?.[0]?.description ||
+          mpAttempt.data?.message ||
+          mpAttempt.data?.cause?.[0]?.description ||
+          mpAttempt.data?.error ||
+          "Falha na validação do cartão junto ao Mercado Pago";
+
         const customErr: any = new Error(errMessage);
         customErr.status = mpAttempt.status;
         customErr.data = mpAttempt.data;
-        customErr.causes = mpAttempt.data?.cause;
+        customErr.causes = mpAttempt.data?.cause || fallbackPaymentResult?.cause;
         throw customErr;
       }
 
@@ -4491,8 +4722,8 @@ Data e hora atual: ${new Date().toISOString()}`;
   // Health Check Route
   app.get('/', (req, res) => res.status(200).json({
     status: 'Nexus Focus API Online',
-    version: '1.4.0-webhook-preapproval',
-    deployedAt: '2026-10-14T22:48:00Z'
+    version: '1.5.0-customer-preapproval-fallback',
+    deployedAt: '2026-10-14T22:57:00Z'
   }));
 
   app.listen(Number(PORT), "0.0.0.0", () => {

@@ -221,6 +221,7 @@ export function CheckoutScreen() {
           coupon: appliedCoupon || undefined,
           couponCode: appliedCoupon || undefined,
           amount: currentAmount,
+          identification: formData?.payer?.identification || formData?.identification || undefined
         }),
       });
 
