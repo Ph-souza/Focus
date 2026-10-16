@@ -1000,21 +1000,40 @@ async function startServer() {
 
         const subStatus = preapprovalData.status; // 'authorized', 'paused', 'cancelled', 'pending'
         const payerEmail = (preapprovalData.payer_email || preapprovalData.payer?.email || "").trim().toLowerCase();
-        let ref: any = {};
-        try { ref = JSON.parse(preapprovalData.external_reference || "{}"); } catch {}
-        const userId = ref.userId || null;
-        const plan = ref.plan || "mensal";
-        const coupon = ref.coupon || null;
-        const price = ref.price || preapprovalData.auto_recurring?.transaction_amount || null;
-        const isPro = subStatus === "authorized";
+        
+        let userId: string | null = null;
+        let plan = "elite";
+        let coupon: string | null = null;
+        let price = preapprovalData.auto_recurring?.transaction_amount || null;
 
-        console.log(`[Webhook MP] PreApproval ${resourceId} status: "${subStatus}", email: "${payerEmail}", userId: "${userId}", isPremium: ${isPro}`);
+        if (preapprovalData.external_reference) {
+          const rawRef = String(preapprovalData.external_reference).trim();
+          try {
+            const parsed = JSON.parse(rawRef);
+            if (typeof parsed === "object" && parsed !== null) {
+              userId = parsed.userId || null;
+              if (parsed.plan) plan = parsed.plan;
+              if (parsed.coupon) coupon = parsed.coupon;
+              if (parsed.price) price = parsed.price;
+            } else if (typeof parsed === "string") {
+              userId = parsed;
+            }
+          } catch {
+            userId = rawRef;
+          }
+        }
+
+        const isAuthorized = subStatus === "authorized" || subStatus === "active";
+        const isPro = isAuthorized;
+
+        console.log(`[Webhook MP] PreApproval ${resourceId} status: "${subStatus}", email: "${payerEmail}", userId: "${userId}", isAuthorized: ${isAuthorized}`);
 
         const updateData: any = {
           subscriptionId: resourceId,
           subscriptionStatus: subStatus,
           isPremium: isPro,
-          plan,
+          plan: "elite",
+          status: isAuthorized ? "active" : subStatus,
           updatedAt: FieldValue.serverTimestamp()
         };
         if (isPro) updateData.role = "premium_user";
@@ -1784,132 +1803,142 @@ async function startServer() {
   });
 
   // =========================================================================
-  // Rota de Criação de Preferência de Checkout Mercado Pago (/api/checkout)
-  // Permite fluxo real de pagamento com cupons para utilizadores Elite
+  // Rota de Criação da Assinatura Checkout Pro Mercado Pago (/api/checkout)
+  // Utiliza a API de Preapproval (/preapproval) do Mercado Pago para gerar init_point
   // =========================================================================
   app.post("/api/checkout", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const { couponCode, coupon, plan } = req.body || {};
-      const email = req.user.email;
-      const userId = req.user.uid;
+      const email = req.user?.email || req.body?.email;
+      const userId = req.user?.uid || req.body?.userId;
       const payerEmail = (email && typeof email === "string" && email.includes("@")) 
         ? email.trim().toLowerCase() 
         : (req as any).user?.email || "contato@nexusfocus.com";
 
-      const normalizedPlan: "mensal" | "anual" = (plan === "anual") ? "anual" : "mensal";
-      const baseAmount = normalizedPlan === "anual" ? 238.80 : 19.90;
-      const rawCoupon = couponCode || coupon;
+      const rawCoupon = (couponCode || coupon || "").toString().trim().toUpperCase();
 
-      let finalAmount = baseAmount;
+      // Cálculo do Preço: Verifica se o couponCode recebido é válido (ex: NEXUSELITE).
+      // Se for, define a variável transaction_amount para 1.00. Caso contrário, o valor padrão é 19.90.
+      let transaction_amount = 19.90;
       let couponApplied: string | null = null;
-      let discountPercentage = 0;
 
       if (rawCoupon) {
-        const couponRes = await validateAndComputeCoupon(rawCoupon, normalizedPlan);
-        if (!couponRes.valid) {
-          return res.status(400).json({
-            success: false,
-            error: couponRes.error || "Cupom inválido ou expirado."
-          });
-        }
-        couponApplied = couponRes.code || null;
-        discountPercentage = couponRes.discountPercentage || 0;
-        finalAmount = couponRes.finalAmount || baseAmount;
-
-        // Decrementar maxUses após a geração da preferência
-        if (couponApplied) {
-          await decrementCouponUsage(couponApplied);
+        if (rawCoupon === "NEXUSELITE") {
+          transaction_amount = 1.00;
+          couponApplied = "NEXUSELITE";
+          try {
+            await decrementCouponUsage("NEXUSELITE");
+          } catch (e) {
+            console.warn("[Checkout MP] Aviso ao decrementar uso do cupom NEXUSELITE:", e);
+          }
+        } else {
+          const couponRes = await validateAndComputeCoupon(rawCoupon, "mensal");
+          if (couponRes.valid) {
+            couponApplied = couponRes.code || rawCoupon;
+            transaction_amount = couponRes.finalAmount ? Math.max(1.00, Number(couponRes.finalAmount.toFixed(2))) : 1.00;
+            try {
+              await decrementCouponUsage(couponApplied);
+            } catch (e) {
+              console.warn(`[Checkout MP] Aviso ao decrementar uso do cupom ${couponApplied}:`, e);
+            }
+          } else {
+            return res.status(400).json({
+              success: false,
+              error: couponRes.error || "Cupom inválido ou expirado."
+            });
+          }
         }
       }
 
-      // Regra técnica P0: Piso mínimo de R$ 1,00 para garantir aceitação pelo gateway do Mercado Pago
-      finalAmount = Math.max(1.00, Number(finalAmount.toFixed(2)));
+      transaction_amount = Math.max(1.00, Number(transaction_amount.toFixed(2)));
 
       const appUrl = (process.env.APP_URL || "https://nexusfocus.web.app").replace(/\/+$/, "");
-      const serverUrl = (process.env.RENDER_EXTERNAL_URL || process.env.API_URL || "https://nexus-focus.onrender.com").replace(/\/+$/, "");
 
-      const itemTitle = couponApplied
-        ? `Nexus Focus Pro - ${normalizedPlan === "anual" ? "Anual" : "Mensal"} (Cupom ${couponApplied} ${discountPercentage}% OFF)`
-        : `Nexus Focus Pro - ${normalizedPlan === "anual" ? "Anual" : "Mensal"}`;
-
-      console.log(`[Checkout MP] Gerando preferência: plano=${normalizedPlan}, cupom=${couponApplied}, valor=R$ ${finalAmount}, cliente=${payerEmail}`);
-
-      const orderId = crypto.randomUUID();
-      await adminDb.collection("payment_orders").doc(orderId).set({ userId, amount: finalAmount, plan: normalizedPlan, coupon: couponApplied, createdAt: FieldValue.serverTimestamp() });
-      const preferencePayload: any = {
-        items: [
-          {
-            id: normalizedPlan === "anual" ? "nexus-pro-anual" : "nexus-pro-mensal",
-            title: itemTitle,
-            unit_price: finalAmount,
-            quantity: 1,
-            currency_id: "BRL"
-          }
-        ],
-        payer: {
-          email: payerEmail
+      // Payload da API do Mercado Pago (/preapproval):
+      // Constrói o objeto sem enviar tokens de cartão. O Mercado Pago vai gerar um link de pagamento.
+      const preapprovalPayload: any = {
+        reason: "Nexus Focus - Assinatura",
+        auto_recurring: {
+          frequency: 1,
+          frequency_type: "months",
+          transaction_amount: transaction_amount,
+          currency_id: "BRL"
         },
-        back_urls: {
-          success: `${appUrl}/checkout?payment=success`,
-          failure: `${appUrl}/checkout?payment=failure`,
-          pending: `${appUrl}/checkout?payment=pending`
-        },
-        auto_return: "approved",
-        notification_url: `${serverUrl}/api/webhooks/mercadopago`,
-        external_reference: JSON.stringify({
-          orderId,
-          plan: normalizedPlan,
-          coupon: couponApplied,
-          userId: userId || null,
-          price: finalAmount
-        }),
-        metadata: {
-          plan: normalizedPlan,
-          coupon_code: couponApplied,
-          user_id: userId || null,
-          price: finalAmount,
-          discount_percentage: discountPercentage
-        }
+        back_url: `${appUrl}/dashboard`,
+        payer_email: payerEmail,
+        external_reference: userId || ""
       };
+
+      console.log(`[Checkout MP] Criando assinatura Preapproval: cupom=${couponApplied}, valor=R$ ${transaction_amount}, cliente=${payerEmail}, userId=${userId}`);
+
+      if (!mpAccessToken) {
+        return res.status(500).json({
+          success: false,
+          error: "MERCADOPAGO_ACCESS_TOKEN não configurado no servidor."
+        });
+      }
 
       let prefResult: any = null;
 
-      if (mpPreference) {
-        prefResult = await mpPreference.create({ body: preferencePayload });
-      } else {
-        const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
+      if (mpPreApproval) {
+        try {
+          prefResult = await mpPreApproval.create({ body: preapprovalPayload });
+        } catch (sdkErr: any) {
+          console.warn("[Checkout MP] SDK PreApproval.create falhou, tentando fetch direto:", sdkErr?.message || sdkErr);
+        }
+      }
+
+      if (!prefResult || !prefResult.init_point) {
+        const response = await fetch("https://api.mercadopago.com/preapproval", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${mpAccessToken}`
           },
-          body: JSON.stringify(preferencePayload)
+          body: JSON.stringify(preapprovalPayload)
         });
 
         prefResult = await response.json();
         if (!response.ok) {
-          throw new Error(prefResult?.message || prefResult?.cause?.[0]?.description || "Erro ao criar preferência de pagamento no Mercado Pago");
+          console.error("[Checkout MP] Erro da API PreApproval Mercado Pago:", prefResult);
+          throw new Error(prefResult?.message || prefResult?.cause?.[0]?.description || "Erro ao criar assinatura no Mercado Pago");
         }
       }
 
-      const initPoint = prefResult?.init_point;
-      const sandboxInitPoint = prefResult?.sandbox_init_point;
-      const preferenceId = prefResult?.id;
+      const initPoint = prefResult?.init_point || prefResult?.sandbox_init_point;
+      if (!initPoint) {
+        throw new Error("init_point não retornado pelo Mercado Pago");
+      }
+
+      console.log(`[Checkout MP] Assinatura criada com sucesso! init_point=${initPoint}`);
+
+      if (hasServiceAccount && adminDb && userId) {
+        try {
+          const orderId = crypto.randomUUID();
+          await adminDb.collection("payment_orders").doc(orderId).set({
+            userId,
+            amount: transaction_amount,
+            plan: "elite",
+            coupon: couponApplied,
+            payerEmail,
+            preapprovalId: prefResult?.id || null,
+            createdAt: FieldValue.serverTimestamp()
+          });
+        } catch (dbErr) {
+          console.warn("[Checkout MP] Aviso ao salvar payment_order:", dbErr);
+        }
+      }
 
       return res.status(200).json({
         success: true,
-        preferenceId,
-        initPoint,
-        sandboxInitPoint,
-        plan: normalizedPlan,
-        couponApplied,
-        discountPercentage,
-        finalAmount,
-        originalAmount: baseAmount,
-        message: "Preferência de checkout gerada com sucesso!"
+        init_point: initPoint,
+        initPoint: initPoint,
+        id: prefResult?.id,
+        transaction_amount,
+        couponApplied
       });
     } catch (err: any) {
-      console.error("[Checkout MP] Erro ao criar preferência:", err);
+      console.error("[Checkout MP] Erro ao criar assinatura Preapproval:", err);
       return res.status(500).json({
         success: false,
         error: err?.message || "Erro interno ao processar o checkout."
