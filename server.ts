@@ -3698,6 +3698,8 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
       }
 
       const from = message.from;
+      const contactProfileName = value.contacts?.[0]?.profile?.name || "Usuário WhatsApp";
+      const waMessageId = message.id || `wa_${Date.now()}`;
 
       if (!from) {
         console.warn(`[WhatsApp Webhook] Remetente não identificado no payload.`);
@@ -3705,7 +3707,7 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
       }
 
       // 5. Log de Sucesso formatado para monitoramento na Render
-      console.log(`Mensagem recebida de [${from}] (Tipo: ${messageType}): [${text}]`);
+      console.log(`Mensagem recebida de [${from}] (${contactProfileName}) (Tipo: ${messageType}): [${text}]`);
 
       const cleanFrom = String(from).replace(/\D/g, "");
 
@@ -3873,17 +3875,36 @@ Se o usuário quiser registrar um afazer solto, use add_task. Se o usuário menc
 
         const linkedUserId = userMatch.uid;
 
-        // 1. Registro da Interação (No Webhook POST):
-        console.log(`[Mensagem Regular] Atualizando lastWaInteraction para users/${linkedUserId}...`);
-        await withTimeout(
-          userMatch.ref.set({
-            lastWaInteraction: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp()
-          }, { merge: true }),
-          10000,
-          `Atualizar lastWaInteraction users/${linkedUserId}`
-        );
-        console.log(`[Mensagem Regular] lastWaInteraction atualizado com sucesso!`);
+        // 1. Registro da Interação e Persistência da Mensagem no Firestore (users/{uid} e users/{uid}/chatMessages):
+        console.log(`[Mensagem Regular] Atualizando lastWaInteraction e salvando mensagem para users/${linkedUserId}...`);
+        await Promise.all([
+          withTimeout(
+            userMatch.ref.set({
+              whatsappContactName: contactProfileName,
+              lastWaInteraction: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true }),
+            10000,
+            `Atualizar lastWaInteraction users/${linkedUserId}`
+          ),
+          withTimeout(
+            userMatch.ref.collection("chatMessages").doc(String(waMessageId)).set({
+              waMessageId,
+              sender: "user",
+              role: "user",
+              channel: "whatsapp",
+              from: cleanFrom,
+              contactName: contactProfileName,
+              type: messageType,
+              text: text || `[Mídia: ${messageType}]`,
+              timestamp: FieldValue.serverTimestamp(),
+              createdAt: new Date().toISOString()
+            }, { merge: true }),
+            10000,
+            `Salvar mensagem WhatsApp em users/${linkedUserId}/chatMessages`
+          )
+        ]);
+        console.log(`[Mensagem Regular] Interação e mensagem salvas com sucesso!`);
 
         const apiKey = getGeminiApiKey();
         if (!apiKey) {
