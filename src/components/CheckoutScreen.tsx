@@ -53,19 +53,23 @@ export function CheckoutScreen() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  // Cálculo de valores da assinatura mensal
+  // Cálculo de valores da assinatura mensal / vitalícia
   const baseAmount = 19.90;
   let currentAmount = baseAmount;
   let discountAmount = '0,00';
 
+  const isLifetimeCoupon = appliedCoupon === 'NEXUSELITE';
+  const isFocus50Coupon = appliedCoupon === 'FOCUS50';
   const effectiveDiscountPercentage = discountPercentage > 0
     ? discountPercentage
-    : (appliedCoupon === 'NEXUSELITE' ? 99 : (appliedCoupon === 'FOCUS50' ? 50 : 0));
+    : (isLifetimeCoupon ? 95 : (isFocus50Coupon ? 50 : 0));
   const hasDiscount = Boolean(appliedCoupon && effectiveDiscountPercentage > 0);
 
   if (hasDiscount) {
-    if (appliedCoupon === 'NEXUSELITE') {
+    if (isLifetimeCoupon) {
       currentAmount = 1.00;
+    } else if (isFocus50Coupon) {
+      currentAmount = 9.95;
     } else {
       const rawDiscounted = Number((baseAmount * (1 - effectiveDiscountPercentage / 100)).toFixed(2));
       currentAmount = Math.max(1.00, rawDiscounted);
@@ -92,18 +96,6 @@ export function CheckoutScreen() {
     setCouponStatus({ message: 'Validando cupom...', type: '' });
 
     try {
-      // Atalho para o cupom oficial NEXUSELITE
-      if (code === 'NEXUSELITE') {
-        setAppliedCoupon('NEXUSELITE');
-        setDiscountPercentage(99);
-        setCouponStatus({
-          message: 'Cupom NEXUSELITE aplicado com sucesso! (99% de desconto: R$ 1,00/mês)',
-          type: 'success'
-        });
-        setIsApplyingCoupon(false);
-        return;
-      }
-
       const response = await fetch(getApiUrl('/api/coupons/validate'), {
         method: 'POST',
         headers: {
@@ -122,7 +114,7 @@ export function CheckoutScreen() {
         setAppliedCoupon(data.coupon);
         setDiscountPercentage(data.discountPercentage || 0);
         setCouponStatus({
-          message: `Cupom ${data.coupon} aplicado! ${data.discountPercentage}% de desconto.`,
+          message: data.message || `Cupom ${data.coupon} aplicado! ${data.discountPercentage}% de desconto.`,
           type: 'success'
         });
       } else {
@@ -133,12 +125,18 @@ export function CheckoutScreen() {
       }
     } catch (err: any) {
       console.warn('[Checkout] Erro ao validar cupom:', err);
-      // Fallback gracioso para NEXUSELITE
       if (code === 'NEXUSELITE') {
         setAppliedCoupon('NEXUSELITE');
-        setDiscountPercentage(99);
+        setDiscountPercentage(95);
         setCouponStatus({
-          message: 'Cupom NEXUSELITE ativado com sucesso! (R$ 1,00/mês)',
+          message: 'Acesso Vitalício liberado: Taxa de adesão única de R$ 1,00 (R$ 0,00/mês).',
+          type: 'success'
+        });
+      } else if (code === 'FOCUS50') {
+        setAppliedCoupon('FOCUS50');
+        setDiscountPercentage(50);
+        setCouponStatus({
+          message: 'R$ 9,95/mês nos 3 primeiros meses. Após o 3º mês, R$ 19,90/mês.',
           type: 'success'
         });
       } else {
@@ -415,13 +413,17 @@ export function CheckoutScreen() {
                     <div className="price">
                       <span className="currency">R$</span>
                       <strong id="price">{displayPrice}</strong>
-                      <span className="period">/mês</span>
+                      <span className="period">{isLifetimeCoupon ? ' taxa única' : '/mês'}</span>
                     </div>
 
                     <p className="price-term" id="price-term">
-                      {hasDiscount
-                        ? `R$ ${displayPrice}/mês no primeiro período com cupom ${appliedCoupon} (${effectiveDiscountPercentage}% OFF). Renovação automática.`
-                        : 'Assinatura com renovação mensal no Mercado Pago. Cancele a qualquer momento.'}
+                      {isLifetimeCoupon
+                        ? 'Acesso Vitalício liberado: Taxa de adesão única de R$ 1,00. Sem mensalidades (R$ 0,00/mês).'
+                        : isFocus50Coupon
+                          ? 'R$ 9,95/mês durante os 3 primeiros meses (50% OFF). Após o 3º mês, R$ 19,90/mês.'
+                          : hasDiscount
+                            ? `R$ ${displayPrice}/mês com cupom ${appliedCoupon} (${effectiveDiscountPercentage}% OFF). Renovação automática.`
+                            : 'Assinatura com renovação mensal no Mercado Pago. Cancele a qualquer momento.'}
                     </p>
                   </div>
 
@@ -498,7 +500,7 @@ export function CheckoutScreen() {
                     </div>
                   )}
                   <div className="total">
-                    <dt>Total da primeira mensalidade</dt>
+                    <dt>{isLifetimeCoupon ? 'Taxa única de adesão (Vitalício)' : 'Total da primeira mensalidade'}</dt>
                     <dd id="total">R$ {displayPrice}</dd>
                   </div>
                 </dl>
@@ -526,9 +528,13 @@ export function CheckoutScreen() {
 
                 {/* Texto de Renovação */}
                 <p className="renewal" id="renewal">
-                  {hasDiscount
-                    ? `R$ ${displayPrice}/mês com cupom ${appliedCoupon} (${effectiveDiscountPercentage}% OFF). Renovação automática pelo Mercado Pago.`
-                    : 'R$ 19,90/mês, com renovação mensal automática. Cancele a qualquer momento no seu painel ou Mercado Pago.'}
+                  {isLifetimeCoupon
+                    ? 'Cobrança única de R$ 1,00. Recorrência isenta (R$ 0,00/mês) e acesso vitalício garantido.'
+                    : isFocus50Coupon
+                      ? 'R$ 9,95/mês durante os 3 primeiros ciclos. Após o 3º mês, atualização automática para R$ 19,90/mês.'
+                      : hasDiscount
+                        ? `R$ ${displayPrice}/mês com cupom ${appliedCoupon} (${effectiveDiscountPercentage}% OFF). Renovação automática pelo Mercado Pago.`
+                        : 'R$ 19,90/mês, com renovação mensal automática. Cancele a qualquer momento no seu painel ou Mercado Pago.'}
                 </p>
 
                 {/* Garantia e Segurança */}

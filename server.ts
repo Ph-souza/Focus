@@ -107,6 +107,32 @@ const adminAuth = getAuth(adminApp);
  * (ex: NEXUSELITE) para busca O(1).
  * Campos: discountPercentage (número), maxUses (número), active (booleano).
  */
+export type CouponBillingMode =
+  | "one_time_lifetime"       // NEXUSELITE: taxa de adesão única (R$ 1,00) + acesso vitalício (R$ 0,00/mês)
+  | "recurring_temp_discount" // FOCUS50: desconto nos N primeiros ciclos (R$ 9,95 por 3 meses) -> valor cheio (R$ 19,90/mês)
+  | "recurring_discount";     // Desconto percentual recorrente padrão
+
+export interface FirestoreCouponSchema {
+  code: string;
+  active: boolean;
+  billingMode: CouponBillingMode;
+  discountType: "fixed_price" | "percentage";
+  discountPercentage: number;
+  fixedPrice?: number | null;
+  baseMonthlyAmount: number;
+  promotionalAmount: number;
+  recurringAmountAfterPromo: number;
+  durationCycles: number | null; // null = vitalício/indefinido, 3 = 3 ciclos mensais
+  grantsLifetime: boolean;
+  targetPlan: "elite" | "pro";
+  maxUses: number;
+  usedCount: number;
+  expiresAt?: any | null;
+  description: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
 async function initCouponsCollection() {
   if (!hasServiceAccount) {
     console.warn("⚠️ [Firestore] Sem Service Account configurada. Ignorando initCouponsCollection no startup para evitar NO_ADC_FOUND.");
@@ -116,29 +142,66 @@ async function initCouponsCollection() {
   try {
     const eliteRef = adminDb.collection("coupons").doc("NEXUSELITE");
     const snap = await eliteRef.get();
+    const eliteDefaults: Partial<FirestoreCouponSchema> = {
+      code: "NEXUSELITE",
+      active: true,
+      billingMode: "one_time_lifetime",
+      discountType: "fixed_price",
+      discountPercentage: 95,
+      fixedPrice: 1.00,
+      baseMonthlyAmount: 19.90,
+      promotionalAmount: 1.00,
+      recurringAmountAfterPromo: 0.00,
+      durationCycles: null,
+      grantsLifetime: true,
+      targetPlan: "elite",
+      description: "Acesso Vitalício Nexus Elite — Taxa de adesão única de R$ 1,00 (sem mensalidades).",
+      updatedAt: FieldValue.serverTimestamp()
+    };
+
     if (!snap.exists) {
       await eliteRef.set({
-        discountPercentage: 99,
+        ...eliteDefaults,
         maxUses: 100,
-        active: true,
-        createdAt: FieldValue.serverTimestamp(),
-        description: "Cupom exclusivo Nexus Elite para testes e homologação (99% de desconto)."
+        usedCount: 0,
+        expiresAt: null,
+        createdAt: FieldValue.serverTimestamp()
       });
-      console.log("🎟️ [Firestore] Cupom NEXUSELITE inicializado com sucesso (99% OFF, 100 usos, ativo).");
+      console.log("🎟️ [Firestore] Cupom NEXUSELITE inicializado com sucesso (Vitalício, taxa única R$ 1,00).");
     } else {
-      console.log("🎟️ [Firestore] Coleção 'coupons' ativa (NEXUSELITE verificado).");
+      await eliteRef.set(eliteDefaults, { merge: true });
+      console.log("🎟️ [Firestore] Coleção 'coupons' ativa (NEXUSELITE sincronizado).");
     }
 
     const focus50Ref = adminDb.collection("coupons").doc("FOCUS50");
     const focus50Snap = await focus50Ref.get();
+    const focus50Defaults: Partial<FirestoreCouponSchema> = {
+      code: "FOCUS50",
+      active: true,
+      billingMode: "recurring_temp_discount",
+      discountType: "percentage",
+      discountPercentage: 50,
+      fixedPrice: null,
+      baseMonthlyAmount: 19.90,
+      promotionalAmount: 9.95,
+      recurringAmountAfterPromo: 19.90,
+      durationCycles: 3,
+      grantsLifetime: false,
+      targetPlan: "pro",
+      description: "50% OFF nos 3 primeiros meses (R$ 9,95/mês). Após o 3º ciclo, R$ 19,90/mês.",
+      updatedAt: FieldValue.serverTimestamp()
+    };
+
     if (!focus50Snap.exists) {
       await focus50Ref.set({
-        discountPercentage: 50,
+        ...focus50Defaults,
         maxUses: 1000,
-        active: true,
-        createdAt: FieldValue.serverTimestamp(),
-        description: "Cupom padrão de 50% de desconto."
+        usedCount: 0,
+        expiresAt: null,
+        createdAt: FieldValue.serverTimestamp()
       });
+    } else {
+      await focus50Ref.set(focus50Defaults, { merge: true });
     }
   } catch (err: any) {
     console.warn("⚠️ [Firestore] Aviso ao inicializar coleção coupons:", err?.message);
@@ -148,20 +211,27 @@ async function initCouponsCollection() {
 interface CouponValidationResult {
   valid: boolean;
   code?: string;
+  billingMode?: CouponBillingMode;
   discountPercentage?: number;
   finalAmount?: number;
   discountAmount?: number;
   originalAmount?: number;
+  recurringAmountAfterPromo?: number;
+  durationCycles?: number | null;
+  grantsLifetime?: boolean;
+  targetPlan?: "elite" | "pro";
+  summaryText?: string;
   error?: string;
 }
 
 /**
- * Validação de cupons no Firestore e cálculo de desconto com garantia
- * do piso mínimo de R$ 1,00 para conformidade estrita com o Mercado Pago.
+ * Validação de cupons no Firestore e cálculo de regras de faturamento:
+ * - NEXUSELITE: Taxa única de R$ 1,00 + Acesso Vitalício (recorrência R$ 0,00)
+ * - FOCUS50: R$ 9,95/mês nos 3 primeiros ciclos + R$ 19,90/mês a partir do 4º ciclo
  */
 async function validateAndComputeCoupon(
   rawCode: string | undefined | null,
-  plan: "mensal" | "anual"
+  plan: "mensal" | "anual" = "mensal"
 ): Promise<CouponValidationResult> {
   const originalAmount = plan === "anual" ? 238.80 : 19.90;
   if (!rawCode || typeof rawCode !== "string") {
@@ -173,82 +243,152 @@ async function validateAndComputeCoupon(
     return { valid: false, originalAmount, finalAmount: originalAmount, error: "Código do cupom inválido." };
   }
 
-  // Cupons clássicos embutidos com garantia total de funcionamento
-  const BUILTIN_COUPONS: Record<string, { discountPercentage: number; description: string }> = {
-    NEXUSELITE: { discountPercentage: 99, description: "Cupom exclusivo Nexus Elite (99% de desconto)" },
-    FOCUS50: { discountPercentage: 50, description: "Cupom padrão (50% de desconto)" }
+  const BUILTIN_COUPONS: Record<string, FirestoreCouponSchema> = {
+    NEXUSELITE: {
+      code: "NEXUSELITE",
+      active: true,
+      billingMode: "one_time_lifetime",
+      discountType: "fixed_price",
+      discountPercentage: 95,
+      fixedPrice: 1.00,
+      baseMonthlyAmount: 19.90,
+      promotionalAmount: 1.00,
+      recurringAmountAfterPromo: 0.00,
+      durationCycles: null,
+      grantsLifetime: true,
+      targetPlan: "elite",
+      maxUses: 100,
+      usedCount: 0,
+      expiresAt: null,
+      description: "Acesso Vitalício — Taxa de adesão única de R$ 1,00 (sem mensalidades)."
+    },
+    FOCUS50: {
+      code: "FOCUS50",
+      active: true,
+      billingMode: "recurring_temp_discount",
+      discountType: "percentage",
+      discountPercentage: 50,
+      fixedPrice: null,
+      baseMonthlyAmount: 19.90,
+      promotionalAmount: 9.95,
+      recurringAmountAfterPromo: 19.90,
+      durationCycles: 3,
+      grantsLifetime: false,
+      targetPlan: "pro",
+      maxUses: 1000,
+      usedCount: 0,
+      expiresAt: null,
+      description: "50% de desconto nos 3 primeiros meses (R$ 9,95/mês). Após o 3º mês, R$ 19,90/mês."
+    }
   };
 
-  const computeDiscount = (discountPercentage: number, couponCode: string) => {
-    const rawDiscounted = Number((originalAmount * (1 - discountPercentage / 100)).toFixed(2));
-    const finalAmount = Math.max(1.00, rawDiscounted);
-    const discountAmount = Number((originalAmount - finalAmount).toFixed(2));
-    return {
-      valid: true,
-      code: couponCode,
-      discountPercentage,
-      originalAmount,
-      finalAmount,
-      discountAmount
-    };
-  };
+  let couponDoc: Partial<FirestoreCouponSchema> | null = BUILTIN_COUPONS[code] ? { ...BUILTIN_COUPONS[code] } : null;
 
-  // 1. Cupons embutidos essenciais (NEXUSELITE e FOCUS50)
-  if (BUILTIN_COUPONS[code]) {
-    if (hasServiceAccount) {
-      try {
-        const couponRef = adminDb.collection("coupons").doc(code);
-        const snap = await couponRef.get();
-        if (snap.exists) {
-          const data = snap.data() || {};
-          if (data.active === false) {
-            return { valid: false, originalAmount, finalAmount: originalAmount, error: "Este cupom não está mais ativo." };
-          }
-          if (typeof data.maxUses === "number" && data.maxUses <= 0) {
-            return { valid: false, originalAmount, finalAmount: originalAmount, error: "Limite de utilizações deste cupom foi atingido." };
-          }
-          const pct = Number(data.discountPercentage) || BUILTIN_COUPONS[code].discountPercentage;
-          return computeDiscount(pct, code);
-        }
-      } catch (e: any) {
-        console.warn(`[Coupons] Aviso ao consultar Firestore para ${code}:`, e?.message);
+  if (hasServiceAccount) {
+    try {
+      const couponRef = adminDb.collection("coupons").doc(code);
+      const snap = await couponRef.get();
+      if (snap.exists) {
+        const data = snap.data() || {};
+        couponDoc = { ...(couponDoc || {}), ...data, code };
+      } else if (!couponDoc) {
+        return { valid: false, originalAmount, finalAmount: originalAmount, error: "Cupom inválido ou não encontrado." };
+      }
+    } catch (e: any) {
+      console.warn(`[Coupons] Aviso ao consultar Firestore para ${code}:`, e?.message);
+      if (!couponDoc) {
+        return { valid: false, originalAmount, finalAmount: originalAmount, error: "Erro ao validar cupom no banco de dados." };
       }
     }
-    return computeDiscount(BUILTIN_COUPONS[code].discountPercentage, code);
-  }
-
-  // 2. Cupons dinâmicos adicionados no Firestore
-  if (!hasServiceAccount) {
+  } else if (!couponDoc) {
     return { valid: false, originalAmount, finalAmount: originalAmount, error: "Cupom inválido ou não encontrado." };
   }
 
-  try {
-    const couponRef = adminDb.collection("coupons").doc(code);
-    const snap = await couponRef.get();
-
-    if (!snap.exists) {
-      return { valid: false, originalAmount, finalAmount: originalAmount, error: "Cupom inválido ou não encontrado." };
-    }
-
-    const data = snap.data() || {};
-    if (data.active !== true) {
-      return { valid: false, originalAmount, finalAmount: originalAmount, error: "Este cupom não está mais ativo." };
-    }
-
-    if (typeof data.maxUses === "number" && data.maxUses <= 0) {
-      return { valid: false, originalAmount, finalAmount: originalAmount, error: "Limite de utilizações deste cupom foi atingido." };
-    }
-
-    const discountPercentage = Number(data.discountPercentage) || 0;
-    if (discountPercentage <= 0) {
-      return { valid: false, originalAmount, finalAmount: originalAmount, error: "Cupom sem percentual de desconto válido configurado." };
-    }
-
-    return computeDiscount(discountPercentage, code);
-  } catch (err: any) {
-    console.error(`[Coupons] Erro ao validar cupom ${code}:`, err);
-    return { valid: false, originalAmount, finalAmount: originalAmount, error: "Erro interno ao validar cupom no servidor." };
+  if (couponDoc.active === false) {
+    return { valid: false, originalAmount, finalAmount: originalAmount, error: "Este cupom não está mais ativo." };
   }
+
+  if (typeof couponDoc.maxUses === "number" && couponDoc.maxUses <= 0) {
+    return { valid: false, originalAmount, finalAmount: originalAmount, error: "Limite de utilizações deste cupom foi atingido." };
+  }
+
+  if (couponDoc.expiresAt) {
+    const expDate = typeof couponDoc.expiresAt.toDate === "function"
+      ? couponDoc.expiresAt.toDate()
+      : new Date(couponDoc.expiresAt);
+    if (!isNaN(expDate.getTime()) && expDate.getTime() < Date.now()) {
+      return { valid: false, originalAmount, finalAmount: originalAmount, error: "Este cupom expirou." };
+    }
+  }
+
+  // Regra 1: NEXUSELITE (Taxa de adesão única de R$ 1,00 + Acesso Vitalício)
+  if (code === "NEXUSELITE" || couponDoc.billingMode === "one_time_lifetime") {
+    const finalAmount = Number((couponDoc.fixedPrice ?? 1.00).toFixed(2));
+    const discountAmount = Number((originalAmount - finalAmount).toFixed(2));
+    const discountPercentage = Math.round((discountAmount / originalAmount) * 100);
+    return {
+      valid: true,
+      code,
+      billingMode: "one_time_lifetime",
+      discountPercentage,
+      originalAmount,
+      finalAmount,
+      discountAmount,
+      recurringAmountAfterPromo: 0.00,
+      durationCycles: null,
+      grantsLifetime: true,
+      targetPlan: "elite",
+      summaryText: "Acesso Vitalício liberado: Taxa de adesão única de R$ 1,00 (R$ 0,00/mês)."
+    };
+  }
+
+  // Regra 2: FOCUS50 (50% OFF nos 3 primeiros ciclos = R$ 9,95/mês -> R$ 19,90/mês após 3º ciclo)
+  if (code === "FOCUS50" || couponDoc.billingMode === "recurring_temp_discount") {
+    const discountPercentage = Number(couponDoc.discountPercentage) || 50;
+    const durationCycles = Number(couponDoc.durationCycles) || 3;
+    const rawDiscounted = Number((originalAmount * (1 - discountPercentage / 100)).toFixed(2));
+    const finalAmount = Math.max(1.00, rawDiscounted); // R$ 9,95
+    const discountAmount = Number((originalAmount - finalAmount).toFixed(2));
+    return {
+      valid: true,
+      code,
+      billingMode: "recurring_temp_discount",
+      discountPercentage,
+      originalAmount,
+      finalAmount,
+      discountAmount,
+      recurringAmountAfterPromo: originalAmount,
+      durationCycles,
+      grantsLifetime: false,
+      targetPlan: "pro",
+      summaryText: `R$ ${finalAmount.toFixed(2).replace(".", ",")}/mês nos ${durationCycles} primeiros meses. Após o ${durationCycles}º mês, R$ ${originalAmount.toFixed(2).replace(".", ",")}/mês.`
+    };
+  }
+
+  // Regra 3: Cupom genérico do Firestore
+  const discountPercentage = Number(couponDoc.discountPercentage) || 0;
+  if (discountPercentage <= 0) {
+    return { valid: false, originalAmount, finalAmount: originalAmount, error: "Cupom sem percentual de desconto válido configurado." };
+  }
+
+  const rawDiscounted = Number((originalAmount * (1 - discountPercentage / 100)).toFixed(2));
+  const finalAmount = Math.max(1.00, rawDiscounted);
+  const discountAmount = Number((originalAmount - finalAmount).toFixed(2));
+
+  return {
+    valid: true,
+    code,
+    billingMode: "recurring_discount",
+    discountPercentage,
+    originalAmount,
+    finalAmount,
+    discountAmount,
+    recurringAmountAfterPromo: finalAmount,
+    durationCycles: couponDoc.durationCycles ?? null,
+    grantsLifetime: Boolean(couponDoc.grantsLifetime),
+    targetPlan: couponDoc.targetPlan || "pro",
+    summaryText: `Cupom aplicado (${discountPercentage}% OFF): R$ ${finalAmount.toFixed(2).replace(".", ",")}/mês.`
+  };
 }
 
 /**
@@ -852,15 +992,26 @@ async function applyApprovedPayment(payment: any, expectedUid?: string) {
       if (receipt.data()?.userId !== uid) throw new Error("Payment already belongs to another account");
       return;
     }
+    const appliedCoupon = order?.coupon || ref.coupon || null;
+    const isLifetime = Boolean(order?.grantsLifetime || ref.grantsLifetime || appliedCoupon === "NEXUSELITE" || order?.billingMode === "one_time_lifetime");
     const data = {
-      isPremium: true, email: account.email || "", plan: order?.plan || ref.plan || "mensal",
-      couponApplied: order?.coupon || ref.coupon || null,
-      currentPrice: Number(payment.transaction_amount), lastPaymentId: String(payment.id),
+      isPremium: true,
+      status: "active",
+      role: "premium_user",
+      email: account.email || "",
+      plan: isLifetime ? "elite" : (order?.plan || ref.plan || "mensal"),
+      lifetimeAccess: isLifetime,
+      couponApplied: appliedCoupon,
+      currentPrice: isLifetime ? 0 : Number(payment.transaction_amount),
+      lastPaymentId: String(payment.id),
       paymentMethod: payment.payment_method_id || "mercadopago",
       approvedAt: payment.date_approved || new Date().toISOString(),
       updatedAt: FieldValue.serverTimestamp()
     };
     tx.set(userRef, data, { merge: true });
+    if (account.email) {
+      tx.set(adminDb.collection("users").doc(account.email.trim().toLowerCase()), data, { merge: true });
+    }
     tx.set(paymentRef, { userId: uid, amount: Number(payment.transaction_amount), status: "approved",
       orderId, createdAt: FieldValue.serverTimestamp() });
   });
@@ -940,14 +1091,78 @@ async function startServer() {
       console.log(`[Webhook MP] Notificação recebida: ID=${resourceId}, type="${eventType}", topic="${topic}"`);
 
       // 1. Caso: Fatura/Cobrança periódica de assinatura (subscription_authorized_payment)
-      // Evita falsos erros nos logs consultando payment.get em IDs de fatura
+      // Gerencia o ciclo de faturamento para cupons temporários (ex: FOCUS50 -> 3 ciclos a R$ 9,95 e depois R$ 19,90)
+      // e garante isenção de recorrência caso NEXUSELITE passe por preapproval.
       if (
         eventType === "subscription_authorized_payment" ||
         topic === "subscription_authorized_payment" ||
         topic.includes("authorized_payment")
       ) {
-        console.log(`[Webhook MP] Evento de fatura de assinatura recebido (subscription_authorized_payment) ID: ${resourceId}. Ignorado com status 200 (ativação já gerida via preapproval/payment).`);
-        return res.status(200).json({ received: true, ignored: true, reason: "subscription_authorized_payment_handled" });
+        console.log(`[Webhook MP] Processando fatura de assinatura (subscription_authorized_payment) ID: ${resourceId}`);
+        if (mpAccessToken && hasServiceAccount) {
+          try {
+            const invoiceRes = await fetch(`https://api.mercadopago.com/authorized_payments/${resourceId}`, {
+              headers: { Authorization: `Bearer ${mpAccessToken}` }
+            });
+            if (invoiceRes.ok) {
+              const invoiceData = await invoiceRes.json();
+              const preapprovalId = invoiceData?.preapproval_id;
+              const invoiceStatus = invoiceData?.payment?.status || invoiceData?.status;
+
+              if (preapprovalId && (invoiceStatus === "approved" || invoiceStatus === "processed")) {
+                const subRef = adminDb.collection("subscriptions").doc(String(preapprovalId));
+                const subSnap = await subRef.get();
+                if (subSnap.exists) {
+                  const subDoc = subSnap.data() || {};
+                  const billedCycles = (Number(subDoc.billedCycles) || 0) + 1;
+                  const durationCycles = Number(subDoc.durationCycles) || 3;
+                  const regularAmount = Number(subDoc.regularAmount) || 19.90;
+
+                  // Regra FOCUS50: Após o 3º ciclo faturado a R$ 9,95, atualiza automaticamente para R$ 19,90/mês
+                  if (
+                    subDoc.billingMode === "recurring_temp_discount" &&
+                    !subDoc.stepUpCompleted &&
+                    billedCycles >= durationCycles
+                  ) {
+                    const stepUpRes = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
+                      method: "PUT",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${mpAccessToken}`
+                      },
+                      body: JSON.stringify({
+                        auto_recurring: {
+                          transaction_amount: regularAmount,
+                          currency_id: "BRL"
+                        }
+                      })
+                    });
+
+                    if (stepUpRes.ok) {
+                      console.log(`[Webhook MP] Assinatura ${preapprovalId} (FOCUS50) atingiu ${billedCycles}/${durationCycles} ciclos. Valor atualizado automaticamente para R$ ${regularAmount}/mês.`);
+                      await subRef.set({
+                        billedCycles,
+                        currentAmount: regularAmount,
+                        stepUpCompleted: true,
+                        stepUpAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp()
+                      }, { merge: true });
+                    }
+                  } else {
+                    await subRef.set({
+                      billedCycles,
+                      lastInvoiceId: resourceId,
+                      updatedAt: FieldValue.serverTimestamp()
+                    }, { merge: true });
+                  }
+                }
+              }
+            }
+          } catch (invErr: any) {
+            console.warn(`[Webhook MP] Aviso ao processar ciclo de authorized_payment ${resourceId}:`, invErr?.message);
+          }
+        }
+        return res.status(200).json({ received: true, handled: true, type: "subscription_authorized_payment" });
       }
 
       // 2. Validação criptográfica HMAC (x-signature) se configurada
@@ -1002,8 +1217,9 @@ async function startServer() {
         const payerEmail = (preapprovalData.payer_email || preapprovalData.payer?.email || "").trim().toLowerCase();
         
         let userId: string | null = null;
-        let plan = "elite";
+        let plan = "pro";
         let coupon: string | null = null;
+        let billingMode: string | null = null;
         let price = preapprovalData.auto_recurring?.transaction_amount || null;
 
         if (preapprovalData.external_reference) {
@@ -1014,6 +1230,7 @@ async function startServer() {
               userId = parsed.userId || null;
               if (parsed.plan) plan = parsed.plan;
               if (parsed.coupon) coupon = parsed.coupon;
+              if (parsed.billingMode) billingMode = parsed.billingMode;
               if (parsed.price) price = parsed.price;
             } else if (typeof parsed === "string") {
               userId = parsed;
@@ -1023,6 +1240,7 @@ async function startServer() {
           }
         }
 
+        const isLifetimeElite = coupon === "NEXUSELITE" || billingMode === "one_time_lifetime" || plan === "elite";
         const isAuthorized = subStatus === "authorized" || subStatus === "active";
         const isPro = isAuthorized;
 
@@ -1030,15 +1248,16 @@ async function startServer() {
 
         const updateData: any = {
           subscriptionId: resourceId,
-          subscriptionStatus: subStatus,
+          subscriptionStatus: isLifetimeElite && isAuthorized ? "lifetime_active" : subStatus,
           isPremium: isPro,
-          plan: "elite",
+          plan: isLifetimeElite ? "elite" : plan,
+          lifetimeAccess: isLifetimeElite && isAuthorized,
           status: isAuthorized ? "active" : subStatus,
           updatedAt: FieldValue.serverTimestamp()
         };
         if (isPro) updateData.role = "premium_user";
         if (coupon) updateData.couponApplied = coupon;
-        if (price) updateData.currentPrice = price;
+        if (price !== null) updateData.currentPrice = isLifetimeElite ? 0 : price;
 
         if (payerEmail) {
           await adminDb.collection("users").doc(payerEmail).set(updateData, { merge: true });
@@ -1682,7 +1901,9 @@ async function startServer() {
         }
         couponApplied = couponRes.code || null;
         finalAmount = couponRes.finalAmount || finalAmount;
-        description = `Nexus Focus Pro - ${normalizedPlan === "anual" ? "Anual" : "Mensal"} (Cupom ${couponApplied} ${couponRes.discountPercentage}% OFF)`;
+        description = couponRes.billingMode === "one_time_lifetime"
+          ? "Nexus Focus - Taxa Unica de Adesao Vitalicia"
+          : `Nexus Focus Pro - ${normalizedPlan === "anual" ? "Anual" : "Mensal"}`;
 
         // Decrementa maxUses no Firestore após geração bem-sucedida
         if (couponApplied) {
@@ -1786,11 +2007,16 @@ async function startServer() {
         success: true,
         valid: true,
         coupon: validation.code,
+        billingMode: validation.billingMode,
         discountPercentage: validation.discountPercentage,
         originalAmount: validation.originalAmount,
         finalAmount: validation.finalAmount,
         discountAmount: validation.discountAmount,
-        message: `Cupom ${validation.code} aplicado com sucesso! ${validation.discountPercentage}% de desconto.`
+        recurringAmountAfterPromo: validation.recurringAmountAfterPromo,
+        durationCycles: validation.durationCycles,
+        grantsLifetime: validation.grantsLifetime,
+        targetPlan: validation.targetPlan,
+        message: validation.summaryText || `Cupom ${validation.code} aplicado com sucesso!`
       });
     } catch (err: any) {
       console.error("[Coupons] Erro no endpoint de validação:", err);
@@ -1803,8 +2029,10 @@ async function startServer() {
   });
 
   // =========================================================================
-  // Rota de Criação da Assinatura Checkout Pro Mercado Pago (/api/checkout)
-  // Utiliza a API de Preapproval (/preapproval) do Mercado Pago para gerar init_point
+  // Rota de Criação da Assinatura / Cobrança Checkout Pro Mercado Pago (/api/checkout)
+  // - NEXUSELITE (one_time_lifetime): Taxa de adesão única de R$ 1,00 (/checkout/preferences) + Acesso Vitalício (R$ 0,00/mês)
+  // - FOCUS50 (recurring_temp_discount): R$ 9,95/mês nos 3 primeiros ciclos (/preapproval) -> R$ 19,90/mês após o 3º ciclo
+  // - Sem cupom: R$ 19,90/mês recorrente (/preapproval)
   // =========================================================================
   app.post("/api/checkout", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
@@ -1816,48 +2044,162 @@ async function startServer() {
         : (req as any).user?.email || "contato@nexusfocus.com";
 
       const rawCoupon = (couponCode || coupon || "").toString().trim().toUpperCase();
+      const appUrl = (process.env.APP_URL || "https://nexusfocus.web.app").replace(/\/+$/, "");
+      const serverUrl = (process.env.RENDER_EXTERNAL_URL || "https://nexus-focus.onrender.com").replace(/\/+$/, "");
 
-      // Cálculo do Preço: Verifica se o couponCode recebido é válido (ex: NEXUSELITE).
-      // Se for, define a variável transaction_amount para 1.00. Caso contrário, o valor padrão é 19.90.
+      if (!mpAccessToken) {
+        return res.status(500).json({
+          success: false,
+          error: "MERCADOPAGO_ACCESS_TOKEN não configurado no servidor."
+        });
+      }
+
       let transaction_amount = 19.90;
       let couponApplied: string | null = null;
+      let billingMode: CouponBillingMode | "standard_recurring" = "standard_recurring";
+      let durationCycles: number | null = null;
+      let recurringAmountAfterPromo = 19.90;
+      let targetPlan: "elite" | "pro" = "pro";
 
       if (rawCoupon) {
-        if (rawCoupon === "NEXUSELITE") {
-          transaction_amount = 1.00;
-          couponApplied = "NEXUSELITE";
-          try {
-            await decrementCouponUsage("NEXUSELITE");
-          } catch (e) {
-            console.warn("[Checkout MP] Aviso ao decrementar uso do cupom NEXUSELITE:", e);
-          }
-        } else {
-          const couponRes = await validateAndComputeCoupon(rawCoupon, "mensal");
-          if (couponRes.valid) {
-            couponApplied = couponRes.code || rawCoupon;
-            transaction_amount = couponRes.finalAmount ? Math.max(1.00, Number(couponRes.finalAmount.toFixed(2))) : 1.00;
-            try {
-              await decrementCouponUsage(couponApplied);
-            } catch (e) {
-              console.warn(`[Checkout MP] Aviso ao decrementar uso do cupom ${couponApplied}:`, e);
-            }
-          } else {
-            return res.status(400).json({
-              success: false,
-              error: couponRes.error || "Cupom inválido ou expirado."
-            });
-          }
+        const couponRes = await validateAndComputeCoupon(rawCoupon, "mensal");
+        if (!couponRes.valid) {
+          return res.status(400).json({
+            success: false,
+            error: couponRes.error || "Cupom inválido ou expirado."
+          });
+        }
+
+        couponApplied = couponRes.code || rawCoupon;
+        transaction_amount = Math.max(1.00, Number((couponRes.finalAmount ?? 19.90).toFixed(2)));
+        billingMode = couponRes.billingMode || "recurring_discount";
+        durationCycles = couponRes.durationCycles ?? null;
+        recurringAmountAfterPromo = couponRes.recurringAmountAfterPromo ?? 19.90;
+        targetPlan = couponRes.targetPlan || (couponApplied === "NEXUSELITE" ? "elite" : "pro");
+
+        try {
+          await decrementCouponUsage(couponApplied);
+        } catch (e) {
+          console.warn(`[Checkout MP] Aviso ao decrementar uso do cupom ${couponApplied}:`, e);
         }
       }
 
-      transaction_amount = Math.max(1.00, Number(transaction_amount.toFixed(2)));
+      const orderId = crypto.randomUUID();
 
-      const appUrl = (process.env.APP_URL || "https://nexusfocus.web.app").replace(/\/+$/, "");
+      // =======================================================================
+      // CASO 1: NEXUSELITE — Cobrança Única de Adesão (R$ 1,00) + Acesso Vitalício
+      // Recorrência isenta/cancelada (R$ 0,00 mensais) via Checkout Pro Preference
+      // =======================================================================
+      if (billingMode === "one_time_lifetime") {
+        const externalReferencePayload = JSON.stringify({
+          orderId,
+          userId: userId || null,
+          plan: "elite",
+          coupon: couponApplied,
+          billingMode: "one_time_lifetime",
+          grantsLifetime: true,
+          price: transaction_amount
+        });
 
-      // Payload da API do Mercado Pago (/preapproval):
-      // Constrói o objeto sem enviar tokens de cartão. O Mercado Pago vai gerar um link de pagamento.
+        const oneTimePreferencePayload = {
+          items: [
+            {
+              id: "nexus-focus-lifetime-adhesion",
+              title: "Nexus Focus — Taxa Única de Adesão (Acesso Vitalício)",
+              description: "Acesso vitalício completo ao ecossistema Nexus Focus. Cobrança única, sem mensalidades.",
+              quantity: 1,
+              currency_id: "BRL",
+              unit_price: transaction_amount
+            }
+          ],
+          payer: {
+            email: payerEmail
+          },
+          back_urls: {
+            success: `${appUrl}/dashboard?payment=success`,
+            failure: `${appUrl}/checkout?payment=failure`,
+            pending: `${appUrl}/dashboard?payment=pending`
+          },
+          auto_return: "approved",
+          notification_url: `${serverUrl}/api/webhooks/mercadopago`,
+          external_reference: externalReferencePayload
+        };
+
+        let oneTimeResult: any = null;
+        if (mpPreference) {
+          try {
+            oneTimeResult = await mpPreference.create({ body: oneTimePreferencePayload });
+          } catch (prefSdkErr: any) {
+            console.warn("[Checkout MP] SDK Preference.create falhou, tentando fetch direto:", prefSdkErr?.message);
+          }
+        }
+
+        if (!oneTimeResult || !oneTimeResult.init_point) {
+          const prefResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${mpAccessToken}`
+            },
+            body: JSON.stringify(oneTimePreferencePayload)
+          });
+          oneTimeResult = await prefResponse.json();
+          if (!prefResponse.ok) {
+            console.error("[Checkout MP] Erro ao criar cobrança única vitalícia:", oneTimeResult);
+            throw new Error(oneTimeResult?.message || "Erro ao gerar cobrança única no Mercado Pago");
+          }
+        }
+
+        const initPoint = oneTimeResult?.init_point || oneTimeResult?.sandbox_init_point;
+        if (!initPoint) {
+          throw new Error("init_point não retornado pelo Mercado Pago para adesão vitalícia");
+        }
+
+        if (hasServiceAccount && adminDb && userId) {
+          await adminDb.collection("payment_orders").doc(orderId).set({
+            userId,
+            amount: transaction_amount,
+            recurringAmountAfterPromo: 0.00,
+            plan: "elite",
+            billingMode: "one_time_lifetime",
+            grantsLifetime: true,
+            coupon: couponApplied,
+            payerEmail,
+            preferenceId: oneTimeResult?.id || null,
+            createdAt: FieldValue.serverTimestamp()
+          });
+        }
+
+        return res.status(200).json({
+          success: true,
+          init_point: initPoint,
+          initPoint,
+          id: oneTimeResult?.id,
+          billingMode: "one_time_lifetime",
+          transaction_amount,
+          recurring_amount: 0.00,
+          couponApplied
+        });
+      }
+
+      // =======================================================================
+      // CASO 2: Assinatura Recorrente (/preapproval)
+      // - FOCUS50: R$ 9,95/mês nos 3 primeiros ciclos -> atualiza para R$ 19,90/mês após o 3º ciclo
+      // - Plano Padrão: R$ 19,90/mês
+      // =======================================================================
+      const preapprovalExternalRef = JSON.stringify({
+        orderId,
+        userId: userId || null,
+        plan: targetPlan,
+        coupon: couponApplied,
+        billingMode,
+        durationCycles,
+        price: transaction_amount,
+        regularAmount: recurringAmountAfterPromo
+      });
+
       const preapprovalPayload: any = {
-        reason: "Nexus Focus - Assinatura",
+        reason: "Nexus Focus - Assinatura Full Access",
         auto_recurring: {
           frequency: 1,
           frequency_type: "months",
@@ -1866,17 +2208,10 @@ async function startServer() {
         },
         back_url: `${appUrl}/dashboard`,
         payer_email: payerEmail,
-        external_reference: userId || ""
+        external_reference: preapprovalExternalRef
       };
 
-      console.log(`[Checkout MP] Criando assinatura Preapproval: cupom=${couponApplied}, valor=R$ ${transaction_amount}, cliente=${payerEmail}, userId=${userId}`);
-
-      if (!mpAccessToken) {
-        return res.status(500).json({
-          success: false,
-          error: "MERCADOPAGO_ACCESS_TOKEN não configurado no servidor."
-        });
-      }
+      console.log(`[Checkout MP] Criando assinatura Preapproval: cupom=${couponApplied}, modo=${billingMode}, valorInicial=R$ ${transaction_amount}, valorAposPromo=R$ ${recurringAmountAfterPromo}, ciclos=${durationCycles}`);
 
       let prefResult: any = null;
 
@@ -1914,18 +2249,40 @@ async function startServer() {
 
       if (hasServiceAccount && adminDb && userId) {
         try {
-          const orderId = crypto.randomUUID();
           await adminDb.collection("payment_orders").doc(orderId).set({
             userId,
             amount: transaction_amount,
-            plan: "elite",
+            recurringAmountAfterPromo,
+            durationCycles,
+            billingMode,
+            plan: targetPlan,
             coupon: couponApplied,
             payerEmail,
             preapprovalId: prefResult?.id || null,
             createdAt: FieldValue.serverTimestamp()
           });
+
+          if (prefResult?.id) {
+            await adminDb.collection("subscriptions").doc(String(prefResult.id)).set({
+              preapprovalId: String(prefResult.id),
+              orderId,
+              userId,
+              payerEmail,
+              coupon: couponApplied,
+              billingMode,
+              promotionalAmount: transaction_amount,
+              regularAmount: recurringAmountAfterPromo,
+              currentAmount: transaction_amount,
+              durationCycles: durationCycles || null,
+              billedCycles: 0,
+              stepUpCompleted: billingMode !== "recurring_temp_discount",
+              status: prefResult?.status || "pending",
+              createdAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp()
+            });
+          }
         } catch (dbErr) {
-          console.warn("[Checkout MP] Aviso ao salvar payment_order:", dbErr);
+          console.warn("[Checkout MP] Aviso ao salvar payment_order/subscription:", dbErr);
         }
       }
 
@@ -1934,7 +2291,10 @@ async function startServer() {
         init_point: initPoint,
         initPoint: initPoint,
         id: prefResult?.id,
+        billingMode,
+        durationCycles,
         transaction_amount,
+        recurring_amount_after_promo: recurringAmountAfterPromo,
         couponApplied
       });
     } catch (err: any) {
