@@ -438,7 +438,7 @@ export function CheckoutScreen() {
                         id="coupon"
                         name="coupon"
                         type="text"
-                        placeholder="Ex: NEXUSELITE"
+                        placeholder="Digite seu código"
                         autoComplete="off"
                         autoCapitalize="characters"
                         spellCheck="false"
