@@ -14,10 +14,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // Verifica Custom Claim JWT (request.auth.token.admin == true) com fallback seguro
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'phillipe.souza27@gmail.com' ||
         request.auth.token.admin == true ||
+        request.auth.token.email == 'phillipe.souza27@gmail.com' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
@@ -25,12 +26,12 @@ service cloud.firestore {
 
     // Impede que o cliente manipule campos sensíveis de faturamento/privilégio via DevTools
     function doesNotEscalatePrivileges() {
-      let protectedFields = ['role', 'isPremium', 'plan', 'status', 'lifetimeAccess', 'subscriptionId', 'subscriptionStatus'];
+      let protectedFields = ['role', 'isAdmin', 'isPremium', 'plan', 'status', 'lifetimeAccess', 'subscriptionId', 'subscriptionStatus'];
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedFields);
     }
 
     function validInitialUserCreate() {
-      let protectedFields = ['isPremium', 'lifetimeAccess', 'subscriptionId'];
+      let protectedFields = ['isAdmin', 'isPremium', 'lifetimeAccess', 'subscriptionId'];
       return !request.resource.data.keys().hasAny(protectedFields) &&
              request.resource.data.get('role', 'user') == 'user' &&
              request.resource.data.get('plan', 'free') in ['free', 'none', ''];
@@ -39,9 +40,8 @@ service cloud.firestore {
     // =========================================================================
     // REGRA DE OURO DO ISOLAMENTO ESTRITO DE DADOS (P0 SECURITY SHIELD)
     // =========================================================================
-    // Um usuário autenticado SÓ PODE ler e escrever no documento e subcoleções
-    // que correspondem EXATAMENTE ao seu próprio UID oficial do Firebase Auth,
-    // sem poder alterar seus próprios campos de assinatura/admin no client-side.
+    // Usuários comuns leem/escrevem apenas em seu próprio UID.
+    // Administradores (request.auth.token.admin == true) têm leitura global.
     // =========================================================================
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
@@ -55,16 +55,29 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // COLEÇÃO DE CUPONS (Sistema de Descontos e Homologação)
+    // LEITURA GLOBAL DE SUBCOLEÇÕES PARA ADMIN (Collection Group Queries)
     // =========================================================================
-    match /coupons/{couponCode} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin(); // Escrita permitida apenas via Admin SDK ou Painel Admin
+    match /{path=**}/transactions/{transactionId} {
+      allow read: if isAdmin();
+    }
+
+    match /{path=**}/tasks/{taskId} {
+      allow read: if isAdmin();
     }
 
     // =========================================================================
-    // COLEÇÕES DE AUDITORIA, ASSINATURAS E PAGAMENTOS (Somente Backend / Admin)
+    // COLEÇÕES GLOBAIS DE FATURAMENTO, ASSINATURAS E TRANSAÇÕES (Admin Global Read)
     // =========================================================================
+    match /subscriptions/{subId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /transactions/{txId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
     match /payments/{docId} {
       allow read: if isAdmin();
       allow write: if false;
@@ -80,11 +93,25 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    match /subscriptions/{docId} {
-      allow read: if isAdmin();
-      allow write: if false;
+    // =========================================================================
+    // COLEÇÃO DE CUPONS (Sistema de Descontos e Homologação)
+    // =========================================================================
+    match /coupons/{couponCode} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
+    // =========================================================================
+    // CACHE DE MÉTRICAS DO PAINEL ADMIN (Single Source of Truth: Mercado Pago)
+    // Documento: admin/metrics_cache (TTL de 4 horas)
+    // =========================================================================
+    match /admin/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // =========================================================================
+    // LOGS E AUDITORIA DE SISTEMA
+    // =========================================================================
     match /logs/{docId} {
       allow read: if isAdmin();
       allow write: if false;
@@ -99,17 +126,17 @@ service cloud.firestore {
     // COLEÇÃO DE COFRES COMPARTILHADOS (Controle Familiar)
     // =========================================================================
     match /ledgers/{ledgerId} {
-      allow read, write: if request.auth != null && (
+      allow read, write: if isAdmin() || (request.auth != null && (
         resource == null ||
         request.auth.uid in resource.data.members ||
         resource.data.ownerUid == request.auth.uid
-      );
+      ));
 
       match /{document=**} {
-        allow read, write: if request.auth != null && (
+        allow read, write: if isAdmin() || (request.auth != null && (
           get(/databases/$(database)/documents/ledgers/$(ledgerId)).data.ownerUid == request.auth.uid ||
           request.auth.uid in get(/databases/$(database)/documents/ledgers/$(ledgerId)).data.members
-        );
+        ));
       }
     }
 

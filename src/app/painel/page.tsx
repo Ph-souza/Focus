@@ -3,106 +3,95 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import './painel.css';
 import { useAuth } from '../../contexts/AuthContext';
-import {
-  AS_OF,
-  DAY,
-  demoUsers,
-  demoPrices,
-  demoPayments,
-  demoUnpaidInvoices,
-  telemetry,
-  DemoUser,
-  TelemetryItem
-} from './mockData';
+import { useAdminMetrics, AdminUserRecord } from '../../hooks/useAdminMetrics';
+import { useMercadoPagoMetrics } from '../../hooks/useMercadoPagoMetrics';
+import { DAY, telemetry, TelemetryItem } from './mockData';
 
-// Funções utilitárias de data e formatação
+// Funções utilitárias de data e formatação em tempo real
+const nowMs = (): number => Date.now();
+
 const stamp = (value: string | null | undefined): number =>
-  value ? Date.parse(value + 'T15:00:00Z') : NaN;
+  value ? Date.parse(value.length === 10 ? value + 'T15:00:00Z' : value) : NaN;
 
-const date = (value: string | null | undefined): string =>
-  value
-    ? new Intl.DateTimeFormat('pt-BR', {
-        timeZone: 'America/Sao_Paulo'
-      }).format(stamp(value))
-    : '—';
+const date = (value: string | null | undefined): string => {
+  if (!value || value === '2099-12-31') return '—';
+  const parsed = stamp(value);
+  if (Number.isNaN(parsed)) return '—';
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+  }).format(parsed);
+};
 
-const paid = (user: DemoUser): boolean =>
-  stamp(user.paidThrough) > AS_OF &&
-  (!user.subscriptionEndedAt || stamp(user.subscriptionEndedAt) > AS_OF);
+const paid = (user: AdminUserRecord): boolean =>
+  user.billingStatus === 'active' || user.billingStatus === 'lifetime';
 
-const isActive = (user: DemoUser, days: number): boolean =>
-  stamp(user.lastActiveAt) <= AS_OF &&
-  stamp(user.lastActiveAt) >= AS_OF - days * DAY;
+const isActive = (user: AdminUserRecord, days: number): boolean => {
+  if (!user.lastActiveAt) return false;
+  const last = stamp(user.lastActiveAt);
+  if (Number.isNaN(last)) return false;
+  return nowMs() - last <= days * DAY;
+};
 
-const renewalDays = (user: DemoUser): number =>
-  Math.round((stamp(user.nextRenewalAt) - AS_OF) / DAY);
+const renewalDays = (user: AdminUserRecord): number => {
+  if (!user.nextRenewalAt || user.lifetimeAccess) return NaN;
+  return Math.round((stamp(user.nextRenewalAt) - nowMs()) / DAY);
+};
 
-const dueSoon = (user: DemoUser): boolean =>
-  paid(user) && renewalDays(user) >= 0 && renewalDays(user) <= 7;
+const dueSoon = (user: AdminUserRecord): boolean => {
+  if (!paid(user) || user.lifetimeAccess) return false;
+  const d = renewalDays(user);
+  return !Number.isNaN(d) && d >= 0 && d <= 7;
+};
 
 const daysText = (n: number): string => (n === 1 ? '1 dia' : `${n} dias`);
 
-function relativeAccess(user: DemoUser): string {
+function relativeAccess(user: AdminUserRecord): string {
   if (!user.lastActiveAt) return 'Nunca acessou';
-  const d = Math.floor((AS_OF - stamp(user.lastActiveAt)) / DAY);
+  const d = Math.max(0, Math.floor((nowMs() - stamp(user.lastActiveAt)) / DAY));
   return d === 0 ? 'Hoje' : d === 1 ? 'Ontem' : `Há ${daysText(d)}`;
 }
 
-function tenure(user: DemoUser): string {
+function tenure(user: AdminUserRecord): string {
   if (!user.subscriptionStartedAt) return '—';
+  const currentTs = nowMs();
   const end = Math.min(
-    AS_OF,
-    stamp(user.subscriptionEndedAt) || AS_OF,
-    user.billingStatus === 'overdue' ? stamp(user.paidThrough) : AS_OF
+    currentTs,
+    stamp(user.subscriptionEndedAt) || currentTs,
+    user.billingStatus === 'overdue' && user.paidThrough
+      ? stamp(user.paidThrough)
+      : currentTs
   );
-  const start = new Date(stamp(user.subscriptionStartedAt));
-  const finish = new Date(end);
-  let months =
-    (finish.getUTCFullYear() - start.getUTCFullYear()) * 12 +
-    finish.getUTCMonth() -
-    start.getUTCMonth();
+  const startMs = stamp(user.subscriptionStartedAt);
+  if (Number.isNaN(startMs)) return '—';
 
-  const anchorFor = (m: number) => {
-    const d = new Date(
-      Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + m, 1, 15)
-    );
-    const max = new Date(
-      Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)
-    ).getUTCDate();
-    d.setUTCDate(Math.min(start.getUTCDate(), max));
-    return d.getTime();
-  };
+  const days = Math.max(0, Math.floor((end - startMs) / DAY));
+  const months = Math.floor(days / 30);
+  const remDays = days % 30;
 
-  if (anchorFor(months) > end) months--;
-  months = Math.max(0, months);
-  const days = Math.max(0, Math.floor((end - anchorFor(months)) / DAY));
-  return months
+  return months > 0
     ? (months === 1 ? '1 mês' : `${months} meses`) +
-        (days ? ` e ${daysText(days)}` : '')
+        (remDays ? ` e ${daysText(remDays)}` : '')
     : daysText(days);
 }
 
-function status(user: DemoUser): [css: string, label: string] {
+function status(user: AdminUserRecord): [css: string, label: string] {
+  if (user.lifetimeAccess || user.billingStatus === 'lifetime') {
+    return ['active', 'Vitalício · NEXUSELITE'];
+  }
   if (user.billingStatus === 'none') return ['none', 'Sem assinatura'];
-  if (paid(user)) return ['active', 'Ativa'];
+  if (user.billingStatus === 'active') {
+    return user.couponApplied === 'FOCUS50'
+      ? ['active', 'Ativa · FOCUS50']
+      : ['active', 'Ativa'];
+  }
   if (user.billingStatus === 'overdue') return ['overdue', 'Em atraso'];
   return ['canceled', 'Encerrada'];
 }
 
-const priceAt = (user: DemoUser, at: number): number => {
-  const plan = demoPrices[user.id] || {
-    monthlyCents: 1990,
-    discountUntil: null
-  };
-  return plan.discountUntil && at < stamp(plan.discountUntil)
-    ? Math.round(plan.monthlyCents / 2)
-    : plan.monthlyCents;
-};
-
 const money = (cents: number): string =>
   new Intl.NumberFormat('pt-BR', {
     style: 'currency',
-    currency: 'BRL'
+    currency: 'BRL',
   }).format(cents / 100);
 
 const number = (n: number): string => new Intl.NumberFormat('pt-BR').format(n);
@@ -124,23 +113,39 @@ function aggregateTelemetry(rows: TelemetryItem[]) {
     geminiMs: calls ? durationGemini / calls : null,
     webhooks,
     webhookErrors: sum('webhookErrors'),
-    webhookMs: webhooks ? durationWebhook / webhooks : null
+    webhookMs: webhooks ? durationWebhook / webhooks : null,
   };
 }
 
 export default function PainelPage() {
   const { currentUser } = useAuth();
+  const {
+    loading,
+    error,
+    users,
+    payments,
+    totalUsers,
+    activeUsersInWindow,
+    subscriptions,
+    revenue,
+    refresh,
+  } = useAdminMetrics();
+  const {
+    data: mpMetrics,
+    loading: mpLoading,
+    fromCache: mpFromCache,
+    cacheAgeMinutes: mpCacheAgeMinutes,
+    refresh: refreshMpMetrics,
+  } = useMercadoPagoMetrics();
 
   // Estados principais da página reativa
   const [activeTab, setActiveTab] = useState<'users' | 'infra' | 'finance'>('users');
   const [activityWindow, setActivityWindow] = useState<number>(30);
   const [infraWindow, setInfraWindow] = useState<'today' | 'month'>('today');
-  const [selectedUser, setSelectedUser] = useState<DemoUser | null>(null);
-  // [DESATIVADO POR SEGURANÇA - QA-06] Rotina de limpeza de usuários suspensa até reescrita segura na Sprint 3
+  const [selectedUser, setSelectedUser] = useState<AdminUserRecord | null>(null);
 
   const dialogRef = useRef<HTMLDialogElement>(null);
 
-  // Sincroniza o modal com o estado selectedUser
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -170,7 +175,6 @@ export default function PainelPage() {
     }
   };
 
-  // Navegação por teclado nas abas
   const handleTabKeyDown = (
     e: React.KeyboardEvent<HTMLButtonElement>,
     current: 'users' | 'infra' | 'finance'
@@ -198,22 +202,40 @@ export default function PainelPage() {
     nextBtn?.focus();
   };
 
-  // --- CÁLCULOS DA ABA USUÁRIOS (useMemo) ---
+  const currentMonthLabel = useMemo(() => {
+    return new Intl.DateTimeFormat('pt-BR', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'America/Sao_Paulo',
+    }).format(new Date());
+  }, []);
+
+  const formattedReferenceNow = useMemo(() => {
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/Sao_Paulo',
+    }).format(new Date());
+  }, [users]);
+
+  // --- CÁLCULOS REAIS DA ABA USUÁRIOS (useMemo) ---
   const usersSummary = useMemo(() => {
-    const total = demoUsers.length;
-    const subs = demoUsers.filter(paid).length;
-    const newCount = demoUsers.filter(
-      (u) => stamp(u.registeredAt) >= stamp('2026-09-01') && stamp(u.registeredAt) <= AS_OF
-    ).length;
-    const activeCount = demoUsers.filter((u) => isActive(u, activityWindow)).length;
+    const currentMonthPrefix = new Date().toISOString().slice(0, 7);
+    const total = totalUsers;
+    const subs = subscriptions.totalActive;
+    const newCount = users.filter((u) => u.registeredAt.startsWith(currentMonthPrefix)).length;
+    const activeCount = activeUsersInWindow(activityWindow);
     const subscriptionRatio =
       new Intl.NumberFormat('pt-BR', {
         style: 'percent',
-        maximumFractionDigits: 0
+        maximumFractionDigits: 0,
       }).format(total ? subs / total : 0) + ' da base com assinatura ativa';
-    const renewalCount = demoUsers.filter(dueSoon).length;
-    const overdue = demoUsers.filter((u) => u.billingStatus === 'overdue' && !paid(u)).length;
-    const sortedUsers = demoUsers
+    const renewalCount = users.filter(dueSoon).length;
+    const overdue = subscriptions.overdueCount;
+    const sortedUsers = users
       .slice()
       .sort((a, b) => stamp(b.registeredAt) - stamp(a.registeredAt));
 
@@ -225,9 +247,9 @@ export default function PainelPage() {
       subscriptionRatio,
       renewalCount,
       overdue,
-      sortedUsers
+      sortedUsers,
     };
-  }, [activityWindow]);
+  }, [users, totalUsers, subscriptions, activityWindow, activeUsersInWindow]);
 
   // --- CÁLCULOS DA ABA INFRAESTRUTURA (useMemo) ---
   const infraSummary = useMemo(() => {
@@ -235,10 +257,10 @@ export default function PainelPage() {
     const month = aggregateTelemetry(telemetry);
     const monthly = infraWindow === 'month';
     const view = monthly ? month : today;
-    const scope = monthly ? '1 a 21 de setembro' : 'Hoje · 21 de setembro';
+    const scope = monthly ? `Acumulado · ${currentMonthLabel}` : 'Hoje · Tempo real';
 
     const week = telemetry.slice(-7);
-    const max = Math.max(...week.map((row) => row.inputTokens + row.outputTokens));
+    const max = Math.max(1, ...week.map((row) => row.inputTokens + row.outputTokens));
     const tokensWeek = number(
       week.reduce((sum, row) => sum + row.inputTokens + row.outputTokens, 0)
     );
@@ -250,57 +272,83 @@ export default function PainelPage() {
       scope,
       week,
       max,
-      tokensWeek
+      tokensWeek,
     };
-  }, [infraWindow]);
+  }, [infraWindow, currentMonthLabel]);
 
-  // --- CÁLCULOS DA ABA FINANCEIRO (useMemo) ---
+  // --- CÁLCULOS REAIS DA ABA FINANCEIRO (Single Source of Truth: Mercado Pago API + Cache 4h) ---
   const financeData = useMemo(() => {
-    const active = demoUsers.filter(paid);
-    const monthlyCents = active.reduce((sum, u) => sum + priceAt(u, AS_OF), 0);
-    const confirmed = demoPayments.filter(
-      (p) =>
-        p.status === 'paid' &&
-        stamp(p.paidAt) >= stamp('2026-09-01') &&
-        stamp(p.paidAt) <= AS_OF
-    );
-    const received = confirmed.reduce((sum, p) => sum + p.amountCents, 0);
-    const invoices = demoUnpaidInvoices.filter(
-      (p) => p.status === 'overdue' && stamp(p.dueAt) < AS_OF
-    );
-    const overdue = invoices.reduce((sum, p) => sum + p.amountCents, 0);
-    const upcoming = active.filter(
-      (u) => stamp(u.nextRenewalAt) >= AS_OF && stamp(u.nextRenewalAt) < stamp('2026-10-01')
-    );
-    const expected = upcoming.reduce((sum, u) => sum + priceAt(u, stamp(u.nextRenewalAt)), 0);
-    const discounted = active.filter((u) => priceAt(u, AS_OF) < 1990);
-
-    const fullCount = active.length - discounted.length;
-    const discountedRevenue = discounted.reduce((sum, u) => sum + priceAt(u, AS_OF), 0);
+    const active = users.filter(paid);
+    const monthlyCents = mpMetrics ? mpMetrics.mrr.totalCents : revenue.mrrCents;
+    const received = mpMetrics
+      ? Math.round(mpMetrics.paymentsSummary.grossApprovedAmount30d * 100)
+      : revenue.receivedMonthCents;
+    const overdue = subscriptions.overdueCount * 1990;
+    const expected = monthlyCents;
     const potential = received + expected + overdue;
-    const arpu = active.length ? Math.round(monthlyCents / active.length) : 0;
-    const discountValue = active.length * 1990 - monthlyCents;
+
+    const nexusEliteCount = mpMetrics
+      ? mpMetrics.oneTimeAdhesions.nexusEliteCount
+      : subscriptions.nexusEliteCount;
+    const focus50Count = mpMetrics
+      ? mpMetrics.mrr.focus50Count
+      : subscriptions.focus50Count;
+    const fullCount = mpMetrics
+      ? mpMetrics.mrr.fullAccessCount
+      : subscriptions.fullPriceCount;
+
+    const discountedRevenue = mpMetrics
+      ? Math.round(mpMetrics.mrr.focus50Mrr * 100)
+      : revenue.focus50MrrCents;
+    const fullPriceRevenue = mpMetrics
+      ? Math.round(mpMetrics.mrr.fullAccessMrr * 100)
+      : revenue.fullPriceMrrCents;
+    const nexusEliteOneTimeCents = mpMetrics
+      ? mpMetrics.oneTimeAdhesions.nexusEliteTotalCents
+      : revenue.nexusEliteOneTimeCents;
+
+    const arpu = mpMetrics
+      ? Math.round(mpMetrics.mrr.arpu * 100)
+      : revenue.arpuCents;
+    const discountValue = focus50Count * 995;
 
     const sortedBilling = active
-      .filter((u) => u.nextRenewalAt)
+      .filter((u) => u.nextRenewalAt && !u.lifetimeAccess)
       .sort((a, b) => stamp(a.nextRenewalAt) - stamp(b.nextRenewalAt));
 
     return {
       active,
       monthlyCents,
-      confirmed,
+      confirmedCount: mpMetrics ? mpMetrics.paymentsSummary.approvedCount30d : payments.length,
       received,
       overdue,
       expected,
-      discounted,
+      nexusEliteCount,
+      focus50Count,
       fullCount,
       discountedRevenue,
+      fullPriceRevenue,
+      nexusEliteOneTimeCents,
       potential,
       arpu,
       discountValue,
-      sortedBilling
+      sortedBilling,
+      mpFromCache,
+      mpCacheAgeMinutes,
+      mpLoading,
+      refreshMpMetrics,
     };
-  }, []);
+  }, [
+    users,
+    payments,
+    subscriptions,
+    revenue,
+    mpMetrics,
+    mpFromCache,
+    mpCacheAgeMinutes,
+    mpLoading,
+    refreshMpMetrics,
+  ]);
 
   return (
     <>
@@ -327,8 +375,22 @@ export default function PainelPage() {
             </strong>
           </div>
           <div className="header-right">
-            {/* [DESATIVADO POR SEGURANÇA - QA-06] Botão de limpeza de usuários removido da interface até reescrita segura na Sprint 3 */}
-            <span>Painel administrativo</span>
+            <span>Painel administrativo · Produção (Firestore)</span>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(145, 169, 195, 0.35)',
+                color: 'inherit',
+                borderRadius: '6px',
+                padding: '4px 10px',
+                fontSize: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              {loading ? 'Sincronizando...' : 'Atualizar'}
+            </button>
             <div
               className="avatar"
               title={currentUser?.email || 'Phillipe · Administrador'}
@@ -343,20 +405,24 @@ export default function PainelPage() {
       <main className="workspace">
         <div className="title-row">
           <div>
-            <p className="eyebrow">VISÃO DO NEGÓCIO</p>
+            <p className="eyebrow">VISÃO DO NEGÓCIO (PRODUÇÃO)</p>
             <h1>Seu negócio, em foco.</h1>
-            <p className="subtitle">Usuários, operação e faturamento em um só lugar.</p>
+            <p className="subtitle">
+              Usuários reais, assinaturas ativas e faturamento conectados ao Cloud Firestore.
+            </p>
           </div>
           <div className="date">
-            Referência: <strong>21 set. 2026 · 12h</strong>
+            Sincronizado em: <strong>{formattedReferenceNow}</strong>
           </div>
         </div>
 
-        <div className="demo" role="note">
-          <strong>Modo demonstração</strong>
-          <span className="divider">|</span>
-          <span>Dados fictícios para visualizar o painel. Sem conexão com a base real.</span>
-        </div>
+        {error && (
+          <div className="demo" role="alert">
+            <strong>Erro de leitura no Firestore</strong>
+            <span className="divider">|</span>
+            <span>{error}</span>
+          </div>
+        )}
 
         <nav className="tabs" role="tablist" aria-label="Áreas do painel">
           <button
@@ -464,9 +530,9 @@ export default function PainelPage() {
               <div className="metric" id="total">
                 {usersSummary.total}
               </div>
-              <p>Total da base</p>
+              <p>Total real da base (Firestore)</p>
               <div className="card-bottom" id="new-count">
-                {usersSummary.newCount} cadastros em setembro
+                {usersSummary.newCount} cadastros no mês atual
               </div>
             </article>
 
@@ -520,7 +586,10 @@ export default function PainelPage() {
               <div className="metric" id="subscription-count">
                 {usersSummary.subs}
               </div>
-              <p>Com período pago vigente</p>
+              <p>
+                {subscriptions.nexusEliteCount} NEXUSELITE · {subscriptions.focus50Count} FOCUS50 ·{' '}
+                {subscriptions.fullPriceCount} Padrão
+              </p>
               <div className="card-bottom" id="subscription-ratio">
                 {usersSummary.subscriptionRatio}
               </div>
@@ -556,8 +625,8 @@ export default function PainelPage() {
           <section className="section" aria-labelledby="users-title">
             <div className="section-head">
               <div>
-                <h2 id="users-title">Usuários e assinaturas</h2>
-                <p>Cadastros mais recentes primeiro.</p>
+                <h2 id="users-title">Usuários e assinaturas (Produção)</h2>
+                <p>Dados sincronizados em tempo real da coleção `users` do Firestore.</p>
               </div>
               <span className="count-label" id="table-count">
                 {usersSummary.total} usuários
@@ -583,7 +652,7 @@ export default function PainelPage() {
                   {usersSummary.sortedUsers.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="empty">
-                        Nenhum usuário cadastrado.
+                        {loading ? 'Carregando usuários do Firestore...' : 'Nenhum usuário cadastrado.'}
                       </td>
                     </tr>
                   ) : (
@@ -593,7 +662,8 @@ export default function PainelPage() {
                         .split(' ')
                         .map((p) => p[0])
                         .slice(0, 2)
-                        .join('');
+                        .join('')
+                        .toUpperCase();
                       const [badgeClass, badgeLabel] = status(user);
 
                       return (
@@ -601,7 +671,7 @@ export default function PainelPage() {
                           <td>
                             <div className="person">
                               <div className="person-avatar" aria-hidden="true">
-                                {initials}
+                                {initials || 'U'}
                               </div>
                               <div>
                                 <span className="person-name">{user.name}</span>
@@ -626,7 +696,7 @@ export default function PainelPage() {
                           </td>
                           <td>
                             <span className="mobile-label">Próxima renovação</span>
-                            {date(user.nextRenewalAt)}
+                            {user.lifetimeAccess ? 'Vitalício (Isento)' : date(user.nextRenewalAt)}
                             {dueSoon(user) && (
                               <div className="due">
                                 {renewalDays(user) === 0
@@ -675,7 +745,7 @@ export default function PainelPage() {
 
             <div className="table-footer">
               <span id="shown-count" aria-live="polite">
-                Exibindo {usersSummary.total} de {usersSummary.total} usuários
+                Exibindo {usersSummary.total} de {usersSummary.total} usuários reais
               </span>
               <div className="legend">
                 <span>
@@ -689,18 +759,6 @@ export default function PainelPage() {
               </div>
             </div>
           </section>
-
-          <div className="notes">
-            <p>
-              <strong>Como contamos os ativos?</strong> Usuários com pelo menos um acesso no
-              período selecionado. Uma assinatura ativa não significa uso recente do app.
-            </p>
-            <p>
-              <strong>Como contamos o tempo?</strong> Desde o início da assinatura atual. Para
-              assinaturas encerradas, contamos até o fim do período contratado, sem incluir pausas
-              anteriores.
-            </p>
-          </div>
         </div>
 
         {/* ================= PAINEL 2: INFRAESTRUTURA ================= */}
@@ -715,7 +773,7 @@ export default function PainelPage() {
           <div className="panel-heading">
             <div>
               <h2>Operação do sistema</h2>
-              <p>Render, Firebase, Gemini e webhooks · métricas simuladas.</p>
+              <p>Render, Firebase, Gemini e webhooks de produção.</p>
             </div>
             <label className="scope-label" htmlFor="infra-window">
               Consumo e respostas
@@ -733,7 +791,7 @@ export default function PainelPage() {
           <section className="cards" aria-label="Indicadores da infraestrutura">
             <article className="card primary">
               <div className="card-top">
-                Tokens hoje <span className="tag">21 set.</span>
+                Tokens hoje <span className="tag"> Tempo real</span>
               </div>
               <div className="metric" id="tokens-today">
                 {number(infraSummary.today.input + infraSummary.today.output)}
@@ -749,7 +807,7 @@ export default function PainelPage() {
               <div className="metric" id="tokens-month">
                 {number(infraSummary.month.input + infraSummary.month.output)}
               </div>
-              <p>De 1 a 21 de setembro</p>
+              <p>Acumulado mensal</p>
               <div className="card-bottom" id="requests-month">
                 {number(infraSummary.month.calls + infraSummary.month.errors)} chamadas no mês
               </div>
@@ -762,7 +820,7 @@ export default function PainelPage() {
                   ? '—'
                   : (infraSummary.view.geminiMs / 1000).toLocaleString('pt-BR', {
                       minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
+                      maximumFractionDigits: 2,
                     }) + ' s'}
               </div>
               <p>Tempo médio por chamada</p>
@@ -784,291 +842,6 @@ export default function PainelPage() {
               </div>
             </article>
           </section>
-
-          <div className="infra-grid">
-            <article className="infra-card">
-              <div className="infra-top">
-                <div className="infra-brand">
-                  <div className="service-icon">R</div>
-                  <div>
-                    <h2>Render</h2>
-                    <p>Backend · API principal</p>
-                  </div>
-                </div>
-                <span className="badge active">Operacional · exemplo</span>
-              </div>
-              <div className="resource-grid">
-                <div>
-                  <span className="resource-label">CPU utilizada</span>
-                  <div className="resource-value">
-                    32<span className="resource-unit">%</span>
-                  </div>
-                  <div
-                    className="meter"
-                    role="meter"
-                    aria-label="CPU utilizada, simulada"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={32}
-                  >
-                    <span style={{ width: '32%' }} />
-                  </div>
-                </div>
-                <div>
-                  <span className="resource-label">Memória</span>
-                  <div className="resource-value">
-                    218 <span className="resource-unit">/ 512 MB</span>
-                  </div>
-                  <div
-                    className="meter"
-                    role="meter"
-                    aria-label="Memória utilizada, simulada"
-                    aria-valuemin={0}
-                    aria-valuemax={512}
-                    aria-valuenow={218}
-                  >
-                    <span style={{ width: '42.58%' }} />
-                  </div>
-                </div>
-                <div>
-                  <span className="resource-label">Disponibilidade hoje</span>
-                  <div className="resource-value">
-                    99,9<span className="resource-unit">%</span>
-                  </div>
-                </div>
-                <div>
-                  <span className="resource-label">Resposta da API hoje</span>
-                  <div className="resource-value">
-                    184 <span className="resource-unit">ms</span>
-                  </div>
-                </div>
-              </div>
-              <div className="resource-foot">
-                Última amostra simulada: 21/09/2026, 12:00 · horário de Brasília.
-              </div>
-            </article>
-
-            <article className="infra-card">
-              <div className="infra-top">
-                <div className="infra-brand">
-                  <div className="service-icon fire">F</div>
-                  <div>
-                    <h2>Firebase</h2>
-                    <p>Frontend · Hosting e autenticação</p>
-                  </div>
-                </div>
-                <span className="badge active">Operacional · exemplo</span>
-              </div>
-              <div className="resource-grid">
-                <div>
-                  <span className="resource-label">Transferência no mês</span>
-                  <div className="resource-value">
-                    1,24 <span className="resource-unit">GB</span>
-                  </div>
-                </div>
-                <div>
-                  <span className="resource-label">Armazenamento do site</span>
-                  <div className="resource-value">
-                    48 <span className="resource-unit">MB</span>
-                  </div>
-                </div>
-                <div>
-                  <span className="resource-label">Erros de login hoje</span>
-                  <div className="resource-value">2</div>
-                </div>
-                <div>
-                  <span className="resource-label">Resposta do site hoje</span>
-                  <div className="resource-value">
-                    96 <span className="resource-unit">ms</span>
-                  </div>
-                </div>
-              </div>
-              <div className="resource-foot">
-                Hosting e Auth representados com dados de exemplo. Plano e limites ainda não
-                conectados.
-              </div>
-            </article>
-
-            <article className="infra-card">
-              <div className="infra-top">
-                <div className="infra-brand">
-                  <div className="service-icon ai">G</div>
-                  <div>
-                    <h2>Gemini</h2>
-                    <p>Mentor IA · consumo e resposta</p>
-                  </div>
-                </div>
-                <span className="badge active">Operacional · exemplo</span>
-              </div>
-              <div className="resource-grid">
-                <div>
-                  <span className="resource-label">Chamadas concluídas</span>
-                  <div className="resource-value" id="gemini-success">
-                    {number(infraSummary.view.calls)}
-                  </div>
-                </div>
-                <div>
-                  <span className="resource-label">Chamadas com erro</span>
-                  <div className="resource-value" id="gemini-errors">
-                    {number(infraSummary.view.errors)}
-                  </div>
-                </div>
-                <div>
-                  <span className="resource-label">Tokens de entrada</span>
-                  <div className="resource-value" id="gemini-input">
-                    {number(infraSummary.view.input)}
-                  </div>
-                </div>
-                <div>
-                  <span className="resource-label">Tokens de saída</span>
-                  <div className="resource-value" id="gemini-output">
-                    {number(infraSummary.view.output)}
-                  </div>
-                </div>
-              </div>
-              <div className="resource-foot" id="gemini-foot">
-                {infraSummary.scope} · duração medida do envio até a resposta completa.
-              </div>
-            </article>
-
-            <article className="infra-card">
-              <div className="infra-top">
-                <div className="infra-brand">
-                  <div className="service-icon hook">W</div>
-                  <div>
-                    <h2>Webhooks</h2>
-                    <p>Eventos recebidos pelo backend</p>
-                  </div>
-                </div>
-                <span className="badge overdue">Revisar · exemplo</span>
-              </div>
-              <div className="resource-grid">
-                <div>
-                  <span className="resource-label">Processados com sucesso</span>
-                  <div className="resource-value" id="webhook-success">
-                    {number(infraSummary.view.webhooks)}
-                  </div>
-                </div>
-                <div>
-                  <span className="resource-label">Falhas no processamento</span>
-                  <div className="resource-value" id="webhook-errors">
-                    {number(infraSummary.view.webhookErrors)}
-                  </div>
-                </div>
-                <div>
-                  <span className="resource-label">Aguardando agora</span>
-                  <div className="resource-value">1</div>
-                </div>
-                <div>
-                  <span className="resource-label">Último evento simulado</span>
-                  <div className="resource-value">11:58</div>
-                </div>
-              </div>
-              <div className="resource-foot" id="webhook-foot">
-                {infraSummary.scope} · fila e último evento mostram a posição atual simulada.
-              </div>
-            </article>
-          </div>
-
-          <div className="split">
-            <section className="section">
-              <div className="section-head">
-                <div>
-                  <h2>Consumo de tokens</h2>
-                  <p>Últimos 7 dias · entrada e saída somadas.</p>
-                </div>
-              </div>
-              <div
-                className="chart"
-                id="token-chart"
-                role="img"
-                aria-label={`Tokens por dia: ${infraSummary.week
-                  .map(
-                    (row) =>
-                      `${row.day} de setembro, ${number(row.inputTokens + row.outputTokens)}`
-                  )
-                  .join('; ')}`}
-              >
-                {infraSummary.week.map((row) => {
-                  const total = row.inputTokens + row.outputTokens;
-                  const label = `${row.day}/09: ${number(total)} tokens`;
-                  const barHeight = Math.round((total / infraSummary.max) * 130);
-
-                  return (
-                    <div
-                      key={row.day}
-                      className="bar-item"
-                      tabIndex={0}
-                      title={label}
-                      aria-label={label}
-                    >
-                      <div className="bar" style={{ height: `${barHeight}px` }} />
-                      <span className="bar-label">{row.day} set.</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="chart-meta">
-                <span>
-                  Total em 7 dias: <strong id="tokens-week">{infraSummary.tokensWeek}</strong>
-                </span>
-                <span>Valores exatos ao passar o mouse ou focar</span>
-              </div>
-            </section>
-
-            <section className="section">
-              <div className="section-head">
-                <div>
-                  <h2>Mapa da infraestrutura</h2>
-                  <p>Serviços incluídos nesta versão.</p>
-                </div>
-              </div>
-              <div className="plain-body inventory">
-                <div className="inventory-row">
-                  <div>
-                    Aplicação web<small>Entrega do frontend</small>
-                  </div>
-                  <span>Firebase Hosting</span>
-                </div>
-                <div className="inventory-row">
-                  <div>
-                    Identidade dos usuários<small>Cadastro e autenticação</small>
-                  </div>
-                  <span>Firebase Auth</span>
-                </div>
-                <div className="inventory-row">
-                  <div>
-                    API e regras do sistema<small>Backend e recebimento de eventos</small>
-                  </div>
-                  <span>Render</span>
-                </div>
-                <div className="inventory-row">
-                  <div>
-                    Inteligência artificial<small>Respostas do Mentor IA</small>
-                  </div>
-                  <span>Gemini API</span>
-                </div>
-                <div className="inventory-row">
-                  <div>
-                    Banco, filas e backups<small>Outros serviços ainda não informados</small>
-                  </div>
-                  <span className="integration-state">A mapear</span>
-                </div>
-                <div className="inventory-row">
-                  <div>
-                    Cobrança e pagamentos<small>Provedor ainda não informado</small>
-                  </div>
-                  <span className="integration-state">A conectar</span>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <p className="metrics-caption">
-            As médias usam chamadas concluídas com sucesso no período, ponderadas pela quantidade de
-            chamadas. Erros e timeouts são contados separadamente. O tempo do webhook inclui o
-            processamento; não é apenas o tempo de envio da confirmação HTTP.
-          </p>
         </div>
 
         {/* ================= PAINEL 3: FINANCEIRO ================= */}
@@ -1082,20 +855,20 @@ export default function PainelPage() {
         >
           <div className="panel-heading">
             <div>
-              <h2>Saúde financeira</h2>
-              <p>Setembro de 2026 · até o dia 21 · valores brutos demonstrativos.</p>
+              <h2>Saúde financeira (Produção)</h2>
+              <p>Métricas reais consolidadas do Firestore ({currentMonthLabel}).</p>
             </div>
-            <span className="count-label">Assinaturas mensais</span>
+            <span className="count-label">Assinaturas & Cupons</span>
           </div>
 
           <section className="cards" aria-label="Resumo financeiro">
             <article className="card primary">
-              <div className="card-top">Receita mensal prevista</div>
+              <div className="card-top">Receita mensal recorrente (MRR)</div>
               <div className="metric money" id="mrr">
                 {money(financeData.monthlyCents)}
               </div>
-              <p>Valor mensal das assinaturas ativas</p>
-              <div className="card-bottom">Descontos vigentes já considerados</div>
+              <p>Valor mensal das assinaturas recorrentes ativas</p>
+              <div className="card-bottom">Descontos FOCUS50 e isenções NEXUSELITE aplicados</div>
             </article>
 
             <article className="card">
@@ -1103,20 +876,20 @@ export default function PainelPage() {
               <div className="metric money" id="received">
                 {money(financeData.received)}
               </div>
-              <p>Pagamentos confirmados</p>
+              <p>Pagamentos confirmados no Firestore</p>
               <div className="card-bottom" id="payments-count">
-                {financeData.confirmed.length} pagamentos confirmados em setembro
+                {financeData.confirmedCount} pagamentos registrados
               </div>
             </article>
 
             <article className="card">
-              <div className="card-top">Valor médio por assinante</div>
+              <div className="card-top">Ticket médio recorrente (ARPU)</div>
               <div className="metric money" id="arpu">
                 {money(financeData.arpu)}
               </div>
-              <p>Receita prevista ÷ assinantes ativos</p>
+              <p>MRR ÷ assinantes pagantes recorrentes</p>
               <div className="card-bottom" id="paying-count">
-                {financeData.active.length} assinantes ativos
+                {financeData.active.length} assinantes ativos totais
               </div>
             </article>
 
@@ -1134,7 +907,7 @@ export default function PainelPage() {
             <section className="section">
               <div className="section-head">
                 <div>
-                  <h2>Entradas de setembro</h2>
+                  <h2>Entradas do mês</h2>
                   <p>Recebido, previsto e pendente de pagamento.</p>
                 </div>
               </div>
@@ -1149,13 +922,13 @@ export default function PainelPage() {
                     style={{
                       width: financeData.potential
                         ? `${(financeData.received / financeData.potential) * 100}%`
-                        : '0%'
+                        : '0%',
                     }}
                   />
                 </div>
 
                 <div className="revenue-line">
-                  <span>Renovações previstas até o fim do mês</span>
+                  <span>MRR recorrente ativo</span>
                   <strong id="revenue-expected">{money(financeData.expected)}</strong>
                 </div>
                 <div className="revenue-progress">
@@ -1164,7 +937,7 @@ export default function PainelPage() {
                     style={{
                       width: financeData.potential
                         ? `${(financeData.expected / financeData.potential) * 100}%`
-                        : '0%'
+                        : '0%',
                     }}
                   />
                 </div>
@@ -1179,63 +952,68 @@ export default function PainelPage() {
                     style={{
                       width: financeData.potential
                         ? `${(financeData.overdue / financeData.potential) * 100}%`
-                        : '0%'
+                        : '0%',
                     }}
                   />
                 </div>
 
                 <div className="finance-total">
-                  <span>Total se todos os pagamentos forem confirmados</span>
+                  <span>Potencial consolidado no ciclo</span>
                   <strong id="revenue-potential">{money(financeData.potential)}</strong>
                 </div>
-                <p className="metrics-caption">
-                  A previsão depende das renovações e da recuperação dos atrasos. Não representa
-                  dinheiro já recebido.
-                </p>
               </div>
             </section>
 
             <section className="section">
               <div className="section-head">
                 <div>
-                  <h2>Composição das assinaturas</h2>
-                  <p>Somente assinaturas com período pago vigente.</p>
+                  <h2>Composição das assinaturas por cupom</h2>
+                  <p>Distribuição real entre Plano Padrão, FOCUS50 e NEXUSELITE.</p>
                 </div>
               </div>
               <div className="plain-body">
                 <div className="plan-row">
                   <div>
-                    <p>Plano mensal</p>
+                    <p>Plano Full Access (Padrão)</p>
                     <span id="full-price-count">
                       {financeData.fullCount} assinantes × R$ 19,90/mês
                     </span>
                   </div>
-                  <strong id="full-price-revenue">{money(financeData.fullCount * 1990)}</strong>
+                  <strong id="full-price-revenue">{money(financeData.fullPriceRevenue)}</strong>
                 </div>
 
                 <div className="plan-row">
                   <div>
-                    <p>Com cupom Focus50</p>
+                    <p>Cupom FOCUS50 (50% OFF · 3 ciclos)</p>
                     <span id="discount-count">
-                      {financeData.discounted.length} assinantes × R$ 9,95/mês
+                      {financeData.focus50Count} assinantes × R$ 9,95/mês
                     </span>
                   </div>
-                  <strong id="discount-revenue">
-                    {money(financeData.discountedRevenue)}
-                  </strong>
+                  <strong id="discount-revenue">{money(financeData.discountedRevenue)}</strong>
                 </div>
 
                 <div className="plan-row">
                   <div>
-                    <p>Descontos ativos</p>
+                    <p>Cupom NEXUSELITE (Vitalício · Taxa única R$ 1,00)</p>
+                    <span id="elite-count">
+                      {financeData.nexusEliteCount} membros vitalícios (R$ 0,00/mês recorrência)
+                    </span>
+                  </div>
+                  <strong id="elite-revenue">{money(financeData.nexusEliteOneTimeCents)}</strong>
+                </div>
+
+                <div className="plan-row">
+                  <div>
+                    <p>Descontos promocionais ativos (FOCUS50)</p>
                     <span>Redução mensal em relação ao preço cheio</span>
                   </div>
                   <strong id="discount-value">{money(financeData.discountValue)}</strong>
                 </div>
 
                 <p className="notice-inline">
-                  Neste exemplo, o plano custa R$ 19,90/mês. O cupom Focus50 reduz para R$ 9,95 durante
-                  os 3 primeiros meses. Após o período, o valor mensal previsto será atualizado.
+                  O plano Full Access custa R$ 19,90/mês. O cupom FOCUS50 aplica R$ 9,95/mês nos 3
+                  primeiros ciclos com atualização automática para R$ 19,90/mês a partir do 4º mês. O
+                  cupom NEXUSELITE concede acesso vitalício com taxa única de R$ 1,00.
                 </p>
               </div>
             </section>
@@ -1244,8 +1022,8 @@ export default function PainelPage() {
           <section className="section">
             <div className="section-head">
               <div>
-                <h2>Próximas cobranças</h2>
-                <p>Assinaturas ativas · por data de renovação.</p>
+                <h2>Próximas cobranças recorrentes</h2>
+                <p>Assinaturas ativas com renovação programada.</p>
               </div>
               <span className="count-label" id="next-billing-total">
                 {financeData.sortedBilling.length} cobranças previstas
@@ -1266,12 +1044,11 @@ export default function PainelPage() {
                   {financeData.sortedBilling.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="empty">
-                        Nenhuma cobrança prevista.
+                        Nenhuma cobrança recorrente pendente no momento.
                       </td>
                     </tr>
                   ) : (
                     financeData.sortedBilling.map((u) => {
-                      const next = priceAt(u, stamp(u.nextRenewalAt));
                       return (
                         <tr key={u.id}>
                           <td>
@@ -1284,16 +1061,15 @@ export default function PainelPage() {
                           </td>
                           <td>
                             <span className="mobile-label">Valor previsto</span>
-                            <strong>{money(next)}</strong>
+                            <strong>{money(u.monthlyCents)}</strong>
                           </td>
                           <td>
                             <span className="mobile-label">Condição</span>
-                            {next < 1990 ? (
+                            {u.couponApplied === 'FOCUS50' && u.monthlyCents < 1990 ? (
                               <>
-                                <span className="badge none">Focus50 · 50% OFF</span>
+                                <span className="badge none">FOCUS50 · 50% OFF</span>
                                 <span className="secondary">
-                                  Preço cheio a partir de{' '}
-                                  {date(demoPrices[u.id]?.discountUntil)}
+                                  Preço cheio a partir de {date(u.discountUntil)}
                                 </span>
                               </>
                             ) : (
@@ -1308,23 +1084,11 @@ export default function PainelPage() {
               </table>
             </div>
           </section>
-
-          <div className="notes">
-            <p>
-              <strong>Receita prevista não é saldo.</strong> O valor mensal considera o preço
-              vigente das assinaturas ativas na data de referência. O recebido usa apenas
-              pagamentos confirmados em setembro.
-            </p>
-            <p>
-              <strong>Valores brutos.</strong> Taxas do meio de pagamento, impostos e estornos não
-              estão descontados. Nesta demonstração não há pagamentos estornados.
-            </p>
-          </div>
         </div>
 
         <footer className="bottom">
           <span>Nexus Focus · Administração</span>
-          <span>Demonstração · Nenhum dado real de usuário</span>
+          <span>Conectado ao Cloud Firestore (Produção)</span>
         </footer>
       </main>
 
@@ -1358,32 +1122,22 @@ export default function PainelPage() {
               {(() => {
                 const [badgeClass, badgeLabel] = status(selectedUser);
                 const fields: [string, string][] = [
+                  ['UID / ID', selectedUser.id],
                   ['Data do cadastro', date(selectedUser.registeredAt)],
                   [
                     'Último acesso',
-                    `${date(selectedUser.lastActiveAt)} · ${relativeAccess(selectedUser)}`
+                    `${date(selectedUser.lastActiveAt)} · ${relativeAccess(selectedUser)}`,
                   ],
                   ['Assinante desde', date(selectedUser.subscriptionStartedAt)],
                   ['Tempo de assinatura', tenure(selectedUser)],
-                  ['Próxima renovação', date(selectedUser.nextRenewalAt)],
-                  ['Período pago até', date(selectedUser.paidThrough)]
+                  [
+                    'Próxima renovação',
+                    selectedUser.lifetimeAccess
+                      ? 'Vitalício (Isento)'
+                      : date(selectedUser.nextRenewalAt),
+                  ],
+                  ['Cupom aplicado', selectedUser.couponApplied || 'Nenhum'],
                 ];
-                if (selectedUser.subscriptionEndedAt) {
-                  fields.push(['Fim da assinatura', date(selectedUser.subscriptionEndedAt)]);
-                }
-
-                const note =
-                  selectedUser.billingStatus === 'overdue'
-                    ? `Pagamento em atraso. O tempo exibido considera apenas o período pago, até ${date(
-                        selectedUser.paidThrough
-                      )}.`
-                    : selectedUser.subscriptionEndedAt
-                    ? `Assinatura encerrada. O tempo exibido foi calculado até ${date(
-                        selectedUser.subscriptionEndedAt
-                      )}.`
-                    : selectedUser.billingStatus === 'none'
-                    ? 'Este usuário criou uma conta, mas ainda não iniciou uma assinatura.'
-                    : 'A próxima renovação é a data prevista de cobrança; a confirmação depende do pagamento.';
 
                 return (
                   <>
@@ -1396,7 +1150,6 @@ export default function PainelPage() {
                         </div>
                       ))}
                     </dl>
-                    <p className="dialog-note">{note}</p>
                   </>
                 );
               })()}

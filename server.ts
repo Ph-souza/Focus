@@ -4979,6 +4979,309 @@ Data e hora atual: ${new Date().toISOString()}`;
     }
   });
 
+  // =========================================================================
+  // ADMIN METRICS ROUTE (Single Source of Truth: Mercado Pago API + 4h Cache)
+  // Documento de cache no Firestore: admin/metrics_cache
+  // =========================================================================
+  const MP_METRICS_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 horas
+  const MP_METRICS_CACHE_PATH = "admin/metrics_cache";
+
+  async function handleAdminMpMetricsRequest(req: AuthenticatedRequest, res: express.Response) {
+    const decodedToken = req.user;
+    const isAdmin = Boolean(
+      decodedToken?.admin === true ||
+      decodedToken?.isAdmin === true ||
+      decodedToken?.role === "admin" ||
+      decodedToken?.role === "admin_pro" ||
+      decodedToken?.email === "phillipe.souza27@gmail.com"
+    );
+
+    if (!isAdmin) {
+      return res.status(403).json({
+        error: "Acesso restrito a administradores com Custom Claim { admin: true }.",
+        code: "FORBIDDEN"
+      });
+    }
+
+    try {
+      const forceRefresh = Boolean(req.body?.forceRefresh || req.query?.force === "true");
+      const cacheRef = adminDb.doc(MP_METRICS_CACHE_PATH);
+
+      if (!forceRefresh && hasServiceAccount) {
+        const cacheSnap = await cacheRef.get();
+        if (cacheSnap.exists) {
+          const cacheData = cacheSnap.data() as any;
+          const updatedAtMs =
+            typeof cacheData?.updatedAtMillis === "number"
+              ? cacheData.updatedAtMillis
+              : cacheData?.updatedAt?.toMillis
+              ? cacheData.updatedAt.toMillis()
+              : 0;
+          const ageMs = Date.now() - updatedAtMs;
+
+          if (updatedAtMs > 0 && ageMs < MP_METRICS_CACHE_TTL_MS && cacheData?.payload) {
+            return res.json({
+              ...cacheData.payload,
+              source: "firestore_cache",
+              fromCache: true,
+              cacheAgeMinutes: Math.max(0, Math.round(ageMs / 60_000))
+            });
+          }
+        }
+      }
+
+      if (!mpPreApproval || !mpPayment) {
+        return res.status(503).json({ error: "SDK do Mercado Pago não inicializado no servidor." });
+      }
+
+      const thirtyDaysAgoIso = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const [subsSearchResult, paymentsSearchResult] = await Promise.all([
+        mpPreApproval
+          .search({
+            options: {
+              status: "authorized",
+              limit: 100,
+              sort: "date_created",
+              criteria: "desc"
+            }
+          })
+          .catch(() => ({ results: [] as any[] })),
+        mpPayment
+          .search({
+            options: {
+              status: "approved",
+              sort: "date_approved",
+              criteria: "desc",
+              range: "date_approved",
+              begin_date: thirtyDaysAgoIso,
+              end_date: new Date().toISOString(),
+              limit: 100
+            } as any
+          })
+          .catch(() => ({ results: [] as any[] }))
+      ]);
+
+      const activePreApprovals: any[] = subsSearchResult?.results || [];
+      const approvedPayments: any[] = paymentsSearchResult?.results || [];
+
+      const parseExt = (raw: unknown): { userId?: string; coupon?: string; billingMode?: string } => {
+        if (!raw || typeof raw !== "string") return {};
+        const trimmed = raw.trim();
+        if (trimmed.startsWith("{")) {
+          try {
+            return JSON.parse(trimmed);
+          } catch {
+            return {};
+          }
+        }
+        return { coupon: trimmed.toUpperCase() };
+      };
+
+      // 1. Separação estrita de MRR (Assinaturas Recorrentes Ativas)
+      let fullAccessCount = 0;
+      let fullAccessMrr = 0;
+      let focus50Count = 0;
+      let focus50Mrr = 0;
+
+      for (const sub of activePreApprovals) {
+        const amount = Number(sub?.auto_recurring?.transaction_amount ?? 0);
+        const ext = parseExt(sub?.external_reference);
+        const reason = String(sub?.reason || "").toUpperCase();
+
+        if (amount <= 1.05 || ext.coupon === "NEXUSELITE" || ext.billingMode === "one_time_lifetime") {
+          continue;
+        }
+
+        if (ext.coupon === "FOCUS50" || reason.includes("FOCUS50") || (amount >= 8.0 && amount <= 12.0)) {
+          focus50Count += 1;
+          focus50Mrr += amount;
+        } else {
+          fullAccessCount += 1;
+          fullAccessMrr += amount;
+        }
+      }
+
+      const totalMrrAmount = Number((fullAccessMrr + focus50Mrr).toFixed(2));
+      const totalMrrCents = Math.round(totalMrrAmount * 100);
+      const activeSubscriptionsCount = fullAccessCount + focus50Count;
+      const arpu =
+        activeSubscriptionsCount > 0
+          ? Number((totalMrrAmount / activeSubscriptionsCount).toFixed(2))
+          : 0;
+
+      // 2. Separação de Receita Única (Taxa de Adesão R$ 1,00 do NEXUSELITE) vs Recorrente
+      let nexusEliteCount = 0;
+      let nexusEliteTotalAmount = 0;
+      let otherOneTimeCount = 0;
+      let otherOneTimeAmount = 0;
+      let recurringPaymentsAmount30d = 0;
+
+      const dailyMap = new Map<
+        string,
+        { date: string; mrrNewOrRenewed: number; oneTimeElite: number; total: number }
+      >();
+      for (let i = 13; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10);
+        dailyMap.set(d, { date: d, mrrNewOrRenewed: 0, oneTimeElite: 0, total: 0 });
+      }
+
+      const recentTransactions: any[] = [];
+
+      for (const pay of approvedPayments) {
+        const amount = Number(pay?.transaction_amount ?? 0);
+        if (amount <= 0) continue;
+
+        const ext = parseExt(pay?.external_reference);
+        const description = String(pay?.description || "").toUpperCase();
+        const operationType = String(pay?.operation_type || "").toLowerCase();
+        const dateApprovedIso = String(pay?.date_approved || pay?.date_created || new Date().toISOString());
+        const dayKey = dateApprovedIso.slice(0, 10);
+
+        const isNexusEliteOneTime =
+          ext.coupon === "NEXUSELITE" ||
+          ext.billingMode === "one_time_lifetime" ||
+          description.includes("NEXUSELITE") ||
+          description.includes("VITALÍCIO") ||
+          description.includes("VITALICIO") ||
+          (amount >= 0.9 && amount <= 1.5 && operationType !== "recurring_payment");
+
+        const isFocus50Recurring =
+          !isNexusEliteOneTime &&
+          (ext.coupon === "FOCUS50" || description.includes("FOCUS50") || (amount >= 8.0 && amount <= 12.0));
+
+        const isFullRecurring =
+          !isNexusEliteOneTime &&
+          !isFocus50Recurring &&
+          (operationType === "recurring_payment" || amount >= 18.0);
+
+        let billingCategory = "OTHER";
+        if (isNexusEliteOneTime) {
+          billingCategory = "NEXUSELITE_ONETIME";
+          nexusEliteCount += 1;
+          nexusEliteTotalAmount = Number((nexusEliteTotalAmount + amount).toFixed(2));
+        } else if (isFocus50Recurring) {
+          billingCategory = "FOCUS50_RECURRING";
+          recurringPaymentsAmount30d = Number((recurringPaymentsAmount30d + amount).toFixed(2));
+        } else if (isFullRecurring) {
+          billingCategory = "FULL_RECURRING";
+          recurringPaymentsAmount30d = Number((recurringPaymentsAmount30d + amount).toFixed(2));
+        } else {
+          otherOneTimeCount += 1;
+          otherOneTimeAmount = Number((otherOneTimeAmount + amount).toFixed(2));
+        }
+
+        const bucket = dailyMap.get(dayKey) || {
+          date: dayKey,
+          mrrNewOrRenewed: 0,
+          oneTimeElite: 0,
+          total: 0
+        };
+        if (isNexusEliteOneTime) {
+          bucket.oneTimeElite = Number((bucket.oneTimeElite + amount).toFixed(2));
+        } else {
+          bucket.mrrNewOrRenewed = Number((bucket.mrrNewOrRenewed + amount).toFixed(2));
+        }
+        bucket.total = Number((bucket.total + amount).toFixed(2));
+        dailyMap.set(dayKey, bucket);
+
+        if (recentTransactions.length < 25) {
+          recentTransactions.push({
+            id: String(pay.id),
+            dateApproved: dateApprovedIso,
+            payerEmail: String(pay?.payer?.email || "Cliente MP"),
+            amount,
+            billingCategory,
+            status: String(pay.status || "approved")
+          });
+        }
+      }
+
+      const oneTimePaymentsAmount30d = Number((nexusEliteTotalAmount + otherOneTimeAmount).toFixed(2));
+      const grossApprovedAmount30d = Number((recurringPaymentsAmount30d + oneTimePaymentsAmount30d).toFixed(2));
+      const nowMs = Date.now();
+
+      const freshPayload = {
+        source: "mercadopago_api",
+        cachedAt: new Date(nowMs).toISOString(),
+        expiresAt: new Date(nowMs + MP_METRICS_CACHE_TTL_MS).toISOString(),
+        mrr: {
+          totalAmount: totalMrrAmount,
+          totalCents: totalMrrCents,
+          activeSubscriptionsCount,
+          fullAccessCount,
+          fullAccessMrr: Number(fullAccessMrr.toFixed(2)),
+          focus50Count,
+          focus50Mrr: Number(focus50Mrr.toFixed(2)),
+          arpu
+        },
+        oneTimeAdhesions: {
+          nexusEliteCount,
+          nexusEliteTotalAmount,
+          nexusEliteTotalCents: Math.round(nexusEliteTotalAmount * 100),
+          otherOneTimeCount,
+          otherOneTimeAmount
+        },
+        paymentsSummary: {
+          approvedCount30d: approvedPayments.length,
+          grossApprovedAmount30d,
+          recurringPaymentsAmount30d,
+          oneTimePaymentsAmount30d
+        },
+        charts: {
+          planDistribution: [
+            {
+              name: "Full Access (R$ 19,90/mês)",
+              code: "FULL_ACCESS",
+              subscribers: fullAccessCount,
+              mrrContribution: Number(fullAccessMrr.toFixed(2)),
+              oneTimeContribution: 0
+            },
+            {
+              name: "Cupom FOCUS50 (R$ 9,95/mês)",
+              code: "FOCUS50",
+              subscribers: focus50Count,
+              mrrContribution: Number(focus50Mrr.toFixed(2)),
+              oneTimeContribution: 0
+            },
+            {
+              name: "Vitalício NEXUSELITE (R$ 1,00 único)",
+              code: "NEXUSELITE",
+              subscribers: nexusEliteCount,
+              mrrContribution: 0,
+              oneTimeContribution: nexusEliteTotalAmount
+            }
+          ],
+          dailyRevenueLast30d: Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+        },
+        recentTransactions
+      };
+
+      if (hasServiceAccount) {
+        await cacheRef.set(
+          {
+            payload: freshPayload,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedAtMillis: nowMs,
+            ttlHours: 4
+          },
+          { merge: true }
+        );
+      }
+
+      return res.json({
+        ...freshPayload,
+        fromCache: false,
+        cacheAgeMinutes: 0
+      });
+    } catch (err: any) {
+      console.error("[MP Admin Metrics] Erro ao processar métricas do Mercado Pago:", err?.message);
+      return res.status(500).json({ error: err?.message || "Erro ao consultar Mercado Pago." });
+    }
+  }
+
+  app.get('/api/admin/mp-metrics', requireAuth, handleAdminMpMetricsRequest);
+  app.post('/api/admin/mp-metrics', requireAuth, handleAdminMpMetricsRequest);
+
   // Admin Route to ensure Pro status on demand (validação estrita de ID token, custom claims e registro de auditoria)
   app.post('/api/admin/activate-pro', async (req: express.Request, res: express.Response) => {
     if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {

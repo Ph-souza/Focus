@@ -73,79 +73,12 @@ export function AdminPanel() {
         role: u.role,
         isPremium: u.isPremium,
         plan: u.plan,
-        createdAt: u.createdAt instanceof Date ? u.createdAt.toLocaleDateString('pt-BR') : '2026-09-15',
-        nextBilling: u.nextBilling || (u.isPremium ? '15/10/2026' : '—'),
+        createdAt: u.createdAt instanceof Date ? u.createdAt.toLocaleDateString('pt-BR') : '—',
+        nextBilling: u.nextBilling || (u.isPremium ? 'Ativo' : '—'),
         status: u.status
       }));
 
-      // Complementa com a lista demonstrativa para visualização completa caso a base seja recente
-      const defaultDemoUsers: AdminUserRow[] = [
-        {
-          id: 'usr-001',
-          name: 'Phillipe Souza (Admin)',
-          email: 'phillipe.souza27@gmail.com',
-          role: 'Administrador / Pro',
-          isPremium: true,
-          plan: 'Plano Mensal (R$ 19,90)',
-          createdAt: '10/01/2026',
-          nextBilling: '10/10/2026',
-          status: 'active'
-        },
-
-        {
-          id: 'usr-003',
-          name: 'Mariana Duarte',
-          email: 'mariana.duarte@techcorp.com.br',
-          role: 'Assinante Pro',
-          isPremium: true,
-          plan: 'Plano Mensal (R$ 19,90)',
-          createdAt: '03/09/2026',
-          nextBilling: '03/10/2026',
-          status: 'active'
-        },
-        {
-          id: 'usr-004',
-          name: 'Rafael Guimarães',
-          email: 'rafael.gui@inova.io',
-          role: 'Assinante Pro',
-          isPremium: true,
-          plan: 'Plano Mensal (R$ 19,90)',
-          createdAt: '28/08/2026',
-          nextBilling: '28/09/2026',
-          status: 'overdue'
-        },
-        {
-          id: 'usr-005',
-          name: 'Camila Mendonça',
-          email: 'camilam@studio.art',
-          role: 'Usuário Free',
-          isPremium: false,
-          plan: 'Gratuito',
-          createdAt: '14/09/2026',
-          nextBilling: '—',
-          status: 'none'
-        },
-        {
-          id: 'usr-006',
-          name: 'Eduardo Silveira',
-          email: 'ed.silveira@advogados.com',
-          role: 'Cancelado',
-          isPremium: false,
-          plan: 'Plano Mensal (Cancelado)',
-          createdAt: '15/07/2026',
-          nextBilling: '—',
-          status: 'canceled'
-        }
-      ];
-
-      const merged = [...firestoreUsers];
-      defaultDemoUsers.forEach((demo) => {
-        if (!merged.some((u) => u.email.toLowerCase() === demo.email.toLowerCase())) {
-          merged.push(demo);
-        }
-      });
-
-      setUsersList(merged);
+      setUsersList(firestoreUsers);
     } catch (e) {
       console.warn('[AdminPanel] Erro ao carregar métricas:', e);
     } finally {
