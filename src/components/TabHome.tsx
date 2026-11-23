@@ -1190,6 +1190,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
             {/* Form de Captura */}
             <form onSubmit={handleQuickCaptureSubmit}>
               <input
+                id="desktop-quick-capture-input"
                 type="text"
                 value={captureText}
                 onChange={(e) => setCaptureText(e.target.value)}
@@ -1706,89 +1707,6 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
               </div>
             </div>
           )}
-        </div>
-
-        {/* ===================================================================== */}
-        {/* 4. DOCK INFERIOR FLUTUANTE (Fiel à barra centralizada do modelo)      */}
-        {/* ===================================================================== */}
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40">
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-[#18181d]/95 border border-white/15 shadow-[0_12px_40px_rgba(0,0,0,0.85)] backdrop-blur-xl">
-            {/* Pill Ativo: Início */}
-            <button
-              type="button"
-              onClick={() => onTabChange('home')}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 text-white text-xs font-semibold transition-all cursor-pointer"
-            >
-              <LayoutGrid size={13} />
-              <span>Início</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onTabChange('projects')}
-              className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-              title="Tarefas & Projetos"
-            >
-              <CheckSquare size={15} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onTabChange('calendar')}
-              className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-              title="Agenda"
-            >
-              <Calendar size={15} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onTabChange('more')}
-              className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-              title="Notas & Mais"
-            >
-              <FileText size={15} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onTabChange('goals')}
-              className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-              title="Hábitos & Metas"
-            >
-              <Repeat size={15} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onTabChange('focus')}
-              className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-              title="Modo Foco"
-            >
-              <Timer size={15} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onTabChange('finances')}
-              className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-              title="Finanças"
-            >
-              <BarChart3 size={15} />
-            </button>
-
-            {/* Botão Circular Branco '+' para Focar na Captura Rápida */}
-            <button
-              type="button"
-              onClick={() => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className="ml-1 w-7 h-7 rounded-full bg-white text-black hover:bg-zinc-200 flex items-center justify-center shadow transition-transform active:scale-95 cursor-pointer"
-              title="Nova tarefa ou nota rápida"
-            >
-              <Plus size={15} strokeWidth={2.5} />
-            </button>
-          </div>
         </div>
 
       </div>
