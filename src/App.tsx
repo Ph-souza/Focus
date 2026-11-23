@@ -429,8 +429,8 @@ function Dashboard() {
         onOpenSmartCapture={() => setIsSmartCaptureOpen(true)}
       />
       
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-24 md:p-8">
-        <div className="w-full max-w-[1536px] mx-auto border-transparent">
+      <main className={`flex-1 overflow-y-auto px-4 pt-4 pb-24 ${activeTab === 'home' ? 'md:p-0' : 'md:p-8'}`}>
+        <div className={`w-full ${activeTab === 'home' ? 'max-w-none' : 'max-w-[1536px]'} mx-auto border-transparent`}>
           {renderContent()}
         </div>
       </main>
