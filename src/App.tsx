@@ -429,8 +429,8 @@ function Dashboard() {
         onOpenSmartCapture={() => setIsSmartCaptureOpen(true)}
       />
       
-      <main className={`flex-1 overflow-y-auto px-4 pt-4 pb-24 ${activeTab === 'home' ? 'md:p-0' : 'md:px-8 md:pt-8 md:pb-28'}`}>
-        <div className={`w-full ${activeTab === 'home' ? 'max-w-none' : 'max-w-[1536px]'} mx-auto border-transparent`}>
+      <main className={`flex-1 overflow-y-auto px-4 pt-4 pb-24 ${activeTab === 'home' ? 'md:p-0' : 'md:px-6 md:pt-5 md:pb-20'}`}>
+        <div className={`w-full ${activeTab === 'home' ? 'max-w-none' : 'max-w-[1440px]'} mx-auto border-transparent`}>
           {renderContent()}
         </div>
       </main>

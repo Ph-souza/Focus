@@ -229,7 +229,7 @@ export function TabMore({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col gap-5 p-0 md:p-6 max-w-3xl mx-auto pb-8"
+      className="flex flex-col gap-4 p-0 max-w-3xl mx-auto pb-2"
     >
       {/* ========================================================= */}
       {/* 1. CABEÇALHO E BUSCA (Search Bar 100% largura)            */}

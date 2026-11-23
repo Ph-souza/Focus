@@ -374,7 +374,7 @@ ${recentTasks || 'Nenhuma tarefa pendente/recente.'}`;
     <motion.div 
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="max-w-2xl mx-auto h-[calc(100vh-120px)] md:h-[calc(100vh-80px)] bg-[#121216] border border-[#27272a] rounded-2xl p-5 flex flex-col gap-4 text-white relative shadow-2xl overflow-hidden"
+      className="max-w-2xl mx-auto h-[calc(100vh-120px)] md:h-[calc(100vh-110px)] bg-[#121216] border border-[#27272a] rounded-2xl p-5 flex flex-col gap-4 text-white relative shadow-2xl overflow-hidden"
     >
       <div className="flex items-center justify-between z-10">
         <div className="flex items-center gap-3">

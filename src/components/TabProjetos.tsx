@@ -863,7 +863,7 @@ export function TabProjetos({ user, onTabChange }: TabProjetosProps) {
     <motion.div 
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col gap-6 p-0 md:p-8 max-w-[1560px] mx-auto w-full pb-16"
+      className="flex flex-col gap-5 p-0 max-w-[1440px] mx-auto w-full pb-4"
     >
       {/* Toast de notificação suave */}
       <AnimatePresence>

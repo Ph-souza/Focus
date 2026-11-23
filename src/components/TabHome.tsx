@@ -1030,14 +1030,14 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
 
       {/* ========================================================================= */}
       {/* DESKTOP VIEW (Fiel ao novo modelo com Capa de Montanha, Quick Capture,    */}
-      {/* Grid HOJE de 3 Colunas e Dock Flutuante Inferior)                         */}
+      {/* Grid HOJE de 3 Colunas e Dock Flutuante Inferior - Otimizado para 100vh)  */}
       {/* ========================================================================= */}
-      <div className="hidden md:flex flex-col min-h-screen bg-[#0b0b0e] text-zinc-100 relative pb-28 select-none">
+      <div className="hidden md:flex flex-col min-h-screen bg-[#0b0b0e] text-zinc-100 relative pb-16 select-none">
 
         {/* ===================================================================== */}
         {/* 1. HERO BANNER COM CAPA MONOCROMÁTICA & TOP BAR                       */}
         {/* ===================================================================== */}
-        <div className="relative w-full h-[350px] lg:h-[380px] overflow-hidden shrink-0">
+        <div className="relative w-full h-[250px] lg:h-[275px] xl:h-[300px] overflow-hidden shrink-0">
           {/* Imagem de Capa com filtro P&B / contraste dramático igual ao modelo */}
           <img
             src={currentCover.url}
@@ -1050,7 +1050,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
           <div className="absolute inset-0 bg-radial from-transparent via-black/20 to-[#0b0b0e]/90" />
 
           {/* Barra Superior (Logo à esquerda | Buscar, Próximas alterações, Sino, Avatar à direita) */}
-          <header className="relative z-20 flex items-center justify-between px-7 pt-4">
+          <header className="relative z-20 flex items-center justify-between px-7 pt-3.5">
             {/* Logo Circular Duplo estilo modelo */}
             <button
               onClick={() => onTabChange('home')}
@@ -1117,8 +1117,8 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
           </header>
 
           {/* Saudação Centralizada sobre a Montanha */}
-          <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 mt-10 lg:mt-12">
-            <h1 className="text-2xl lg:text-[32px] font-bold text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.75)]">
+          <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 mt-5 lg:mt-7">
+            <h1 className="text-2xl lg:text-[28px] font-bold text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.75)]">
               {greeting}, {firstName}. O que vamos fazer hoje?
             </h1>
 
@@ -1126,7 +1126,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
             <button
               type="button"
               onClick={() => onTabChange('calendar')}
-              className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 hover:bg-black/60 border border-white/10 backdrop-blur-md text-[11px] font-medium text-amber-300/95 transition-colors cursor-pointer"
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 hover:bg-black/60 border border-white/10 backdrop-blur-md text-[11px] font-medium text-amber-300/95 transition-colors cursor-pointer"
             >
               <AlertTriangle size={12} className="text-amber-400 shrink-0" />
               <span>
@@ -1138,7 +1138,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
           </div>
 
           {/* Créditos da Foto e Botão "Trocar capa" no canto inferior direito do Hero */}
-          <div className="absolute right-8 bottom-14 z-20 flex items-center gap-3 text-[11px] text-zinc-400">
+          <div className="absolute right-8 bottom-12 z-20 flex items-center gap-3 text-[11px] text-zinc-400">
             <span className="hidden sm:inline opacity-80">
               Foto de {currentCover.author} no Unsplash
             </span>
@@ -1156,14 +1156,14 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
         {/* ===================================================================== */}
         {/* 2. CAIXA CENTRAL DE CAPTURA RÁPIDA (Tarefa | Nota)                    */}
         {/* ===================================================================== */}
-        <div className="relative z-30 -mt-16 px-6">
-          <div className="w-full max-w-[600px] mx-auto rounded-2xl bg-[#141418]/95 border border-white/10 shadow-[0_18px_50px_rgba(0,0,0,0.85)] backdrop-blur-xl p-4">
+        <div className="relative z-30 -mt-14 px-6">
+          <div className="w-full max-w-[580px] mx-auto rounded-2xl bg-[#141418]/95 border border-white/10 shadow-[0_18px_50px_rgba(0,0,0,0.85)] backdrop-blur-xl px-4 py-3">
             {/* Abas Tarefa / Nota */}
-            <div className="flex items-center gap-4 border-b border-white/10 pb-2.5 mb-3">
+            <div className="flex items-center gap-4 border-b border-white/10 pb-2 mb-2.5">
               <button
                 type="button"
                 onClick={() => setCaptureMode('task')}
-                className={`flex items-center gap-1.5 text-xs font-semibold pb-1.5 -mb-[11px] border-b-2 transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 text-xs font-semibold pb-1.5 -mb-[9px] border-b-2 transition-all cursor-pointer ${
                   captureMode === 'task'
                     ? 'text-white border-white'
                     : 'text-zinc-500 border-transparent hover:text-zinc-300'
@@ -1176,7 +1176,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
               <button
                 type="button"
                 onClick={() => setCaptureMode('note')}
-                className={`flex items-center gap-1.5 text-xs font-semibold pb-1.5 -mb-[11px] border-b-2 transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 text-xs font-semibold pb-1.5 -mb-[9px] border-b-2 transition-all cursor-pointer ${
                   captureMode === 'note'
                     ? 'text-white border-white'
                     : 'text-zinc-500 border-transparent hover:text-zinc-300'
@@ -1199,10 +1199,10 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                     ? 'O que precisa ser feito?'
                     : 'Escreva uma nota ou lembrete rápido para hoje...'
                 }
-                className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none py-1.5"
+                className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none py-1"
               />
 
-              <div className="flex items-center justify-between mt-3 pt-1">
+              <div className="flex items-center justify-between mt-2 pt-0.5">
                 <div className="flex items-center gap-2.5 flex-wrap">
                   {captureMode === 'task' ? (
                     <div className="relative">
@@ -1270,9 +1270,9 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
         {/* ===================================================================== */}
         {/* 3. SEÇÃO "HOJE" + BOTÃO PERSONALIZAR + GRID DE 3 COLUNAS              */}
         {/* ===================================================================== */}
-        <div className="w-full max-w-[1160px] mx-auto px-6 mt-9">
+        <div className="w-full max-w-[1140px] mx-auto px-6 mt-5">
           {/* Cabeçalho da seção HOJE */}
-          <div className="flex items-center justify-between mb-3.5">
+          <div className="flex items-center justify-between mb-2.5">
             <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
               HOJE
             </span>
@@ -1319,15 +1319,15 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
           </div>
 
           {/* GRID PRINCIPAL DE 3 COLUNAS IGUAL AO MODELO */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 items-stretch">
 
             {/* =============================================================== */}
             {/* CARD 1: COMO FOI HOJE? (Humor, Energia, Nota e Barra de 14 dias)*/}
             {/* =============================================================== */}
-            <div className="rounded-2xl bg-[#131317] border border-white/[0.08] p-5 flex flex-col justify-between shadow-lg">
+            <div className="rounded-2xl bg-[#131317] border border-white/[0.08] p-4 flex flex-col justify-between shadow-lg">
               <div>
                 {/* Header */}
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Smile size={15} className="text-zinc-400" />
                     <h2 className="text-xs font-bold text-zinc-100">Como foi hoje?</h2>
@@ -1336,7 +1336,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                 </div>
 
                 {/* Humor */}
-                <div className="flex items-center justify-between gap-2 mb-3.5">
+                <div className="flex items-center justify-between gap-2 mb-2.5">
                   <span className="text-[11px] text-zinc-400 font-medium w-14">Humor</span>
                   <div className="flex items-center gap-1.5 flex-1 justify-between">
                     {MOOD_EMOJIS.map((item) => {
@@ -1347,7 +1347,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                           type="button"
                           onClick={() => updateTodayCheckin({ mood: item.level })}
                           title={item.label}
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center text-base transition-all cursor-pointer border ${
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center text-base transition-all cursor-pointer border ${
                             isSelected
                               ? 'bg-amber-500/15 border-amber-400/60 scale-105 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
                               : 'bg-white/[0.03] border-white/[0.06] opacity-70 hover:opacity-100 hover:bg-white/[0.07]'
@@ -1361,7 +1361,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                 </div>
 
                 {/* Energia */}
-                <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center justify-between gap-2 mb-3">
                   <span className="text-[11px] text-zinc-400 font-medium w-14">Energia</span>
                   <div className="flex items-center gap-1.5 flex-1 justify-between">
                     {[1, 2, 3, 4, 5].map((lvl) => {
@@ -1372,7 +1372,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                           type="button"
                           onClick={() => updateTodayCheckin({ energy: lvl })}
                           title={`Energia ${lvl}/5`}
-                          className={`w-9 h-9 rounded-xl flex items-end justify-center gap-0.5 p-2 transition-all cursor-pointer border ${
+                          className={`w-8 h-8 rounded-xl flex items-end justify-center gap-0.5 p-1.5 transition-all cursor-pointer border ${
                             isSelected
                               ? 'bg-white/10 border-white/40 scale-105 shadow-sm'
                               : 'bg-white/[0.03] border-white/[0.06] opacity-70 hover:opacity-100 hover:bg-white/[0.07]'
@@ -1398,13 +1398,13 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                 </div>
 
                 {/* Input "Uma linha sobre o dia (opcional)" */}
-                <div className="mb-4">
+                <div className="mb-3">
                   <input
                     type="text"
                     value={todayCheckin.note}
                     onChange={(e) => updateTodayCheckin({ note: e.target.value })}
                     placeholder="Uma linha sobre o dia (opcional)"
-                    className="w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.07] text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-white/20 transition-colors"
+                    className="w-full px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.07] text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-white/20 transition-colors"
                   />
                 </div>
               </div>
@@ -1428,10 +1428,10 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
             {/* =============================================================== */}
             {/* CARD 2: HÁBITOS DE HOJE                                         */}
             {/* =============================================================== */}
-            <div className="rounded-2xl bg-[#131317] border border-white/[0.08] p-5 flex flex-col justify-between shadow-lg">
+            <div className="rounded-2xl bg-[#131317] border border-white/[0.08] p-4 flex flex-col justify-between shadow-lg">
               <div>
                 {/* Header */}
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Flame size={15} className="text-zinc-400" />
                     <h2 className="text-xs font-bold text-zinc-100">Hábitos de hoje</h2>
@@ -1460,7 +1460,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                 </div>
 
                 {isAddingHabit && (
-                  <form onSubmit={handleCreateHabit} className="flex items-center gap-1.5 mb-3">
+                  <form onSubmit={handleCreateHabit} className="flex items-center gap-1.5 mb-2.5">
                     <input
                       type="text"
                       value={newHabitTitle}
@@ -1479,7 +1479,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                 )}
 
                 {/* Lista de Hábitos */}
-                <div className="space-y-2.5 max-h-[250px] overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-[190px] overflow-y-auto pr-1">
                   {habits.map((hab, idx) => {
                     // Alterna cor do check entre esmeralda e azul igual ao modelo
                     const checkColorClass = hab.completedToday
@@ -1499,9 +1499,9 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                         <div className="flex items-center gap-2.5 min-w-0">
                           <button
                             type="button"
-                            className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${checkColorClass}`}
+                            className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${checkColorClass}`}
                           >
-                            {hab.completedToday && <Check size={12} strokeWidth={3} />}
+                            {hab.completedToday && <Check size={11} strokeWidth={3} />}
                           </button>
 
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -1558,10 +1558,10 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
             {/* =============================================================== */}
             {/* CARD 3: TAREFAS (Com tags de projeto, horário e atraso)         */}
             {/* =============================================================== */}
-            <div className="rounded-2xl bg-[#131317] border border-white/[0.08] p-5 flex flex-col justify-between shadow-lg">
+            <div className="rounded-2xl bg-[#131317] border border-white/[0.08] p-4 flex flex-col justify-between shadow-lg">
               <div>
                 {/* Header */}
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <CheckSquare size={15} className="text-zinc-400" />
                     <h2 className="text-xs font-bold text-zinc-100">Tarefas</h2>
@@ -1573,9 +1573,9 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                 </div>
 
                 {/* Lista de Tarefas */}
-                <div className="space-y-2.5 max-h-[225px] overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-[165px] overflow-y-auto pr-1">
                   {unifiedDesktopTasks.length > 0 ? (
-                    unifiedDesktopTasks.slice(0, 6).map((item) => (
+                    unifiedDesktopTasks.slice(0, 5).map((item) => (
                       <div
                         key={`${item.source}-${item.id}`}
                         onClick={() => handleToggleUnifiedTask(item)}
@@ -1640,7 +1640,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                       </div>
                     ))
                   ) : (
-                    <div className="py-8 text-center text-xs text-zinc-500">
+                    <div className="py-6 text-center text-xs text-zinc-500">
                       Nenhuma tarefa pendente para hoje. Use a caixa acima para criar!
                     </div>
                   )}
@@ -1648,7 +1648,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
               </div>
 
               {/* Link inferior "Ver as X tarefas →" */}
-              <div className="pt-3 mt-2 border-t border-white/[0.06]">
+              <div className="pt-2.5 mt-1.5 border-t border-white/[0.06]">
                 <button
                   type="button"
                   onClick={() => onTabChange('projects')}

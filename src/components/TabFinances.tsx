@@ -527,7 +527,7 @@ export function TabFinances({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col gap-4 md:gap-6 p-0 md:p-8"
+      className="flex flex-col gap-4 md:gap-5 p-0"
     >
       {/* Create Transaction Modal */}
       <AnimatePresence>
@@ -1138,7 +1138,7 @@ export function TabFinances({
       {/* ========================================================= */}
       {/* DESKTOP VIEW (Preserved from high-fidelity Desktop Overhaul) */}
       {/* ========================================================= */}
-      <div className="hidden md:flex flex-col h-full gap-8">
+      <div className="hidden md:flex flex-col h-full gap-5">
         {/* Desktop Header */}
         <div className="flex items-center justify-between">
           <div>

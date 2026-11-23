@@ -200,7 +200,7 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col gap-4 md:gap-6 p-0 md:p-8"
+      className="flex flex-col gap-4 md:gap-5 p-0"
     >
       {/* MOBILE VIEW */}
       <div className="block md:hidden space-y-4">
@@ -258,10 +258,10 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
 
       {/* DESKTOP VIEW */}
       <div className="hidden md:flex flex-col h-full">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Foco</h1>
-            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Menos distração. Mais progresso.</p>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Foco</h1>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">Menos distração. Mais progresso.</p>
           </div>
           <button 
             onClick={() => setIsDeepModeActive(true)}
@@ -271,63 +271,63 @@ export function TabFocus({ onTabChange }: TabFocusProps) {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {/* Left Column (Timer) */}
-          <div className="flex flex-col gap-8">
-            <div className="glass-card p-8 flex flex-col items-center relative overflow-hidden">
-              <div className="flex items-center gap-2 glass-pill p-1.5 rounded-2xl mb-12 relative z-10 w-max mx-auto shadow-sm">
-                <button onClick={() => handleModeChange('pomodoro')} className={`px-6 py-2 rounded-xl font-bold text-xs ${activeMode === 'pomodoro' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Pomodoro</button>
-                <button onClick={() => handleModeChange('timer')} className={`px-6 py-2 rounded-xl font-bold text-xs ${activeMode === 'timer' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Tarefa</button>
-                <button onClick={() => handleModeChange('ritmo')} className={`px-6 py-2 rounded-xl font-bold text-xs ${activeMode === 'ritmo' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Estatísticas</button>
+          <div className="flex flex-col gap-4">
+            <div className="glass-card p-6 flex flex-col items-center relative overflow-hidden">
+              <div className="flex items-center gap-2 glass-pill p-1.5 rounded-2xl mb-6 relative z-10 w-max mx-auto shadow-sm">
+                <button onClick={() => handleModeChange('pomodoro')} className={`px-5 py-1.5 rounded-xl font-bold text-xs ${activeMode === 'pomodoro' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Pomodoro</button>
+                <button onClick={() => handleModeChange('timer')} className={`px-5 py-1.5 rounded-xl font-bold text-xs ${activeMode === 'timer' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Tarefa</button>
+                <button onClick={() => handleModeChange('ritmo')} className={`px-5 py-1.5 rounded-xl font-bold text-xs ${activeMode === 'ritmo' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Estatísticas</button>
               </div>
 
-              <div className="relative w-72 h-72 flex flex-col items-center justify-center mb-10 shrink-0">
+              <div className="relative w-56 h-56 flex flex-col items-center justify-center mb-6 shrink-0">
                 <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-200/60 dark:text-slate-800" />
                   <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="6" strokeDasharray="289" strokeDashoffset={289 - (289 * visualProgressPercent) / 100} strokeLinecap="round" className="text-blue-600 transition-all duration-500" />
                 </svg>
                 <div className="flex flex-col items-center justify-center relative z-10">
-                  <span className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-2">Foco</span>
-                  <span className="text-7xl font-black text-slate-900 dark:text-white tabular-nums leading-none mb-6">{formatTime(timeRemaining)}</span>
+                  <span className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">Foco</span>
+                  <span className="text-5xl font-black text-slate-900 dark:text-white tabular-nums leading-none mb-4">{formatTime(timeRemaining)}</span>
                   
                   <div className="flex items-center gap-4">
-                    <button onClick={handleTogglePlay} className="w-16 h-16 rounded-full bg-blue-600 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_6px_16px_rgba(37,99,235,0.22)]">
-                      {isRunning ? <Pause size={24} className="fill-current" /> : <Play size={24} className="ml-1 fill-current" />}
+                    <button onClick={handleTogglePlay} className="w-13 h-13 rounded-full bg-blue-600 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_6px_16px_rgba(37,99,235,0.22)]">
+                      {isRunning ? <Pause size={20} className="fill-current" /> : <Play size={20} className="ml-1 fill-current" />}
                     </button>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-6">
-                <button onClick={handleStop} className="text-sm font-medium text-slate-500 hover:text-rose-500 flex items-center gap-2"><Square size={14} className="fill-current" /> Parar</button>
-                <button onClick={handleSkip} className="text-sm font-medium text-slate-500 hover:text-slate-700 flex items-center gap-2"><SkipForward size={16} /> Pular</button>
+                <button onClick={handleStop} className="text-xs font-medium text-slate-500 hover:text-rose-500 flex items-center gap-2"><Square size={13} className="fill-current" /> Parar</button>
+                <button onClick={handleSkip} className="text-xs font-medium text-slate-500 hover:text-slate-700 flex items-center gap-2"><SkipForward size={15} /> Pular</button>
               </div>
             </div>
             
             {/* Active task details */}
             {activeTask.id && (
-              <div className="glass-card p-6 flex flex-col gap-4 border-l-4 border-l-blue-500">
+              <div className="glass-card p-4 flex flex-col gap-2 border-l-4 border-l-blue-500">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-black text-slate-800 dark:text-white truncate pr-2 leading-tight">
+                  <h3 className="text-sm font-black text-slate-800 dark:text-white truncate pr-2 leading-tight">
                     {activeTask.title}
                   </h3>
                   <button 
                     onClick={() => handleTaskComplete(activeTask.id as string)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white text-xs font-bold transition-all cursor-pointer shrink-0 shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white text-xs font-bold transition-all cursor-pointer shrink-0 shadow-sm"
                   >
-                    <Check size={14} className="stroke-[3]" /> Concluir tarefa
+                    <Check size={13} className="stroke-[3]" /> Concluir tarefa
                   </button>
                 </div>
-                {activeTask.description && <p className="text-sm font-medium text-slate-500">{activeTask.description}</p>}
+                {activeTask.description && <p className="text-xs font-medium text-slate-500">{activeTask.description}</p>}
               </div>
             )}
           </div>
 
           {/* Right Column: Task Selection */}
-          <div className="flex flex-col gap-6">
-            <div className="glass-card p-8 h-full flex flex-col shadow-sm">
-              <h2 className="font-black text-xl text-slate-900 dark:text-white mb-6 flex items-center gap-3">
-                <Target size={22} className="text-blue-600 dark:text-blue-400" />
+          <div className="flex flex-col gap-4">
+            <div className="glass-card p-6 h-full flex flex-col shadow-sm">
+              <h2 className="font-black text-base text-slate-900 dark:text-white mb-4 flex items-center gap-2.5">
+                <Target size={19} className="text-blue-600 dark:text-blue-400" />
                 Selecione a Tarefa do Dia
               </h2>
               
