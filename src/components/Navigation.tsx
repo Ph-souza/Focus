@@ -77,11 +77,11 @@ export function Navigation({
   return (
     <>
       {/* =================================================================== */}
-      {/* DESKTOP FLOATING BOTTOM DOCK (Substitui a antiga Sidebar lateral)   */}
+      {/* DESKTOP FLOATING BOTTOM DOCK (Padrão Glassmorphism do Mobile)       */}
       {/* =================================================================== */}
       <nav
         aria-label="Navegação principal"
-        className="hidden md:flex fixed bottom-5 left-1/2 -translate-x-1/2 z-40 items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-[#18181d]/95 border border-white/15 shadow-[0_14px_45px_rgba(0,0,0,0.85)] backdrop-blur-xl select-none"
+        className="hidden md:flex fixed bottom-4 left-1/2 -translate-x-1/2 z-40 glass-card !rounded-full items-center gap-1.5 px-3 py-2 shadow-[0_12px_35px_rgba(0,0,0,0.15)] dark:shadow-[0_14px_36px_-4px_rgba(0,0,0,0.6),0_0_20px_rgba(59,130,246,0.12)] border border-white/80 dark:border-blue-500/30 select-none"
       >
         {desktopDockItems.map((item) => {
           const isActive =
@@ -94,20 +94,22 @@ export function Navigation({
               type="button"
               onClick={() => onTabChange(item.id)}
               title={item.label}
-              className={`flex items-center gap-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-full text-xs transition-all duration-200 relative cursor-pointer ${
                 isActive
-                  ? 'px-3.5 py-1.5 bg-white/12 text-white shadow-sm border border-white/10'
-                  : 'p-2 text-zinc-400 hover:text-white hover:bg-white/5'
+                  ? 'px-3.5 py-1.5 bg-blue-500/15 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                  : 'p-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-white/40 dark:hover:bg-white/5 font-medium'
               }`}
             >
-              {item.icon}
+              <div className={`transition-all duration-200 ${isActive ? 'scale-105 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'opacity-85'}`}>
+                {item.icon}
+              </div>
               {isActive && <span>{item.label}</span>}
             </button>
           );
         })}
 
         {/* Divisor vertical sutil */}
-        <div className="w-px h-4 bg-white/10 mx-0.5" />
+        <div className="w-px h-4 bg-slate-300/70 dark:bg-blue-500/25 mx-0.5" />
 
         {/* Toggle de Tema Claro/Escuro */}
         {onToggleDarkMode && (
@@ -115,9 +117,9 @@ export function Navigation({
             type="button"
             onClick={onToggleDarkMode}
             title={isDarkMode ? 'Alternar para tema claro' : 'Alternar para tema escuro'}
-            className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+            className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-white/40 dark:hover:bg-white/5 transition-colors cursor-pointer"
           >
-            {isDarkMode ? <Moon size={14} className="text-blue-400" /> : <Sun size={14} className="text-amber-400" />}
+            {isDarkMode ? <Moon size={14} className="text-blue-400" /> : <Sun size={14} className="text-amber-500" />}
           </button>
         )}
 
@@ -126,7 +128,7 @@ export function Navigation({
           type="button"
           onClick={onOpenProfile}
           title={user?.name ? `Perfil (${user.name})` : 'Perfil'}
-          className="w-7 h-7 rounded-full overflow-hidden border border-white/20 bg-zinc-800 hover:ring-2 hover:ring-white/30 flex items-center justify-center text-[11px] font-bold text-white transition-all cursor-pointer shrink-0"
+          className="w-7 h-7 rounded-full overflow-hidden border border-white/80 dark:border-blue-500/30 bg-blue-500/15 text-blue-600 dark:text-blue-400 hover:ring-2 hover:ring-blue-500/40 flex items-center justify-center text-[11px] font-bold transition-all cursor-pointer shrink-0 shadow-sm"
         >
           {user?.photoURL ? (
             <img src={user.photoURL} alt={user.name} className="w-full h-full object-cover" />
@@ -135,12 +137,12 @@ export function Navigation({
           )}
         </button>
 
-        {/* Botão Circular Branco '+' para Captura Rápida */}
+        {/* Botão Circular '+' para Captura Rápida com brilho neon/glass */}
         <button
           type="button"
           onClick={handleQuickPlus}
           title="Captura rápida"
-          className="ml-0.5 w-7 h-7 rounded-full bg-white text-black hover:bg-zinc-200 flex items-center justify-center shadow transition-transform active:scale-95 cursor-pointer shrink-0"
+          className="ml-0.5 w-7 h-7 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shadow-[0_0_12px_rgba(59,130,246,0.5)] transition-all active:scale-95 cursor-pointer shrink-0"
         >
           <Plus size={15} strokeWidth={2.5} />
         </button>
