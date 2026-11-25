@@ -61,8 +61,11 @@ export interface Task {
   priority: 'low' | 'medium' | 'high';
   deadline?: string;
   description?: string;
+  category?: string;
   date?: string;
   time?: string;
+  completedPomodoros?: number;
+  totalFocusMinutes?: number;
   createdAt?: any;
 }
 
@@ -81,6 +84,10 @@ export interface Rotina {
   date: string;
   time: string;
   completed: boolean;
+  category?: string;
+  subtitle?: string;
+  completedPomodoros?: number;
+  totalFocusMinutes?: number;
   createdAt?: any;
 }
 

@@ -444,7 +444,12 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
 
     // Evita textos duplicados quando salvo em ambos
     const seen = new Set<string>();
-    const merged: typeof todayDaily = [];
+    const merged: Array<{
+      id: string;
+      texto: string;
+      dateLabel: string;
+      source: 'daily' | 'quick';
+    }> = [];
     [...todayDaily, ...fromQuickNotes, ...otherDaily].forEach(item => {
       const key = item.texto.trim().toLowerCase();
       if (!seen.has(key)) {

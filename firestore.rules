@@ -65,6 +65,10 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
+    match /{path=**}/focus_sessions/{sessionId} {
+      allow read: if isAdmin();
+    }
+
     // =========================================================================
     // COLEÇÕES GLOBAIS DE FATURAMENTO, ASSINATURAS E TRANSAÇÕES (Admin Global Read)
     // =========================================================================

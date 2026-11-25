@@ -11,7 +11,7 @@ import { TabChat } from './components/TabChat';
 import { TabMore } from './components/TabMore';
 import { TabCalendar } from './components/TabCalendar';
 import { TabProjetos } from './components/TabProjetos';
-import { TabFocus } from './components/TabFocus';
+import { FocusPage, FocusAvailableTask } from './features/focus/FocusPage';
 import { TabFinances } from './components/TabFinances';
 import { TabHelp } from './components/TabHelp';
 import { ToastNotifications } from './components/ToastNotifications';
@@ -342,6 +342,31 @@ function Dashboard() {
     await logout();
   };
 
+  const focusAvailableTasks: FocusAvailableTask[] = [
+    ...tasks
+      .filter((t) => !t.completed)
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        category: t.category || t.description || 'Geral',
+        source: 'tasks' as const,
+      })),
+    ...rotinas
+      .filter(
+        (r) =>
+          !r.completed &&
+          !tasks.some(
+            (t) => !t.completed && t.title.trim().toLowerCase() === r.title.trim().toLowerCase()
+          )
+      )
+      .map((r) => ({
+        id: r.id,
+        title: r.title,
+        category: r.category || r.subtitle || 'Agenda',
+        source: 'rotinas' as const,
+      })),
+  ];
+
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
@@ -351,7 +376,7 @@ function Dashboard() {
       case 'projects':
         return <TabProjetos user={user} onTabChange={setActiveTab} />;
       case 'focus':
-        return <TabFocus onTabChange={setActiveTab} />;
+        return <FocusPage userId={user.id} availableTasks={focusAvailableTasks} />;
       case 'finances':
         return <TabFinances transactions={transactions} goals={goals} user={user} onTabChange={setActiveTab} />;
       case 'transactions':
@@ -429,13 +454,25 @@ function Dashboard() {
         onOpenSmartCapture={() => setIsSmartCaptureOpen(true)}
       />
       
-      <main className={`flex-1 overflow-y-auto px-4 pt-4 pb-24 ${activeTab === 'home' ? 'md:p-0' : 'md:px-6 md:pt-5 md:pb-20'}`}>
-        <div className={`w-full ${activeTab === 'home' ? 'max-w-none' : 'max-w-[1440px]'} mx-auto border-transparent`}>
+      <main
+        className={`flex-1 overflow-y-auto ${
+          activeTab === 'focus'
+            ? 'p-0 md:p-0'
+            : activeTab === 'home'
+            ? 'px-4 pt-4 pb-24 md:p-0'
+            : 'px-4 pt-4 pb-24 md:px-6 md:pt-5 md:pb-20'
+        }`}
+      >
+        <div
+          className={`w-full ${
+            activeTab === 'home' || activeTab === 'focus' ? 'max-w-none' : 'max-w-[1440px]'
+          } mx-auto border-transparent`}
+        >
           {renderContent()}
         </div>
       </main>
 
-      {activeTab !== 'chat' && (
+      {activeTab !== 'chat' && activeTab !== 'focus' && (
         <QuickChat user={user} onOpenFullChat={() => setActiveTab('chat')} activeTab={activeTab} transactions={transactions} tasks={tasks} />
       )}
     </div>
