@@ -755,26 +755,26 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
       {/* Modal de Busca Rápida (Ctrl+K) */}
       <AnimatePresence>
         {isSearchModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 p-4 bg-black/70 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 p-4 bg-black/60 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: -10 }}
-              className="w-full max-w-lg bg-[#141418] border border-white/10 rounded-2xl shadow-2xl overflow-hidden text-white"
+              className="w-full max-w-lg glass-card overflow-hidden shadow-2xl border border-white/80 dark:border-blue-500/30"
             >
-              <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/10">
-                <Search size={17} className="text-zinc-400" />
+              <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-200/70 dark:border-blue-500/20">
+                <Search size={17} className="text-blue-500" />
                 <input
                   type="text"
                   value={searchFilterText}
                   onChange={(e) => setSearchFilterText(e.target.value)}
                   placeholder="Buscar tarefas, hábitos, projetos ou finanças..."
                   autoFocus
-                  className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 focus:outline-none"
+                  className="flex-1 bg-transparent text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none"
                 />
                 <button
                   onClick={() => setIsSearchModalOpen(false)}
-                  className="text-zinc-400 hover:text-white p-1 rounded-lg"
+                  className="text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-lg"
                 >
                   <X size={16} />
                 </button>
@@ -790,23 +790,23 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                         setIsSearchModalOpen(false);
                         onTabChange('calendar');
                       }}
-                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/5 text-left transition-colors"
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-blue-500/10 text-left transition-colors group"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <CheckSquare size={14} className="text-zinc-400 shrink-0" />
-                        <span className="text-xs font-medium text-zinc-200 truncate">{item.title}</span>
+                        <CheckSquare size={14} className="text-blue-500 shrink-0" />
+                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">{item.title}</span>
                       </div>
-                      <span className="text-[10px] text-zinc-400">{item.dateLabel}</span>
+                      <span className="text-[10px] font-medium text-slate-400">{item.dateLabel}</span>
                     </button>
                   ))}
-                <div className="pt-2 border-t border-white/5 flex items-center justify-between px-2 text-[11px] text-zinc-500">
+                <div className="pt-2 border-t border-slate-200/60 dark:border-blue-500/15 flex items-center justify-between px-2 text-[11px] text-slate-500 dark:text-slate-400">
                   <span>Atalhos rápidos</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => { setIsSearchModalOpen(false); onTabChange('projects'); }} className="hover:text-zinc-300">Projetos</button>
+                  <div className="flex gap-2 font-semibold">
+                    <button onClick={() => { setIsSearchModalOpen(false); onTabChange('projects'); }} className="hover:text-blue-500">Projetos</button>
                     <span>•</span>
-                    <button onClick={() => { setIsSearchModalOpen(false); onTabChange('finances'); }} className="hover:text-zinc-300">Finanças</button>
+                    <button onClick={() => { setIsSearchModalOpen(false); onTabChange('finances'); }} className="hover:text-blue-500">Finanças</button>
                     <span>•</span>
-                    <button onClick={() => { setIsSearchModalOpen(false); onTabChange('focus'); }} className="hover:text-zinc-300">Modo Foco</button>
+                    <button onClick={() => { setIsSearchModalOpen(false); onTabChange('focus'); }} className="hover:text-blue-500">Modo Foco</button>
                   </div>
                 </div>
               </div>
@@ -1029,50 +1029,54 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
 
 
       {/* ========================================================================= */}
-      {/* DESKTOP VIEW (Fiel ao novo modelo com Capa de Montanha, Quick Capture,    */}
-      {/* Grid HOJE de 3 Colunas e Dock Flutuante Inferior - Otimizado para 100vh)  */}
+      {/* DESKTOP VIEW (Layout do modelo com a Identidade Visual do Nexus Focus:    */}
+      {/* Glassmorphism, Blue Glow, Tipografia e Suporte a Tema Claro/Escuro)       */}
       {/* ========================================================================= */}
-      <div className="hidden md:flex flex-col min-h-screen bg-[#0b0b0e] text-zinc-100 relative pb-16 select-none">
+      <div className="hidden md:flex flex-col min-h-screen text-slate-900 dark:text-slate-100 relative pb-16 select-none">
 
         {/* ===================================================================== */}
-        {/* 1. HERO BANNER COM CAPA MONOCROMÁTICA & TOP BAR                       */}
+        {/* 1. HERO BANNER COM CAPA & IDENTIDADE VISUAL NEXUS FOCUS               */}
         {/* ===================================================================== */}
         <div className="relative w-full h-[250px] lg:h-[275px] xl:h-[300px] overflow-hidden shrink-0">
-          {/* Imagem de Capa com filtro P&B / contraste dramático igual ao modelo */}
+          {/* Imagem de Capa com filtro sofisticado e harmonia com o azul do Focus */}
           <img
             src={currentCover.url}
             alt={currentCover.label}
             className="w-full h-full object-cover object-center grayscale contrast-125 brightness-75 scale-[1.01] transition-all duration-700"
           />
 
-          {/* Gradientes escuros para fusão suave com o fundo #0b0b0e */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/25 to-[#0b0b0e]" />
-          <div className="absolute inset-0 bg-radial from-transparent via-black/20 to-[#0b0b0e]/90" />
+          {/* Gradientes com toque azulado Nexus Focus fundindo com o background do app */}
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/65 via-blue-950/35 to-[#f1f5f9] dark:to-[#030712]" />
+          <div className="absolute inset-0 bg-radial from-blue-500/10 via-transparent to-black/40 pointer-events-none" />
 
-          {/* Barra Superior (Logo à esquerda | Buscar, Próximas alterações, Sino, Avatar à direita) */}
+          {/* Barra Superior (Marca NEXUS FOCUS à esquerda | Buscar, Próximas alterações, Sino, Avatar à direita) */}
           <header className="relative z-20 flex items-center justify-between px-7 pt-3.5">
-            {/* Logo Circular Duplo estilo modelo */}
+            {/* Brand Header Oficial Nexus Focus */}
             <button
               onClick={() => onTabChange('home')}
-              className="flex items-center gap-2.5 text-white/90 hover:text-white transition-opacity cursor-pointer"
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-slate-900/55 hover:bg-slate-900/75 backdrop-blur-xl border border-white/15 dark:border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.2)] transition-all cursor-pointer group"
               title="Nexus Focus"
             >
-              <div className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-md border border-white/15 flex items-center justify-center">
-                <AuraLogo className="w-5 h-5" />
+              <div className="w-7 h-7 flex items-center justify-center text-blue-500">
+                <AuraLogo className="w-6 h-6 drop-shadow-[0_0_10px_rgba(59,130,246,0.6)] group-hover:scale-105 transition-transform" />
+              </div>
+              <div className="flex items-center gap-1 text-left">
+                <span className="text-xs font-black tracking-tight text-white leading-none">NEXUS</span>
+                <span className="text-xs font-black tracking-tight text-blue-400 leading-none">FOCUS</span>
               </div>
             </button>
 
-            {/* Ações à Direita */}
+            {/* Ações à Direita em Glass Pills com borda azulada */}
             <div className="flex items-center gap-2.5">
               {/* Botão Buscar Ctrl+K */}
               <button
                 type="button"
                 onClick={() => setIsSearchModalOpen(true)}
-                className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-zinc-900/75 hover:bg-zinc-900/95 border border-white/10 text-zinc-300 text-xs font-medium backdrop-blur-md transition-all cursor-pointer shadow-sm"
+                className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-slate-900/60 hover:bg-slate-900/80 border border-white/20 dark:border-blue-500/30 text-white text-xs font-semibold backdrop-blur-xl transition-all cursor-pointer shadow-[0_4px_15px_rgba(0,0,0,0.25)] hover:border-blue-400/50"
               >
-                <Search size={13} className="text-zinc-400" />
+                <Search size={13} className="text-blue-400" />
                 <span>Buscar</span>
-                <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-white/10 text-zinc-300 rounded">
+                <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-blue-500/20 text-blue-200 border border-blue-400/30 rounded">
                   Ctrl K
                 </kbd>
               </button>
@@ -1081,21 +1085,21 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
               <button
                 type="button"
                 onClick={() => onTabChange('projects')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-900/75 hover:bg-zinc-900/95 border border-white/10 text-zinc-300 text-xs font-medium backdrop-blur-md transition-all cursor-pointer shadow-sm"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/60 hover:bg-slate-900/80 border border-white/20 dark:border-blue-500/30 text-white text-xs font-semibold backdrop-blur-xl transition-all cursor-pointer shadow-[0_4px_15px_rgba(0,0,0,0.25)] hover:border-blue-400/50"
               >
-                <Sparkles size={13} className="text-amber-400" />
+                <Sparkles size={13} className="text-blue-400" />
                 <span>Próximas alterações</span>
               </button>
 
-              {/* Notificações com Badge Amarelo */}
+              {/* Notificações com Badge Azul/Amarelo */}
               <button
                 type="button"
                 onClick={() => setIsNotificationsOpen(true)}
-                className="relative w-8 h-8 rounded-full bg-zinc-900/75 hover:bg-zinc-900/95 border border-white/10 flex items-center justify-center text-zinc-200 backdrop-blur-md transition-all cursor-pointer"
+                className="relative w-8 h-8 rounded-full bg-slate-900/60 hover:bg-slate-900/80 border border-white/20 dark:border-blue-500/30 flex items-center justify-center text-white backdrop-blur-xl transition-all cursor-pointer shadow-[0_4px_15px_rgba(0,0,0,0.25)] hover:border-blue-400/50"
                 title="Notificações"
               >
-                <Bell size={14} />
-                <span className="absolute -top-1 -right-1 px-1 min-w-[16px] h-4 rounded-full bg-amber-400 text-black font-black text-[9px] flex items-center justify-center shadow">
+                <Bell size={14} className="text-blue-300" />
+                <span className="absolute -top-1 -right-1 px-1 min-w-[16px] h-4 rounded-full bg-blue-500 text-white font-black text-[9px] flex items-center justify-center shadow-[0_0_10px_rgba(59,130,246,0.8)]">
                   {Math.max(1, overdueCount + todayNotes.length)}
                 </span>
               </button>
@@ -1104,7 +1108,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
               <button
                 type="button"
                 onClick={onOpenProfile}
-                className="w-8 h-8 rounded-full overflow-hidden border border-white/25 bg-zinc-800 flex items-center justify-center text-xs font-bold text-white shadow-sm cursor-pointer hover:ring-2 hover:ring-white/30 transition-all"
+                className="w-8 h-8 rounded-full overflow-hidden border-2 border-blue-400/60 bg-blue-600 flex items-center justify-center text-xs font-bold text-white shadow-[0_0_12px_rgba(59,130,246,0.5)] cursor-pointer hover:scale-105 transition-all"
                 title="Perfil"
               >
                 {user?.photoURL ? (
@@ -1118,15 +1122,15 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
 
           {/* Saudação Centralizada sobre a Montanha */}
           <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 mt-5 lg:mt-7">
-            <h1 className="text-2xl lg:text-[28px] font-bold text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.75)]">
-              {greeting}, {firstName}. O que vamos fazer hoje?
+            <h1 className="text-2xl lg:text-[30px] font-black text-white tracking-tight drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]">
+              {greeting}, <span className="text-blue-400 drop-shadow-[0_0_14px_rgba(59,130,246,0.45)]">{firstName}</span>. O que vamos fazer hoje?
             </h1>
 
             {/* Alerta de Tarefas Atrasadas / Pendentes */}
             <button
               type="button"
               onClick={() => onTabChange('calendar')}
-              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 hover:bg-black/60 border border-white/10 backdrop-blur-md text-[11px] font-medium text-amber-300/95 transition-colors cursor-pointer"
+              className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-slate-900/65 hover:bg-slate-900/85 border border-blue-400/30 backdrop-blur-xl text-[11px] font-bold text-amber-300 shadow-[0_0_15px_rgba(59,130,246,0.2)] transition-all cursor-pointer"
             >
               <AlertTriangle size={12} className="text-amber-400 shrink-0" />
               <span>
@@ -1138,35 +1142,35 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
           </div>
 
           {/* Créditos da Foto e Botão "Trocar capa" no canto inferior direito do Hero */}
-          <div className="absolute right-8 bottom-12 z-20 flex items-center gap-3 text-[11px] text-zinc-400">
-            <span className="hidden sm:inline opacity-80">
+          <div className="absolute right-8 bottom-12 z-20 flex items-center gap-3 text-[11px] text-slate-200 font-medium drop-shadow">
+            <span className="hidden sm:inline opacity-85">
               Foto de {currentCover.author} no Unsplash
             </span>
             <button
               type="button"
               onClick={handleCycleCover}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/80 hover:bg-zinc-800/90 border border-white/10 text-zinc-200 text-[11px] font-medium backdrop-blur-md transition-all cursor-pointer shadow"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900/65 hover:bg-slate-900/85 border border-white/20 dark:border-blue-500/30 text-white text-[11px] font-semibold backdrop-blur-xl transition-all cursor-pointer shadow-sm hover:border-blue-400/50"
             >
-              <ImageIcon size={12} className="text-zinc-400" />
+              <ImageIcon size={12} className="text-blue-400" />
               <span>Trocar capa</span>
             </button>
           </div>
         </div>
 
         {/* ===================================================================== */}
-        {/* 2. CAIXA CENTRAL DE CAPTURA RÁPIDA (Tarefa | Nota)                    */}
+        {/* 2. CAIXA CENTRAL DE CAPTURA RÁPIDA (Glassmorphism Nexus Focus)        */}
         {/* ===================================================================== */}
         <div className="relative z-30 -mt-14 px-6">
-          <div className="w-full max-w-[580px] mx-auto rounded-2xl bg-[#141418]/95 border border-white/10 shadow-[0_18px_50px_rgba(0,0,0,0.85)] backdrop-blur-xl px-4 py-3">
+          <div className="w-full max-w-[580px] mx-auto glass-card px-4 py-3 border border-white/85 dark:border-blue-500/35 shadow-[0_18px_45px_rgba(0,0,0,0.18)] dark:shadow-[0_18px_50px_rgba(0,0,0,0.75),0_0_25px_rgba(59,130,246,0.14)]">
             {/* Abas Tarefa / Nota */}
-            <div className="flex items-center gap-4 border-b border-white/10 pb-2 mb-2.5">
+            <div className="flex items-center gap-4 border-b border-slate-200/70 dark:border-blue-500/20 pb-2 mb-2.5">
               <button
                 type="button"
                 onClick={() => setCaptureMode('task')}
-                className={`flex items-center gap-1.5 text-xs font-semibold pb-1.5 -mb-[9px] border-b-2 transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 text-xs font-bold pb-1.5 -mb-[9px] border-b-2 transition-all cursor-pointer ${
                   captureMode === 'task'
-                    ? 'text-white border-white'
-                    : 'text-zinc-500 border-transparent hover:text-zinc-300'
+                    ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400'
+                    : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
                 <CheckSquare size={13} />
@@ -1176,10 +1180,10 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
               <button
                 type="button"
                 onClick={() => setCaptureMode('note')}
-                className={`flex items-center gap-1.5 text-xs font-semibold pb-1.5 -mb-[9px] border-b-2 transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 text-xs font-bold pb-1.5 -mb-[9px] border-b-2 transition-all cursor-pointer ${
                   captureMode === 'note'
-                    ? 'text-white border-white'
-                    : 'text-zinc-500 border-transparent hover:text-zinc-300'
+                    ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400'
+                    : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
                 <FileText size={13} />
@@ -1199,7 +1203,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                     ? 'O que precisa ser feito?'
                     : 'Escreva uma nota ou lembrete rápido para hoje...'
                 }
-                className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none py-1"
+                className="w-full bg-transparent text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none py-1"
               />
 
               <div className="flex items-center justify-between mt-2 pt-0.5">
@@ -1209,21 +1213,21 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                       <button
                         type="button"
                         onClick={() => setIsProjectDropdownOpen(prev => !prev)}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-zinc-300 font-medium transition-colors cursor-pointer"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl glass-pill hover:border-blue-500/40 text-[11px] text-slate-700 dark:text-slate-200 font-semibold transition-all cursor-pointer"
                       >
-                        <Folder size={11} className="text-zinc-400" />
+                        <Folder size={11} className="text-blue-500" />
                         <span>{selectedProjectForTask}</span>
                       </button>
 
                       {isProjectDropdownOpen && (
-                        <div className="absolute left-0 mt-1.5 w-44 rounded-xl bg-[#1a1a20] border border-white/10 shadow-xl py-1 z-40">
+                        <div className="absolute left-0 mt-1.5 w-48 rounded-2xl glass-card border border-white/80 dark:border-blue-500/30 shadow-xl py-1.5 z-40">
                           <button
                             type="button"
                             onClick={() => {
                               setSelectedProjectForTask('Sem projeto');
                               setIsProjectDropdownOpen(false);
                             }}
-                            className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
+                            className="w-full text-left px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
                           >
                             Sem projeto
                           </button>
@@ -1235,7 +1239,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                                 setSelectedProjectForTask(p.name);
                                 setIsProjectDropdownOpen(false);
                               }}
-                              className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5 truncate"
+                              className="w-full text-left px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 truncate"
                             >
                               {p.name}
                             </button>
@@ -1244,23 +1248,23 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                       )}
                     </div>
                   ) : (
-                    <span className="text-[11px] text-zinc-500 flex items-center gap-1">
-                      <StickyNote size={11} /> Salvar em Notas do Dia
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                      <StickyNote size={11} className="text-blue-500" /> Salvar em Notas do Dia
                     </span>
                   )}
 
-                  <span className="text-[11px] text-zinc-500">
-                    Use <code className="text-zinc-400">#tag</code> para o time • <code className="text-zinc-400">!</code> prioridade
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Use <code className="text-blue-600 dark:text-blue-400 font-semibold">#tag</code> para o time • <code className="text-blue-600 dark:text-blue-400 font-semibold">!</code> prioridade
                   </span>
                 </div>
 
                 <button
                   type="submit"
                   disabled={!captureText.trim()}
-                  className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white flex items-center justify-center transition-all cursor-pointer shrink-0"
+                  className="w-7 h-7 rounded-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white flex items-center justify-center shadow-[0_0_12px_rgba(59,130,246,0.5)] transition-all cursor-pointer shrink-0 active:scale-95"
                   title="Adicionar"
                 >
-                  <Plus size={15} />
+                  <Plus size={15} strokeWidth={2.5} />
                 </button>
               </div>
             </form>
@@ -1268,29 +1272,34 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
         </div>
 
         {/* ===================================================================== */}
-        {/* 3. SEÇÃO "HOJE" + BOTÃO PERSONALIZAR + GRID DE 3 COLUNAS              */}
+        {/* 3. SEÇÃO "HOJE" + BOTÃO PERSONALIZAR + GRID DE 3 COLUNAS (GLASS-CARD) */}
         {/* ===================================================================== */}
         <div className="w-full max-w-[1140px] mx-auto px-6 mt-5">
           {/* Cabeçalho da seção HOJE */}
           <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
-              HOJE
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+              <span className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-blue-400">
+                HOJE
+              </span>
+            </div>
 
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setIsCustomizeOpen(prev => !prev)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-medium text-zinc-300 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-xl glass-pill hover:border-blue-500/40 text-[11px] font-bold text-slate-700 dark:text-slate-200 transition-all cursor-pointer shadow-sm"
               >
-                <LayoutGrid size={12} className="text-zinc-400" />
+                <LayoutGrid size={12} className="text-blue-500" />
                 <span>Personalizar</span>
               </button>
 
               {isCustomizeOpen && (
-                <div className="absolute right-0 mt-1.5 w-60 rounded-xl bg-[#18181e] border border-white/10 shadow-2xl p-3 z-40 space-y-2.5">
-                  <p className="text-[11px] font-bold text-zinc-300">Widgets visíveis na Home</p>
-                  <label className="flex items-center justify-between text-xs text-zinc-300 cursor-pointer">
+                <div className="absolute right-0 mt-1.5 w-64 rounded-2xl glass-card border border-white/80 dark:border-blue-500/30 shadow-2xl p-3.5 z-40 space-y-2.5">
+                  <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                    Widgets visíveis na Home
+                  </p>
+                  <label className="flex items-center justify-between text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
                     <span>Resumo Financeiro & Mentor</span>
                     <input
                       type="checkbox"
@@ -1300,7 +1309,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                         setShowFinanceRow(val);
                         accountStorage.setItem('nexus_home_show_finance_row', String(val));
                       }}
-                      className="accent-emerald-500"
+                      className="accent-blue-600"
                     />
                   </label>
                   <button
@@ -1309,7 +1318,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                       handleCycleCover();
                       setIsCustomizeOpen(false);
                     }}
-                    className="w-full text-left text-xs text-blue-400 hover:underline pt-1 border-t border-white/10"
+                    className="w-full text-left text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline pt-1.5 border-t border-slate-200/60 dark:border-blue-500/20"
                   >
                     Alternar imagem de capa →
                   </button>
@@ -1318,26 +1327,30 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
             </div>
           </div>
 
-          {/* GRID PRINCIPAL DE 3 COLUNAS IGUAL AO MODELO */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 items-stretch">
+          {/* GRID PRINCIPAL DE 3 COLUNAS COM PADRÃO GLASS-CARD DO NEXUS FOCUS */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
 
             {/* =============================================================== */}
             {/* CARD 1: COMO FOI HOJE? (Humor, Energia, Nota e Barra de 14 dias)*/}
             {/* =============================================================== */}
-            <div className="rounded-2xl bg-[#131317] border border-white/[0.08] p-4 flex flex-col justify-between shadow-lg">
+            <div className="glass-card p-4 flex flex-col justify-between relative overflow-hidden">
               <div>
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Smile size={15} className="text-zinc-400" />
-                    <h2 className="text-xs font-bold text-zinc-100">Como foi hoje?</h2>
-                    <span className="text-[11px] text-emerald-400 font-medium">Salvo</span>
+                    <div className="w-6 h-6 rounded-lg bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                      <Smile size={14} />
+                    </div>
+                    <h2 className="text-xs font-bold text-slate-900 dark:text-white">Como foi hoje?</h2>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                      Salvo
+                    </span>
                   </div>
                 </div>
 
                 {/* Humor */}
                 <div className="flex items-center justify-between gap-2 mb-2.5">
-                  <span className="text-[11px] text-zinc-400 font-medium w-14">Humor</span>
+                  <span className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold w-14">Humor</span>
                   <div className="flex items-center gap-1.5 flex-1 justify-between">
                     {MOOD_EMOJIS.map((item) => {
                       const isSelected = todayCheckin.mood === item.level;
@@ -1349,8 +1362,8 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                           title={item.label}
                           className={`w-8 h-8 rounded-xl flex items-center justify-center text-base transition-all cursor-pointer border ${
                             isSelected
-                              ? 'bg-amber-500/15 border-amber-400/60 scale-105 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
-                              : 'bg-white/[0.03] border-white/[0.06] opacity-70 hover:opacity-100 hover:bg-white/[0.07]'
+                              ? 'bg-blue-500/15 dark:bg-blue-500/25 border-blue-500 scale-105 shadow-[0_0_12px_rgba(59,130,246,0.35)]'
+                              : 'bg-white/50 dark:bg-white/[0.04] border-slate-200/70 dark:border-white/[0.08] opacity-75 hover:opacity-100 hover:border-blue-400/50'
                           }`}
                         >
                           {item.emoji}
@@ -1362,7 +1375,7 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
 
                 {/* Energia */}
                 <div className="flex items-center justify-between gap-2 mb-3">
-                  <span className="text-[11px] text-zinc-400 font-medium w-14">Energia</span>
+                  <span className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold w-14">Energia</span>
                   <div className="flex items-center gap-1.5 flex-1 justify-between">
                     {[1, 2, 3, 4, 5].map((lvl) => {
                       const isSelected = todayCheckin.energy === lvl;
@@ -1374,8 +1387,8 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                           title={`Energia ${lvl}/5`}
                           className={`w-8 h-8 rounded-xl flex items-end justify-center gap-0.5 p-1.5 transition-all cursor-pointer border ${
                             isSelected
-                              ? 'bg-white/10 border-white/40 scale-105 shadow-sm'
-                              : 'bg-white/[0.03] border-white/[0.06] opacity-70 hover:opacity-100 hover:bg-white/[0.07]'
+                              ? 'bg-blue-500/15 dark:bg-blue-500/25 border-blue-500 scale-105 shadow-[0_0_12px_rgba(59,130,246,0.3)]'
+                              : 'bg-white/50 dark:bg-white/[0.04] border-slate-200/70 dark:border-white/[0.08] opacity-75 hover:opacity-100 hover:border-blue-400/50'
                           }`}
                         >
                           {[1, 2, 3, 4].map((bar) => (
@@ -1384,9 +1397,9 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                               className={`w-1 rounded-full transition-all ${
                                 bar <= Math.ceil((lvl / 5) * 4)
                                   ? isSelected
-                                    ? 'bg-white'
-                                    : 'bg-zinc-400'
-                                  : 'bg-zinc-700'
+                                    ? 'bg-blue-600 dark:bg-blue-400'
+                                    : 'bg-slate-400 dark:bg-slate-400'
+                                  : 'bg-slate-200 dark:bg-slate-700'
                               }`}
                               style={{ height: `${bar * 25}%` }}
                             />
@@ -1404,20 +1417,22 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                     value={todayCheckin.note}
                     onChange={(e) => updateTodayCheckin({ note: e.target.value })}
                     placeholder="Uma linha sobre o dia (opcional)"
-                    className="w-full px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.07] text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-white/20 transition-colors"
+                    className="w-full px-3 py-1.5 rounded-xl bg-white/60 dark:bg-slate-900/50 border border-slate-200/80 dark:border-blue-500/20 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
                   />
                 </div>
               </div>
 
-              {/* Barra inferior de 14 pílulas de consistência */}
-              <div className="pt-2 border-t border-white/[0.06]">
+              {/* Barra inferior de 14 pílulas de consistência em Azul Focus */}
+              <div className="pt-2 border-t border-slate-200/60 dark:border-blue-500/15">
                 <div className="grid grid-cols-14 gap-1">
                   {last14DaysCheckin.map((d) => (
                     <div
                       key={d.date}
                       title={d.date}
                       className={`h-1.5 rounded-full transition-colors ${
-                        d.filled ? 'bg-zinc-300' : 'bg-zinc-800'
+                        d.filled
+                          ? 'bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.5)]'
+                          : 'bg-slate-200 dark:bg-slate-800'
                       }`}
                     />
                   ))}
@@ -1428,14 +1443,16 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
             {/* =============================================================== */}
             {/* CARD 2: HÁBITOS DE HOJE                                         */}
             {/* =============================================================== */}
-            <div className="rounded-2xl bg-[#131317] border border-white/[0.08] p-4 flex flex-col justify-between shadow-lg">
+            <div className="glass-card p-4 flex flex-col justify-between relative overflow-hidden">
               <div>
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Flame size={15} className="text-zinc-400" />
-                    <h2 className="text-xs font-bold text-zinc-100">Hábitos de hoje</h2>
-                    <span className="text-[11px] text-zinc-500 font-semibold">
+                    <div className="w-6 h-6 rounded-lg bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                      <Flame size={14} />
+                    </div>
+                    <h2 className="text-xs font-bold text-slate-900 dark:text-white">Hábitos de hoje</h2>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">
                       {completedHabitsCount}/{habits.length}
                     </span>
                   </div>
@@ -1444,14 +1461,14 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                     <button
                       type="button"
                       onClick={() => onTabChange('calendar')}
-                      className="text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline transition-colors cursor-pointer"
                     >
                       Hábitos
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsAddingHabit(prev => !prev)}
-                      className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-300 transition-colors cursor-pointer"
+                      className="w-6 h-6 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 flex items-center justify-center text-blue-600 dark:text-blue-400 transition-colors cursor-pointer"
                       title="Novo hábito"
                     >
                       <Plus size={13} />
@@ -1467,11 +1484,11 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                       onChange={(e) => setNewHabitTitle(e.target.value)}
                       placeholder="Nome do hábito..."
                       autoFocus
-                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white placeholder:text-zinc-500 focus:outline-none"
+                      className="flex-1 px-2.5 py-1.5 rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-500/40 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none"
                     />
                     <button
                       type="submit"
-                      className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold cursor-pointer shadow-sm"
                     >
                       OK
                     </button>
@@ -1481,20 +1498,19 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                 {/* Lista de Hábitos */}
                 <div className="space-y-1.5 max-h-[190px] overflow-y-auto pr-1">
                   {habits.map((hab, idx) => {
-                    // Alterna cor do check entre esmeralda e azul igual ao modelo
                     const checkColorClass = hab.completedToday
                       ? idx % 2 === 1
-                        ? 'bg-emerald-500 border-emerald-500 text-black'
-                        : 'bg-blue-500 border-blue-500 text-white'
-                      : 'border-zinc-700 bg-white/[0.02] hover:border-zinc-500';
+                        ? 'bg-emerald-500 border-emerald-500 text-white shadow-[0_0_8px_rgba(16,185,129,0.4)]'
+                        : 'bg-blue-600 border-blue-600 text-white shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                      : 'border-slate-300 dark:border-slate-600 bg-white/40 dark:bg-white/[0.03] group-hover:border-blue-500';
 
-                    const dotColorClass = idx % 2 === 1 ? 'bg-emerald-400' : 'bg-blue-400';
+                    const dotColorClass = idx % 2 === 1 ? 'bg-emerald-500' : 'bg-blue-500';
 
                     return (
                       <div
                         key={hab.id}
                         onClick={() => handleToggleHabit(hab.id)}
-                        className="flex items-center justify-between gap-2.5 py-1 px-1.5 rounded-xl hover:bg-white/[0.03] transition-colors cursor-pointer group"
+                        className="flex items-center justify-between gap-2.5 py-1 px-1.5 rounded-xl hover:bg-white/50 dark:hover:bg-blue-500/10 transition-colors cursor-pointer group"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <button
@@ -1506,14 +1522,16 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
 
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span
-                              className={`text-xs font-medium truncate ${
-                                hab.completedToday ? 'text-zinc-200' : 'text-zinc-300'
+                              className={`text-xs font-semibold truncate ${
+                                hab.completedToday
+                                  ? 'text-slate-900 dark:text-white'
+                                  : 'text-slate-700 dark:text-slate-300'
                               }`}
                             >
                               {hab.title}
                             </span>
                             {hab.progressText && (
-                              <span className="text-[10px] text-zinc-500 font-semibold">
+                              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">
                                 {hab.progressText}
                               </span>
                             )}
@@ -1527,15 +1545,15 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                               <span
                                 key={hIdx}
                                 className={`w-1.5 h-1.5 rounded-full ${
-                                  done ? dotColorClass : 'bg-zinc-700'
+                                  done ? dotColorClass : 'bg-slate-300 dark:bg-slate-700'
                                 }`}
                               />
                             ))}
                           </div>
 
                           <span
-                            className={`text-[11px] font-semibold flex items-center gap-0.5 min-w-[34px] justify-end ${
-                              hab.streak > 0 ? 'text-amber-400' : 'text-zinc-500'
+                            className={`text-[11px] font-bold flex items-center gap-0.5 min-w-[34px] justify-end ${
+                              hab.streak > 0 ? 'text-amber-500 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'
                             }`}
                           >
                             {hab.streak > 0 ? (
@@ -1558,14 +1576,16 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
             {/* =============================================================== */}
             {/* CARD 3: TAREFAS (Com tags de projeto, horário e atraso)         */}
             {/* =============================================================== */}
-            <div className="rounded-2xl bg-[#131317] border border-white/[0.08] p-4 flex flex-col justify-between shadow-lg">
+            <div className="glass-card p-4 flex flex-col justify-between relative overflow-hidden">
               <div>
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <CheckSquare size={15} className="text-zinc-400" />
-                    <h2 className="text-xs font-bold text-zinc-100">Tarefas</h2>
-                    <span className="text-[11px] text-zinc-500 font-medium">
+                    <div className="w-6 h-6 rounded-lg bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                      <CheckSquare size={14} />
+                    </div>
+                    <h2 className="text-xs font-bold text-slate-900 dark:text-white">Tarefas</h2>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
                       {todayPendingCount} para hoje
                       {overdueCount > 0 ? ` • ${overdueCount} atrasada${overdueCount > 1 ? 's' : ''}` : ''}
                     </span>
@@ -1579,26 +1599,26 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                       <div
                         key={`${item.source}-${item.id}`}
                         onClick={() => handleToggleUnifiedTask(item)}
-                        className="flex items-center justify-between gap-2 py-1 px-1.5 rounded-xl hover:bg-white/[0.03] transition-colors cursor-pointer group"
+                        className="flex items-center justify-between gap-2 py-1 px-1.5 rounded-xl hover:bg-white/50 dark:hover:bg-blue-500/10 transition-colors cursor-pointer group"
                       >
                         {/* Esquerda: Checkbox + Título */}
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <button
                             type="button"
-                            className={`w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
+                            className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                               item.completed
-                                ? 'bg-emerald-500 border-emerald-500 text-black'
-                                : 'border-zinc-600 bg-transparent group-hover:border-zinc-400'
+                                ? 'bg-blue-600 border-blue-600 text-white shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                                : 'border-slate-300 dark:border-slate-600 bg-white/40 dark:bg-transparent group-hover:border-blue-500'
                             }`}
                           >
                             {item.completed && <Check size={10} strokeWidth={3} />}
                           </button>
 
                           <span
-                            className={`text-xs font-medium truncate ${
+                            className={`text-xs font-semibold truncate ${
                               item.completed
-                                ? 'line-through text-zinc-500'
-                                : 'text-zinc-200'
+                                ? 'line-through text-slate-400 dark:text-slate-500'
+                                : 'text-slate-800 dark:text-slate-100'
                             }`}
                           >
                             {item.title}
@@ -1609,15 +1629,15 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                         <div className="flex items-center gap-1.5 shrink-0">
                           {item.projectLabel && (
                             <span
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-semibold flex items-center gap-1 border ${
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 border ${
                                 item.projectColor === 'amber'
-                                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-                                  : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/25'
+                                  : 'bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/25'
                               }`}
                             >
                               <span
                                 className={`w-1.5 h-1.5 rounded-full ${
-                                  item.projectColor === 'amber' ? 'bg-amber-400' : 'bg-emerald-400'
+                                  item.projectColor === 'amber' ? 'bg-amber-500' : 'bg-blue-500'
                                 }`}
                               />
                               <span className="max-w-[85px] truncate">{item.projectLabel}</span>
@@ -1625,22 +1645,22 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
                           )}
 
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 ${
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${
                               item.isOverdue
-                                ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
-                                : 'bg-amber-500/10 text-amber-300/90'
+                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25'
+                                : 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/25'
                             }`}
                           >
                             <span>{item.dateLabel}</span>
                             {item.timeLabel && (
-                              <span className="text-zinc-400 font-normal">{item.timeLabel}</span>
+                              <span className="opacity-80 font-semibold">{item.timeLabel}</span>
                             )}
                           </span>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <div className="py-6 text-center text-xs text-zinc-500">
+                    <div className="py-6 text-center text-xs font-medium text-slate-400 dark:text-slate-500">
                       Nenhuma tarefa pendente para hoje. Use a caixa acima para criar!
                     </div>
                   )}
@@ -1648,11 +1668,11 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
               </div>
 
               {/* Link inferior "Ver as X tarefas →" */}
-              <div className="pt-2.5 mt-1.5 border-t border-white/[0.06]">
+              <div className="pt-2.5 mt-1.5 border-t border-slate-200/60 dark:border-blue-500/15">
                 <button
                   type="button"
                   onClick={() => onTabChange('projects')}
-                  className="text-[11px] font-medium text-zinc-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
+                  className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <span>Ver as {unifiedDesktopTasks.length} tarefas</span>
                   <span>→</span>
@@ -1665,42 +1685,42 @@ export function TabHome({ transactions, tasks, rotinas = [], onTabChange, user, 
           {/* Linha Opcional Personalizável: Resumo Financeiro & Insight do Mentor */}
           {showFinanceRow && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-              <div className="rounded-2xl bg-[#131317] border border-white/[0.08] p-5 flex items-center justify-between">
+              <div className="glass-card p-5 flex items-center justify-between">
                 <div>
-                  <span className="text-[11px] text-zinc-400 font-medium">Saldo Total Disponível</span>
-                  <h3 className="text-2xl font-black text-white mt-0.5">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Saldo Total Disponível</span>
+                  <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
                     R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </h3>
-                  <div className="flex items-center gap-4 mt-2 text-[11px]">
-                    <span className="text-emerald-400">
+                  <div className="flex items-center gap-4 mt-2 text-[11px] font-bold">
+                    <span className="text-emerald-600 dark:text-emerald-400">
                       ↑ R$ {totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
-                    <span className="text-rose-400">
+                    <span className="text-rose-600 dark:text-rose-400">
                       ↓ R$ {totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
                 <button
                   onClick={() => onTabChange('finances')}
-                  className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-zinc-200 cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-xs font-bold text-blue-600 dark:text-blue-400 cursor-pointer transition-colors"
                 >
                   Abrir Finanças →
                 </button>
               </div>
 
-              <div className="rounded-2xl bg-[#131317] border border-white/[0.08] p-5 flex items-center justify-between gap-4">
+              <div className="glass-card p-5 flex items-center justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-xs font-bold text-blue-400 mb-1">
+                  <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 mb-1">
                     <Bot size={15} />
                     <span>Insight do Mentor IA</span>
                   </div>
-                  <p className="text-xs text-zinc-300 italic truncate">
+                  <p className="text-xs text-slate-700 dark:text-slate-200 italic truncate font-medium">
                     {latestMentorFeedback || '"Consistência vence motivação. Foque nas prioridades de hoje."'}
                   </p>
                 </div>
                 <button
                   onClick={() => onTabChange('chat')}
-                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shrink-0 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shrink-0 cursor-pointer shadow-[0_0_15px_rgba(59,130,246,0.45)] transition-all"
                 >
                   Conversar
                 </button>
