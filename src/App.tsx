@@ -455,24 +455,20 @@ function Dashboard() {
       />
       
       <main
-        className={`flex-1 overflow-y-auto ${
-          activeTab === 'focus'
-            ? 'p-0 md:p-0'
-            : activeTab === 'home'
-            ? 'px-4 pt-4 pb-24 md:p-0'
-            : 'px-4 pt-4 pb-24 md:px-6 md:pt-5 md:pb-20'
+        className={`flex-1 overflow-y-auto px-4 pt-4 pb-24 ${
+          activeTab === 'home' ? 'md:p-0' : 'md:px-6 md:pt-5 md:pb-20'
         }`}
       >
         <div
           className={`w-full ${
-            activeTab === 'home' || activeTab === 'focus' ? 'max-w-none' : 'max-w-[1440px]'
+            activeTab === 'home' ? 'max-w-none' : 'max-w-[1440px]'
           } mx-auto border-transparent`}
         >
           {renderContent()}
         </div>
       </main>
 
-      {activeTab !== 'chat' && activeTab !== 'focus' && (
+      {activeTab !== 'chat' && (
         <QuickChat user={user} onOpenFullChat={() => setActiveTab('chat')} activeTab={activeTab} transactions={transactions} tasks={tasks} />
       )}
     </div>
