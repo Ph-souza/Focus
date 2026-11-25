@@ -193,8 +193,8 @@ function Dashboard() {
       handleFirestoreError(error, OperationType.LIST, isShared ? `ledgers/${activeLedger.id}/goals` : `users/${activeUid}/goals`);
     });
 
-    // 3. Tasks Listener (Limit 20)
-    const tasksQuery = query(collection(db, 'users', activeUid, 'tasks'), orderBy('createdAt', 'desc'), limit(20));
+    // 3. Tasks Listener (Limit 50)
+    const tasksQuery = query(collection(db, 'users', activeUid, 'tasks'), orderBy('createdAt', 'desc'), limit(50));
     const unsubTasks = onSnapshot(tasksQuery, (snapshot) => {
       if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Task));
@@ -214,7 +214,7 @@ function Dashboard() {
     });
 
     // 5. Appointments Listener
-    const appointmentsQuery = query(collection(db, 'users', activeUid, 'appointments'), orderBy('createdAt', 'desc'), limit(10));
+    const appointmentsQuery = query(collection(db, 'users', activeUid, 'appointments'), orderBy('createdAt', 'desc'), limit(15));
     const unsubAppointments = onSnapshot(appointmentsQuery, (snapshot) => {
       if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Appointment));
@@ -223,8 +223,8 @@ function Dashboard() {
       handleFirestoreError(error, OperationType.LIST, `users/${activeUid}/appointments`);
     });
 
-    // 6. Rotinas Listener
-    const rotinasQuery = query(collection(db, 'users', activeUid, 'rotinas'), orderBy('date', 'desc'), limit(5));
+    // 6. Rotinas Listener (Limit 50 para alimentar Home e Agenda com todas as tarefas reais)
+    const rotinasQuery = query(collection(db, 'users', activeUid, 'rotinas'), orderBy('date', 'desc'), limit(50));
     const unsubRotinas = onSnapshot(rotinasQuery, (snapshot) => {
       if (auth.currentUser?.uid !== activeUid) return;
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Rotina));
