@@ -34,13 +34,11 @@ export const TimerRing: React.FC<TimerRingProps> = ({
     isFlowtime && phase === 'focus'
       ? ((displayMs / 60000) % 60) / 60
       : targetDurationMs > 0
-      ? 1 - displayMs / targetDurationMs
-      : 0;
+        ? 1 - displayMs / targetDurationMs
+        : 0;
 
-  // Antes de acionar (idle), exibe um arco sutil de referência visual igual às outras telas
-  const idlePreviewProgress = progress === 0 && !isRunning && !isFlowtime ? 1 : progress;
   const strokeDashoffset =
-    circumference - Math.min(1, Math.max(0, idlePreviewProgress)) * circumference;
+    circumference - Math.min(1, Math.max(0, progress)) * circumference;
 
   const phaseLabel =
     phase === 'focus'
@@ -48,8 +46,8 @@ export const TimerRing: React.FC<TimerRingProps> = ({
         ? 'FLOWTIME'
         : 'FOCO PROFUNDO'
       : phase === 'short_break'
-      ? 'PAUSA CURTA'
-      : 'PAUSA LONGA';
+        ? 'PAUSA CURTA'
+        : 'PAUSA LONGA';
 
   return (
     <div className="relative flex items-center justify-center select-none">
@@ -57,23 +55,20 @@ export const TimerRing: React.FC<TimerRingProps> = ({
         height={radius * 2}
         width={radius * 2}
         viewBox={`0 0 ${radius * 2} ${radius * 2}`}
-        className="-rotate-90 transform w-56 h-56 sm:w-64 sm:h-64"
+        className="-rotate-90 transform w-60 h-60 sm:w-64 sm:h-64"
       >
         {/* Trilha de fundo */}
         <circle
+          stroke="#262626"
           fill="transparent"
           strokeWidth={stroke}
           r={normalizedRadius}
           cx={radius}
           cy={radius}
-          className={
-            isRunning
-              ? 'stroke-[#262626] transition-colors duration-500'
-              : 'stroke-slate-200/80 dark:stroke-slate-800/80 transition-colors duration-500'
-          }
         />
         {/* Progresso */}
         <circle
+          stroke={phase === 'focus' ? '#ffffff' : '#afafaf'}
           fill="transparent"
           strokeWidth={stroke}
           strokeDasharray={`${circumference} ${circumference}`}
@@ -85,36 +80,16 @@ export const TimerRing: React.FC<TimerRingProps> = ({
           r={normalizedRadius}
           cx={radius}
           cy={radius}
-          className={
-            isRunning
-              ? phase === 'focus'
-                ? 'stroke-white transition-colors duration-500'
-                : 'stroke-[#afafaf] transition-colors duration-500'
-              : phase === 'focus'
-              ? 'stroke-blue-600 dark:stroke-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.45)] transition-colors duration-500'
-              : 'stroke-emerald-500 dark:stroke-emerald-400 transition-colors duration-500'
-          }
         />
       </svg>
 
       <div className="absolute flex flex-col items-center justify-center text-center">
-        <span
-          className={`text-[11px] font-bold tracking-[0.2em] mb-2 transition-colors duration-300 ${
-            isRunning
-              ? 'text-[#afafaf] font-medium'
-              : phase === 'focus'
-              ? 'text-blue-600 dark:text-blue-400'
-              : 'text-emerald-600 dark:text-emerald-400'
-          }`}
-        >
+        <span className="text-[11px] font-medium tracking-[0.2em] text-[#afafaf] mb-2">
           {phaseLabel}
         </span>
         <span
-          className={`text-5xl sm:text-6xl tracking-tight tabular-nums transition-all duration-300 ${
-            isRunning
-              ? 'font-light text-white'
-              : 'font-black text-slate-900 dark:text-white'
-          }`}
+          className={`text-5xl sm:text-6xl font-light tracking-tight tabular-nums transition-opacity duration-300 ${isRunning ? 'text-white' : 'text-[#d4d4d4]'
+            }`}
         >
           {formattedTime}
         </span>
@@ -122,3 +97,4 @@ export const TimerRing: React.FC<TimerRingProps> = ({
     </div>
   );
 };
+
